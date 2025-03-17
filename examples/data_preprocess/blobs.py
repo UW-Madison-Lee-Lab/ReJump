@@ -81,7 +81,7 @@ def make_prefix(dp, template_type, n_classes, n_shot=0, in_context_dataset=None)
         prefix = f"""
         A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
 
-        User: The dataset has {n_classes} classes. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer>2</answer>.
+        User: The dataset has {n_classes} classes: {list(range(n_classes))}. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer>2</answer>.
         Assistant: Let me solve this step by step.
         <think>
         """
@@ -89,7 +89,7 @@ def make_prefix(dp, template_type, n_classes, n_shot=0, in_context_dataset=None)
         """This works for Qwen Instruct Models"""
         prefix = f"""
         <|im_start|>system\nYou are a helpful assistant. You first thinks about the reasoning process in the mind and then provides the user with the answer.<|im_end|>\n
-        <|im_start|>user\n The dataset has {n_classes} classes. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer>2</answer>.<|im_end|>\n<|im_start|>assistant\nLet me solve this step by step.\n<think>
+        <|im_start|>user\n The dataset has {n_classes} classes: {list(range(n_classes))}. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer>2</answer>.<|im_end|>\n<|im_start|>assistant\nLet me solve this step by step.\n<think>
         """
     return prefix
 
@@ -162,7 +162,6 @@ if __name__ == '__main__':
                 "features": example['features'],
                 "label": example['label']
             }
-            import pdb; pdb.set_trace()
             data = {
                 "data_source": data_source,
                 "prompt": [{
