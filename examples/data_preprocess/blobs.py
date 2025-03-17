@@ -11,6 +11,7 @@ from tqdm import tqdm
 from verl.utils.hdfs_io import copy, makedirs
 import argparse
 from constants import data_dir
+import re
 
 
 def gen_dataset(
@@ -149,3 +150,13 @@ if __name__ == '__main__':
     if hdfs_dir is not None:
         makedirs(hdfs_dir)
         copy(src=local_dir, dst=hdfs_dir)
+
+
+def blobs_reward_fn(response, ground_truth):
+    response_text = re.search(r'<answer>(.*?)</answer>', response_lst[0], re.DOTALL).group(1)
+    if response_text.is_digit():
+        response_class = int(response_text)
+    else:
+        return 0
+    return response_class == ground_truth
+        

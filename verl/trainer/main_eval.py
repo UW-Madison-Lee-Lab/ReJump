@@ -22,11 +22,14 @@ from verl.utils.fs import copy_local_path_from_hdfs
 from verl.utils.reward_score import math, gsm8k
 import pandas as pd
 import numpy as np
+import pdb
 
 
 def select_reward_fn(data_source):
     if data_source == 'lighteval/MATH':
         return math.compute_score
+    elif data_source == "blobs":
+        pass
     else:
         raise NotImplementedError
 
