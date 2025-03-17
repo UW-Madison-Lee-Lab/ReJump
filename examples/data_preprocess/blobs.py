@@ -202,9 +202,9 @@ if __name__ == '__main__':
 
 
 def blobs_reward_fn(response, ground_truth):
-    response_text = re.search(r'<answer>(.*?)</answer>', response, re.DOTALL).group(1)
-    if response_text.strip().isdigit():
-        response_class = int(response_text.strip())
+    response_extract = re.search(r'<answer>(.*?)</answer>', response, re.DOTALL)
+    if response_extract is not None and response_extract.group(1).strip().isdigit():
+        response_class = int(response_extract.group(1).strip())
     else:
         return 0
     return response_class == ground_truth
