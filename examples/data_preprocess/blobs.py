@@ -147,8 +147,8 @@ if __name__ == '__main__':
     train_dataset = raw_dataset.select(range(TRAIN_SIZE))
     test_dataset = raw_dataset.select(range(TRAIN_SIZE, TRAIN_SIZE + TEST_SIZE))
     in_context_dataset = {
-        "train": raw_in_context_dataset.select(range(args.n_shot)),
-        "test": raw_in_context_dataset.select(range(args.n_shot, args.n_shot + TEST_SIZE))
+        "train": raw_in_context_dataset.select(range(TRAIN_SIZE)),
+        "test": raw_in_context_dataset.select(range(TRAIN_SIZE, TRAIN_SIZE + TEST_SIZE))
     }
 
     def make_map_fn(split):
