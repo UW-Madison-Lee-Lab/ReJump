@@ -29,7 +29,8 @@ def select_reward_fn(data_source):
     if data_source == 'lighteval/MATH':
         return math.compute_score
     elif data_source == "blobs":
-        pass
+        from examples.data_preprocess.blobs import blobs_reward_fn
+        return blobs_reward_fn
     else:
         raise NotImplementedError
 
