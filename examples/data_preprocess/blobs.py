@@ -69,6 +69,16 @@ def make_prefix(dp, template_type, n_classes, n_shot=0, in_context_dataset=None)
     in_context_examples = ""
     if n_shot > 0 and in_context_dataset is not None:
         in_context_examples = "We first provide you with some examples of how to classify data points.\n"
+        # Randomly select indices for in-context examples
+        random_indices = np.random.choice(len(in_context_dataset), min(n_shot, len(in_context_dataset)), replace=False)
+        in_context_examples_list = []
+        
+        # Get examples from the selected indices
+        for idx in random_indices:
+            in_context_examples_list.append(in_context_dataset[idx])
+        
+        # Replace the in_context_dataset with the randomly selected examples
+        in_context_dataset = in_context_examples_list
         for i in range(min(n_shot, len(in_context_dataset))):
             example = in_context_dataset[i]
             example_features = example['features']

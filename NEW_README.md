@@ -10,8 +10,7 @@ python examples/data_preprocess/blobs.py\
  --centers=3 \
  --cluster_std=1.0 \
  --test_ratio=0.2 \
- --n_shot=10 
-
+ --n_shot=50 
 ```
 
 # Inference
