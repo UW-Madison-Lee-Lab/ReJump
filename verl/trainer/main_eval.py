@@ -48,6 +48,7 @@ def main(config):
 
     total = len(dataset)
 
+    n_corr, n_tot = 0, 0
     for i in range(total):
         response_lst = responses[i]
         data_source = data_sources[i]
@@ -60,6 +61,8 @@ def main(config):
         for r in response_lst:
             score = reward_fn(r, ground_truth)
             score_lst.append(score)
+            n_tot += 1
+            n_corr += score
 
         max_score = np.max(score_lst)
 
@@ -67,7 +70,7 @@ def main(config):
             passes += 1
 
     print(f'pass@5: {passes / total}')
-
+    print(f'acc: {n_corr / n_tot}')
 
 if __name__ == '__main__':
     main()
