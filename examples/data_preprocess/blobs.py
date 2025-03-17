@@ -11,7 +11,7 @@ from tqdm import tqdm
 from verl.utils.hdfs_io import copy, makedirs
 import argparse
 from constants import data_dir
-import re
+import re, pdb
 from utils import set_seed
 
 
@@ -207,4 +207,4 @@ def blobs_reward_fn(response, ground_truth):
         response_class = int(response_extract.group(1).strip())
     else:
         return 0
-    return response_class == ground_truth
+    return response_class == ground_truth['label']
