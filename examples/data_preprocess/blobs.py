@@ -12,6 +12,7 @@ from verl.utils.hdfs_io import copy, makedirs
 import argparse
 from constants import data_dir
 import re
+from utils import set_seed
 
 
 def gen_dataset(
@@ -55,19 +56,41 @@ def gen_dataset(
     
     return samples
 
-def make_prefix(dp, template_type):
+
+def format_features(features):
+    return ", ".join([f"{x:.3f}" for x in features])
+
+def make_prefix(dp, template_type, n_classes, n_shot=0, in_context_dataset=None):
     features = dp['features']
     label = dp['label']
     
+    
+    # Add in-context examples if requested
+    in_context_examples = ""
+    if n_shot > 0 and in_context_dataset is not None:
+        in_context_examples = "We first provide you with some examples of how to classify data points.\n"
+        for i in range(min(n_shot, len(in_context_dataset))):
+            example = in_context_dataset[i]
+            example_features = example['features']
+            example_label = example['label']
+            
+            in_context_examples += f"Features: {format_features(example_features)}, Label: {example_label}\n"
+    
     if template_type == 'base':
         """This works for any base model"""
-        prefix = f"""A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
-User: Given the data point with features {features}, classify it into one of the possible classes. Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer> Class 2 </answer>.
-Assistant: Let me solve this step by step.
-<think>"""
+        prefix = f"""
+        A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
+
+        User: The dataset has {n_classes} classes. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer>2</answer>.
+        Assistant: Let me solve this step by step.
+        <think>
+        """
     elif template_type == 'qwen-instruct':
         """This works for Qwen Instruct Models"""
-        prefix = f"""<|im_start|>system\nYou are a helpful assistant. You first thinks about the reasoning process in the mind and then provides the user with the answer.<|im_end|>\n<|im_start|>user\nGiven the data point with features {features}, classify it into one of the possible classes. Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer> Class 2 </answer>.<|im_end|>\n<|im_start|>assistant\nLet me solve this step by step.\n<think>"""
+        prefix = f"""
+        <|im_start|>system\nYou are a helpful assistant. You first thinks about the reasoning process in the mind and then provides the user with the answer.<|im_end|>\n
+        <|im_start|>user\n The dataset has {n_classes} classes. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer>2</answer>.<|im_end|>\n<|im_start|>assistant\nLet me solve this step by step.\n<think>
+        """
     return prefix
 
 
@@ -78,15 +101,15 @@ if __name__ == '__main__':
     parser.add_argument('--n_features', type=int, default=2)
     parser.add_argument('--centers', type=int, default=3)
     parser.add_argument('--cluster_std', type=float, default=1.0)
-    parser.add_argument('--train_size', type=int, default=80000)
-    parser.add_argument('--test_size', type=int, default=20000)
+    parser.add_argument('--test_ratio', type=float, default=0.2)
+    parser.add_argument('--n_shot', type=int, default=0)
     parser.add_argument('--template_type', type=str, default='base')
 
     args = parser.parse_args()
 
     data_source = 'blobs'
-    TRAIN_SIZE = args.train_size
-    TEST_SIZE = args.test_size
+    TEST_SIZE = int(args.num_samples * args.test_ratio)
+    TRAIN_SIZE = args.num_samples - TEST_SIZE
     
     # Generate synthetic dataset
     samples = gen_dataset(
@@ -97,25 +120,49 @@ if __name__ == '__main__':
         seed_value=42
     )
     
-    # Create dataset
+    in_context_samples = gen_dataset(
+        num_samples=args.num_samples,
+        n_features=args.n_features,
+        centers=args.centers,
+        cluster_std=args.cluster_std,
+        seed_value=42
+    )
+    
     dataset_dict = {
         'features': [sample[0] for sample in samples],
         'label': [sample[1] for sample in samples]
     }
     
+    in_context_dataset_dict = {
+        'features': [sample[0] for sample in in_context_samples],
+        'label': [sample[1] for sample in in_context_samples]
+    }
+    
     raw_dataset = Dataset.from_dict(dataset_dict)
+    raw_in_context_dataset = Dataset.from_dict(in_context_dataset_dict)
     
     assert len(raw_dataset) >= TRAIN_SIZE + TEST_SIZE
     train_dataset = raw_dataset.select(range(TRAIN_SIZE))
     test_dataset = raw_dataset.select(range(TRAIN_SIZE, TRAIN_SIZE + TEST_SIZE))
+    in_context_dataset = {
+        "train": raw_in_context_dataset.select(range(args.n_shot)),
+        "test": raw_in_context_dataset.select(range(args.n_shot, args.n_shot + TEST_SIZE))
+    }
 
     def make_map_fn(split):
         def process_fn(example, idx):
-            question = make_prefix(example, template_type=args.template_type)
+            question = make_prefix(
+                example, 
+                template_type=args.template_type, 
+                n_classes=args.centers, 
+                n_shot=args.n_shot, 
+                in_context_dataset=in_context_dataset[split]
+            )
             solution = {
                 "features": example['features'],
                 "label": example['label']
             }
+            import pdb; pdb.set_trace()
             data = {
                 "data_source": data_source,
                 "prompt": [{
@@ -153,10 +200,9 @@ if __name__ == '__main__':
 
 
 def blobs_reward_fn(response, ground_truth):
-    response_text = re.search(r'<answer>(.*?)</answer>', response_lst[0], re.DOTALL).group(1)
+    response_text = re.search(r'<answer>(.*?)</answer>', response, re.DOTALL).group(1)
     if response_text.is_digit():
         response_class = int(response_text)
     else:
         return 0
     return response_class == ground_truth
-        
