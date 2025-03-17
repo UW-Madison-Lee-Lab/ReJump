@@ -97,6 +97,9 @@ export VLLM_ATTENTION_BACKEND=XFORMERS
 bash ./scripts/train_tiny_zero.sh
 ```
 
+## Check examples for training and inference
+Infernce: see [`run_deepseek_v2_lite_math.sh`](https://github.com/yzeng58/liftr/blob/master/examples/generation/run_deepseek_v2_lite_math.sh)
+
 ## Acknowledge
 * We run our experiments based on [veRL](https://github.com/volcengine/verl).
 * We use Qwen2.5 series base model [Qwen2.5](https://github.com/QwenLM/Qwen2.5).
