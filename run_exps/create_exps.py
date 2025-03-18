@@ -11,7 +11,7 @@ model_list = [model for model in supported_llms.keys() if supported_llms[model][
 shot_list = [10, 50, 100, 200]
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--dataset", type=str, nargs="+", default=["blobs"], choices=["blobs", "moons"])
+parser.add_argument("--dataset", type=str, nargs="+", default=["blobs"], choices=["blobs", "moons", "linear"])
 args = parser.parse_args()
 
 dataset_list = args.dataset
