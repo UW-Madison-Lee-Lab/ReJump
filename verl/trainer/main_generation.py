@@ -18,6 +18,7 @@ import ray
 import numpy as np
 import hydra
 import os
+import time
 
 os.environ['NCCL_DEBUG'] = 'WARN'
 os.environ['TOKENIZERS_PARALLELISM'] = 'true'
@@ -34,10 +35,22 @@ from verl.utils.fs import copy_local_path_from_hdfs
 from verl.workers.fsdp_workers import ActorRolloutRefWorker
 from verl.utils.hdfs_io import makedirs
 from verl.single_controller.ray import RayClassWithInitArgs, RayResourcePool, RayWorkerGroup
-
+from utils import flatten_dict, print_configs
+from environment import WANDB_INFO
+import wandb
 
 @hydra.main(config_path='config', config_name='generation', version_base=None)
 def main(config):
+    
+    if config.trainer.wandb:
+        wandb.init(
+            project=WANDB_INFO['project'],
+            entity=WANDB_INFO['entity'],
+            config=flatten_dict(config)
+        )
+    
+    print_configs(flatten_dict(config))
+    
     from pprint import pprint
     from omegaconf import OmegaConf
     pprint(OmegaConf.to_container(config, resolve=True))  # resolve=True will eval symbol values
@@ -73,6 +86,7 @@ def main(config):
 
     for batch_idx in range(num_batch):
         print(f'[{batch_idx+1}/{num_batch}] Start to process.')
+        batch_start_time = time.time()
         batch_chat_lst = chat_lst[batch_idx * config_batch_size:(batch_idx + 1) * config_batch_size]
         inputs = tokenizer.apply_chat_template(batch_chat_lst,
                                                add_generation_prompt=True,
@@ -103,7 +117,13 @@ def main(config):
 
         print(f'[{batch_idx+1}/{num_batch}] Start to generate.')
         # START TO GENERATE FOR n_samples TIMES
+        batch_metrics = {
+            'batch_size': real_batch_size,
+            'processing_time': time.time() - batch_start_time,
+        }
+        
         for i in range(config.data.n_samples):
+            gen_start_time = time.time()
             output = wg.generate_sequences(data)
             # remove dummy data
             output = output[:real_batch_size]
@@ -118,6 +138,26 @@ def main(config):
 
             output_lst[i].extend(output_text_unpad)
 
+            # Log generation metrics
+            response_lengths = [len(text.split()) for text in output_text_unpad]
+            generation_time = time.time() - gen_start_time
+            
+            # Compile metrics for this sample
+            sample_metrics = {
+                f'sample_{i}/generation_time': generation_time,
+                f'sample_{i}/tokens_per_second': sum(response_lengths) / max(generation_time, 1e-6),
+                f'sample_{i}/avg_response_length': np.mean(response_lengths),
+                f'sample_{i}/max_response_length': np.max(response_lengths),
+                f'sample_{i}/min_response_length': np.min(response_lengths),
+            }
+            batch_metrics.update(sample_metrics)
+        
+        # Log batch metrics to wandb
+        if config.trainer.wandb:
+            batch_metrics['batch'] = batch_idx
+            batch_metrics['completion_percentage'] = (batch_idx + 1) / num_batch * 100
+            wandb.log(flatten_dict(batch_metrics))
+
     # convert output_lst from (n_samples, n_data) to (n_data, n_sampels)
     output_lst = np.array(output_lst, dtype=object)
     output_lst = np.transpose(output_lst, axes=(1, 0)).tolist()
@@ -125,10 +165,28 @@ def main(config):
     # add to the data frame
     dataset[f'responses'] = output_lst
 
+    # Log final summary statistics to wandb
+    if config.trainer.wandb:
+        all_response_lengths = []
+        for responses in output_lst:
+            for response in responses:
+                all_response_lengths.append(len(response.split()))
+        
+        summary_metrics = {
+            'final/total_samples': total_samples,
+            'final/total_responses': total_samples * config.data.n_samples,
+            'final/avg_response_length': np.mean(all_response_lengths),
+            'final/response_length_std': np.std(all_response_lengths),
+        }
+        wandb.log(flatten_dict(summary_metrics))
+    
     # write to a new parquet
     output_dir = os.path.dirname(config.data.output_path)
     makedirs(output_dir, exist_ok=True)
     dataset.to_parquet(config.data.output_path)
+
+    if config.trainer.wandb:
+        wandb.finish()
 
     return output_text
 

@@ -23,7 +23,7 @@ from verl.utils.reward_score import math, gsm8k
 import pandas as pd
 import numpy as np
 import pdb, wandb
-from utils import flatten_configs, print_configs
+from utils import flatten_dict, print_configs
 from environment import WANDB_INFO
 
 
@@ -43,10 +43,10 @@ def main(config):
         wandb.init(
             project=WANDB_INFO['project'],
             entity=WANDB_INFO['entity'],
-            config=flatten_configs(config)
+            config=flatten_dict(config)
         )
     
-    print_configs(flatten_configs(config))
+    print_configs(flatten_dict(config))
     
     local_path = copy_local_path_from_hdfs(config.data.path)
     dataset = pd.read_parquet(local_path)
