@@ -44,7 +44,7 @@ def main(config):
     
     if config.trainer.wandb:
         wandb.init(
-            project=WANDB_INFO['project'],
+            project=f"{WANDB_INFO['project']}-generation",
             entity=WANDB_INFO['entity'],
             config=flatten_dict(config)
         )
