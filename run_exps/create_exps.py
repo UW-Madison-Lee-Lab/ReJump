@@ -10,7 +10,7 @@ model_list = [model for model in supported_llms.keys() if supported_llms[model][
 shot_list = [10, 50, 100, 200]
 
 dataset_list = [
-    "blobs"
+    "blobs",
 ]
 
 def gen_dataset(
@@ -18,7 +18,8 @@ def gen_dataset(
     shot,
     template_type="qwen-instruct"
 ):
-    return f"""
+    if dataset_name == "blobs":
+        return f"""
 python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --template_type={template_type} \
     --num_samples=1000 \
@@ -28,6 +29,15 @@ python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --test_ratio=0.2 \
     --n_shot={shot}
     """
+    elif dataset_name == "moons":
+        return f"""
+python {root_dir}/examples/data_preprocess/{dataset_name}.py \
+    --template_type={template_type} \
+    --num_samples=1000 \
+    --n_shot={shot}
+    """
+    else:
+        raise ValueError(f"Dataset {dataset_name} not supported")
     
 def inference(
     dataset_name,
