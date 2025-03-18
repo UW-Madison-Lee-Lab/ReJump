@@ -187,7 +187,7 @@ if __name__ == '__main__':
     train_dataset = train_dataset.map(function=make_map_fn('train'), with_indices=True)
     test_dataset = test_dataset.map(function=make_map_fn('test'), with_indices=True)
 
-    local_dir = os.path.join(data_dir, "blobs", args.n_shot)
+    local_dir = os.path.join(data_dir, "blobs", f"{args.n_shot}_shot")
     hdfs_dir = args.hdfs_dir
 
     # Create directory if it doesn't exist
