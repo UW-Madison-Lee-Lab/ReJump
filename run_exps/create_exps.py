@@ -19,7 +19,7 @@ def gen_dataset(
     template_type="qwen-instruct"
 ):
     return f"""
-python examples/data_preprocess/{dataset_name}.py \
+python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --template_type={template_type} \
     --num_samples=1000 \
     --n_features=2 \
@@ -41,11 +41,11 @@ def inference(
 python -m verl.trainer.main_generation \
     trainer.nnodes=1 \
     trainer.n_gpus_per_node=2 \
-    data.path=datasets/{dataset_name}/{shot}_shot/test.parquet \
+    data.path={root_dir}/datasets/{dataset_name}/{shot}_shot/test.parquet \
     data.prompt_key=prompt \
     data.n_samples=1 \
     data.batch_size=128 \
-    data.output_path=results/{dataset_name}/{model_name}_{shot}_shot_gen_test.parquet \
+    data.output_path={root_dir}/results/{dataset_name}/{model_name}_{shot}_shot_gen_test.parquet \
     model.path={model_name} \
     +model.trust_remote_code=True \
     rollout.temperature={temperature} \
@@ -65,13 +65,13 @@ def eval(
 ):
     return f"""
 python -m verl.trainer.main_eval \
-    data.path=results/{dataset_name}/{model_name}_{shot}_shot_gen_test.parquet \
+    data.path={root_dir}/results/{dataset_name}/{model_name}_{shot}_shot_gen_test.parquet \
     trainer.wandb=True
     """
 
 os.makedirs(f"{root_dir}/run_exps/auto", exist_ok=True)
  
-script_names = []
+script_paths = []
 for dataset in dataset_list:
     for shot in shot_list:
         for model in model_list:
@@ -81,13 +81,13 @@ for dataset in dataset_list:
             eval_command = eval(dataset, shot, model)
             
             bash_script = "\n".join([gen_command, inference_command, eval_command])
-            script_name = f"{dataset}_{shot}_{model}.sh".replace("/", "_")
-            script_names.append(script_name)
-            with open(f"{root_dir}/run_exps/auto/{script_name}", "w") as f:
+            script_path = f"{root_dir}/run_exps/auto/{dataset}_{shot}_{model.replace('/', '_')}.sh"
+            script_paths.append(script_path)
+            with open(script_path, "w") as f:
                 f.write(bash_script)
 
 run_all_scripts = f"""
-for script in {script_names}; do
+for script in {script_paths}; do
     bash $script
 done
 """
