@@ -59,8 +59,10 @@ def main(config):
 
     total = len(dataset)
 
+    k = None
     for i in range(total):
         response_lst = responses[i]
+        if k is None: k = len(response_lst)
         data_source = data_sources[i]
         # select reward score based on data_source
         prompt = prompts[i]
@@ -79,11 +81,11 @@ def main(config):
         if max_score == 1:
             passes += 1
 
-    print(f'pass@{config.data.pass_at_k}: {passes / total}')
+    print(f'pass@{k}: {passes / total}')
 
     if config.trainer.wandb:
         wandb.log({
-            f'pass@{config.data.pass_at_k}': passes / total,
+            f'pass@{k}': passes / total,
         })
         wandb.finish()
 
