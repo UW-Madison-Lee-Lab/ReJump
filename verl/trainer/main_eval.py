@@ -22,7 +22,7 @@ from verl.utils.fs import copy_local_path_from_hdfs
 from verl.utils.reward_score import math, gsm8k
 import pandas as pd
 import numpy as np
-import pdb
+import pdb, wandb
 
 
 def select_reward_fn(data_source):
@@ -70,7 +70,7 @@ def main(config):
             passes += 1
 
     print(f'pass@5: {passes / total}')
-    print(f'acc: {n_corr / n_tot}')
+    print(f'acc: {(n_corr / n_tot):.4f}')
 
 if __name__ == '__main__':
     main()
