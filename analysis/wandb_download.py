@@ -7,7 +7,7 @@ api = wandb.Api(timeout=300)
 from environment import WANDB_INFO
 
 # Project is specified by <entity/project-name>
-runs = api.runs(f"{WANDB_INFO['entity']}/{WANDB_INFO['project']}")
+runs = api.runs(f"{WANDB_INFO['entity']}/{WANDB_INFO['project']}-evaluation")
 
 summary_list, config_list, name_list, id_list = [], [], [], []
 for run in runs: 
