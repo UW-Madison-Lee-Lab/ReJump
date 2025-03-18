@@ -1,0 +1,4 @@
+
+for script in ['blobs_10_Qwen_Qwen2.5-3B-Instruct.sh', 'blobs_10_deepseek-ai_DeepSeek-R1-Distill-Qwen-1.5B.sh', 'blobs_10_deepseek-ai_DeepSeek-R1-Distill-Qwen-7B.sh', 'blobs_10_Qwen_Qwen2.5-32B-Preview.sh', 'blobs_50_Qwen_Qwen2.5-3B-Instruct.sh', 'blobs_50_deepseek-ai_DeepSeek-R1-Distill-Qwen-1.5B.sh', 'blobs_50_deepseek-ai_DeepSeek-R1-Distill-Qwen-7B.sh', 'blobs_50_Qwen_Qwen2.5-32B-Preview.sh', 'blobs_100_Qwen_Qwen2.5-3B-Instruct.sh', 'blobs_100_deepseek-ai_DeepSeek-R1-Distill-Qwen-1.5B.sh', 'blobs_100_deepseek-ai_DeepSeek-R1-Distill-Qwen-7B.sh', 'blobs_100_Qwen_Qwen2.5-32B-Preview.sh', 'blobs_200_Qwen_Qwen2.5-3B-Instruct.sh', 'blobs_200_deepseek-ai_DeepSeek-R1-Distill-Qwen-1.5B.sh', 'blobs_200_deepseek-ai_DeepSeek-R1-Distill-Qwen-7B.sh', 'blobs_200_Qwen_Qwen2.5-32B-Preview.sh']; do
+    bash $script
+done
