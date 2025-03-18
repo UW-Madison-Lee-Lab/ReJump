@@ -23,6 +23,8 @@ from verl.utils.reward_score import math, gsm8k
 import pandas as pd
 import numpy as np
 import pdb, wandb
+from utils import flatten_configs, print_configs
+from environment import WANDB_INFO
 
 
 def select_reward_fn(data_source):
@@ -37,6 +39,15 @@ def select_reward_fn(data_source):
 
 @hydra.main(config_path='config', config_name='evaluation', version_base=None)
 def main(config):
+    if config.trainer.wandb:
+        wandb.init(
+            project=WANDB_INFO['project'],
+            entity=WANDB_INFO['entity'],
+            config=flatten_configs(config)
+        )
+    
+    print_configs(flatten_configs(config))
+    
     local_path = copy_local_path_from_hdfs(config.data.path)
     dataset = pd.read_parquet(local_path)
     prompts = dataset[config.data.prompt_key]
@@ -71,6 +82,13 @@ def main(config):
 
     print(f'pass@5: {passes / total}')
     print(f'acc: {(n_corr / n_tot):.4f}')
+    
+    if config.trainer.wandb:
+        wandb.log({
+            'pass@5': passes / total,
+            'acc': n_corr / n_tot
+        })
+        wandb.finish()
 
 if __name__ == '__main__':
     main()
