@@ -3,7 +3,9 @@ import os
 from constants import supported_llms
 from environment import root_dir
 
-model_list = list(supported_llms.keys())
+model_size_upper_limit = 10_000_000_000
+
+model_list = [model for model in supported_llms.keys() if supported_llms[model]["model_size"] <= model_size_upper_limit]
 
 shot_list = [10, 50, 100, 200]
 
