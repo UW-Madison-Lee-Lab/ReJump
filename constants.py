@@ -20,5 +20,13 @@ supported_llms = {
     "Qwen/QwQ-32B-preview": {
         "template_type": "qwen-instruct",
         "model_size": 32_000_000_000,
-    }
+    },
+    "Qwen/Qwen2.5-1.5B-Instruct": {
+        "template_type": "qwen-instruct",
+        "model_size": 1_500_000_000,
+    },
+    "Qwen/Qwen2.5-7B-Instruct": {
+        "template_type": "qwen-instruct",
+        "model_size": 7_000_000_000,
+    },
 }

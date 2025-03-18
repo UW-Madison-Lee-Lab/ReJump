@@ -6,15 +6,17 @@ import argparse
 
 model_size_upper_limit = 10_000_000_000
 
-model_list = [model for model in supported_llms.keys() if supported_llms[model]["model_size"] <= model_size_upper_limit]
+supported_model_list = [model for model in supported_llms.keys() if supported_llms[model]["model_size"] <= model_size_upper_limit]
 
 shot_list = [10, 50, 100, 200]
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--dataset", type=str, nargs="+", default=["blobs"], choices=["blobs", "moons", "linear"])
+parser.add_argument("--model", type=str, nargs="+", default=supported_model_list, choices=supported_model_list)
 args = parser.parse_args()
 
 dataset_list = args.dataset
+model_list = args.model
 
 def gen_dataset(
     dataset_name, 
