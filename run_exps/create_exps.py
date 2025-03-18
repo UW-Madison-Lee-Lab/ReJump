@@ -39,11 +39,11 @@ def inference(
 python -m verl.trainer.main_generation \
     trainer.nnodes=1 \
     trainer.n_gpus_per_node=2 \
-    data.path=datasets/{dataset_name}/{shot}.parquet \
+    data.path=datasets/{dataset_name}/{shot}_shot/test.parquet \
     data.prompt_key=prompt \
     data.n_samples=1 \
     data.batch_size=128 \
-    data.output_path=results/{dataset_name}/{model_name}_{shot}_gen_test.parquet \
+    data.output_path=results/{dataset_name}/{model_name}_{shot}_shot_gen_test.parquet \
     model.path={model_name} \
     +model.trust_remote_code=True \
     rollout.temperature={temperature} \
@@ -63,7 +63,7 @@ def eval(
 ):
     return f"""
 python -m verl.trainer.main_eval \
-    data.path=results/{dataset_name}/{model_name}_{shot}_gen_test.parquet \
+    data.path=results/{dataset_name}/{model_name}_{shot}_shot_gen_test.parquet \
     trainer.wandb=True
     """
 
