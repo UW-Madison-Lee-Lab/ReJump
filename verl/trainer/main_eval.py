@@ -46,6 +46,7 @@ def main(config):
             config=flatten_dict(config)
         )
     
+
     print_configs(flatten_dict(config))
     
     local_path = copy_local_path_from_hdfs(config.data.path)

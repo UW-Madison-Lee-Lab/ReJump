@@ -1,9 +1,9 @@
 import os
-import json
+import json, pdb
 import torch
 import numpy as np
 import random
-
+from omegaconf import DictConfig
 
 def set_seed(seed):
     np.random.seed(seed)
@@ -14,14 +14,17 @@ def set_seed(seed):
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.enabled = False
     
-def flatten_dict(config, prefix=''):
-    new_config = {}
-    for key in config:
-        if isinstance(config[key], dict):
-            new_config.update(flatten_dict(config[key], prefix=f'{prefix}.{key}'))
+def flatten_dict(d):
+    new_d = {}
+    for k1 in d:
+        if isinstance(d[k1], DictConfig) or isinstance(d[k1], dict):
+            d1 = flatten_dict(d[k1])
+            for k2 in d1:
+                new_d[f"{k1}.{k2}"] = d1[k2]
         else:
-            new_config[f'{prefix}.{key}'] = config[key]
-    return new_config
+            new_d[k1] = d[k1]
+    return new_d
+                
     
 def print_configs(args_dict):
     # print experiment configuration
