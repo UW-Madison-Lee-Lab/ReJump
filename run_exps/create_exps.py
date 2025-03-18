@@ -2,6 +2,7 @@ import pandas as pd
 import os
 from constants import supported_llms
 from environment import root_dir
+import argparse
 
 model_size_upper_limit = 10_000_000_000
 
@@ -9,9 +10,11 @@ model_list = [model for model in supported_llms.keys() if supported_llms[model][
 
 shot_list = [10, 50, 100, 200]
 
-dataset_list = [
-    "blobs",
-]
+parser = argparse.ArgumentParser()
+parser.add_argument("--dataset", type=str, nargs="+", default=["blobs"], choices=["blobs", "moons"])
+args = parser.parse_args()
+
+dataset_list = args.dataset
 
 def gen_dataset(
     dataset_name, 
