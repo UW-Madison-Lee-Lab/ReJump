@@ -13,6 +13,7 @@ data:
 model:
   path: ~/models/Qwen2-7B-Instruct  # Path to the model; uses Qwen 2.5 7B Instruct model.
   external_lib: null         # External library to import; null means none specified.
+  quantization: bitsandbytes         # Quantization method; bitsandbytes for 4-bit quantization.
 
 actor:
   ulysses_sequence_parallel_size: 1  # Sequence parallel size for Ulysses; 1 means no sequence parallelism.

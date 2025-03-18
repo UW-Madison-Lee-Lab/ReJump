@@ -115,3 +115,4 @@ datasets/
 results/
 environment.py
 **/auto/
+**/trials/
