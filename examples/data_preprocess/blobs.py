@@ -64,7 +64,6 @@ def make_prefix(dp, template_type, n_classes, n_shot=0, in_context_dataset=None)
     features = dp['features']
     label = dp['label']
     
-    
     # Add in-context examples if requested
     in_context_examples = ""
     if n_shot > 0 and in_context_dataset is not None:
@@ -94,6 +93,7 @@ def make_prefix(dp, template_type, n_classes, n_shot=0, in_context_dataset=None)
         <|im_start|>user\n The dataset has {n_classes} classes: {list(range(n_classes))}. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer>2</answer>.<|im_end|>\n<|im_start|>assistant\nLet me solve this step by step.\n<think>
         """
     return prefix
+
 
 
 if __name__ == '__main__':
@@ -187,7 +187,7 @@ if __name__ == '__main__':
     train_dataset = train_dataset.map(function=make_map_fn('train'), with_indices=True)
     test_dataset = test_dataset.map(function=make_map_fn('test'), with_indices=True)
 
-    local_dir = os.path.join(data_dir, "blobs")
+    local_dir = os.path.join(data_dir, "blobs", args.n_shot)
     hdfs_dir = args.hdfs_dir
 
     # Create directory if it doesn't exist
