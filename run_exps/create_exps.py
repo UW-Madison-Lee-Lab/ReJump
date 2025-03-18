@@ -32,7 +32,7 @@ python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --test_ratio=0.2 \
     --n_shot={shot}
     """
-    elif dataset_name == "moons":
+    elif dataset_name in ["moons", "linear"]:
         return f"""
 python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --template_type={template_type} \
