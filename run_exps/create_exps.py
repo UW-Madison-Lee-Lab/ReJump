@@ -86,11 +86,7 @@ for dataset in dataset_list:
             with open(script_path, "w") as f:
                 f.write(bash_script)
 
-run_all_scripts = f"""
-for script in {script_paths}; do
-    bash $script
-done
-"""
+run_all_scripts = "\n".join([f"bash {script_path}" for script_path in script_paths])
 
 with open(f"{root_dir}/run_exps/auto/run_all.sh", "w") as f:
     f.write(run_all_scripts)
