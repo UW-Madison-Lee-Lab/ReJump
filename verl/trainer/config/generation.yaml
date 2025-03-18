@@ -18,7 +18,8 @@ model:
 actor:
   ulysses_sequence_parallel_size: 1  # Sequence parallel size for Ulysses; 1 means no sequence parallelism.
   fsdp_config:               # Configuration for Fully Sharded Data Parallel (FSDP).
-    dtype: bfloat16          # Data type for FSDP; bfloat16 for mixed precision training.
+  dtype: bfloat16          # Data type for FSDP; bfloat16 for mixed precision training.
+  use_dynamic_bsz: True    # Whether to use dynamic batch size; True enables dynamic batch size.
 
 rollout:
   name: vllm                 # Generation engine type; vLLM for efficient inference.
