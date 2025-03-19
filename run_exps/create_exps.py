@@ -139,13 +139,14 @@ script_paths = []
 for dataset in dataset_list:
     for shot in shot_list:
         prompt_length = ((24 * shot + 185) // 1000 + 1) * 1000
-        response_length = prompt_length // 2
         for model in model_list:
             for mode in args.mode:
                 if mode == "reasoning":
                     template_type = supported_llms[model]["template_type"]
+                    response_length = prompt_length * 5
                 elif mode == "no_reasoning":
                     template_type = "no_reasoning"
+                    response_length = prompt_length // 2
                 else:
                     raise ValueError(f"Mode {mode} not supported, should be in [reasoning, no_reasoning]")
                 
