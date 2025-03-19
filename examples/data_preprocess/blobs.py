@@ -10,7 +10,7 @@ from typing import List, Tuple, Dict, Any
 from tqdm import tqdm
 from verl.utils.hdfs_io import copy, makedirs
 import argparse
-from constants import data_dir
+from constants import data_dir, get_dataset_dir
 import re, pdb
 from utils import set_seed
 
@@ -187,7 +187,7 @@ if __name__ == '__main__':
     train_dataset = train_dataset.map(function=make_map_fn('train'), with_indices=True)
     test_dataset = test_dataset.map(function=make_map_fn('test'), with_indices=True)
 
-    local_dir = os.path.join(data_dir, "blobs", f"{args.n_shot}_shot")
+    local_dir = get_dataset_dir(data_source, args.n_shot, args.template_type)
     hdfs_dir = args.hdfs_dir
 
     # Create directory if it doesn't exist
