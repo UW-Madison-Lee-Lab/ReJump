@@ -62,7 +62,7 @@ python -m verl.trainer.main_generation \
     data.prompt_key=prompt \
     data.n_samples=1 \
     data.batch_size=128 \
-    data.output_path={get_result_dir(dataset_name, model_name, shot, template_type)} \
+    data.output_path={get_result_dir(dataset_name, model_name, shot, template_type)}/test.parquet \
     model.path={model_name} \
     +model.trust_remote_code=True \
     rollout.temperature={temperature} \
@@ -83,7 +83,7 @@ def eval(
 ):
     return f"""
 python -m verl.trainer.main_eval \
-    data.path={get_result_dir(dataset_name, model_name, shot, template_type)} \
+    data.path={get_result_dir(dataset_name, model_name, shot, template_type)}/test.parquet \
     trainer.wandb=True
     """
 
