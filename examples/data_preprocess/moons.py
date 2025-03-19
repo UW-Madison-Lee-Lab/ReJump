@@ -13,7 +13,7 @@ import argparse
 from constants import data_dir
 import re, pdb
 from utils import set_seed
-from examples.data_preprocess.utils import save_data, classification_reward_fn
+from examples.data_preprocess.helper import save_data, classification_reward_fn
 
 def gen_dataset(
     num_samples: int,
