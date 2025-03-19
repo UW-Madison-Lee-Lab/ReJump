@@ -47,7 +47,6 @@ def check_results(
     test_dataset = pd.read_parquet(os.path.join(local_dir, 'test.parquet'))
     for idx, row in test_dataset.iterrows():
         print(row['prompt'])
-        print(row['ground_truth'])
         print(row['response'])
         print('-'*100)
         
