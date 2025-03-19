@@ -37,8 +37,21 @@ from verl.utils.hdfs_io import makedirs
 from verl.single_controller.ray import RayClassWithInitArgs, RayResourcePool, RayWorkerGroup
 from utils import flatten_dict, print_configs
 from constants import get_configs_via_result_dir
-from environment import WANDB_INFO
-import wandb
+import wandb   
+try:
+    from environment import WANDB_INFO, HUGGINGFACE_API_KEY
+except ImportError:
+    raise ImportError("""
+Please create environment.py file in the project root directory.
+Here is the expectede format of WANDB_INFO and HUGGINGFACE_API_KEY:
+
+WANDB_INFO = {"project": "your-project-id", "entity": "your-entity-name"}
+HUGGINGFACE_API_KEY = "your-huggingface-api-key"
+
+""")
+
+from huggingface_hub import login
+login(token=HUGGINGFACE_API_KEY)
 
 @hydra.main(config_path='config', config_name='generation', version_base=None)
 def main(config):
@@ -51,6 +64,7 @@ def main(config):
             entity=WANDB_INFO['entity'],
             config=wandb_configs
         )
+        
     
     print_configs(flatten_dict(config))
     
