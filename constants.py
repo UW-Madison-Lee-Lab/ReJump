@@ -4,7 +4,7 @@ root_dir = os.path.dirname(os.path.abspath(__file__))
 data_dir = os.path.join(root_dir, 'datasets')
 
 def get_result_dir(dataset_name, model_name, shot, template_type):
-    return os.path.join(root_dir, 'results', dataset_name, f"{model_name}_{shot}_shot_{template_type}_gen_test.parquet")
+    return os.path.join(root_dir, 'results', dataset_name, f"{model_name.replace('/', '_')}_{shot}_shot_{template_type}_gen_test.parquet")
 def get_configs_via_result_dir(result_dir):
     basename = os.path.basename(result_dir)
     dirname = os.path.dirname(result_dir)
