@@ -93,21 +93,22 @@ script_paths = []
 for dataset in dataset_list:
     for shot in shot_list:
         for model in model_list:
-            if args.mode == "reasoning":
-                template_type = supported_llms[model]["template_type"]
-            elif args.mode == "no_reasoning":
-                template_type = "no_reasoning"
-            else:
-                raise ValueError(f"Mode {args.mode} not supported, should be in [reasoning, no_reasoning]")
-            gen_command = gen_dataset(dataset, shot, template_type)
-            inference_command = inference(dataset, shot, model, template_type)
-            eval_command = eval(dataset, shot, model, template_type)
-            
-            bash_script = "\n".join([gen_command, inference_command, eval_command])
-            script_path = f"{root_dir}/run_exps/auto/{dataset}_{shot}_{model.replace('/', '_')}.sh"
-            script_paths.append(script_path)
-            with open(script_path, "w") as f:
-                f.write(bash_script)
+            for mode in args.mode:
+                if mode == "reasoning":
+                    template_type = supported_llms[model]["template_type"]
+                elif mode == "no_reasoning":
+                    template_type = "no_reasoning"
+                else:
+                    raise ValueError(f"Mode {mode} not supported, should be in [reasoning, no_reasoning]")
+                gen_command = gen_dataset(dataset, shot, template_type)
+                inference_command = inference(dataset, shot, model, template_type)
+                eval_command = eval(dataset, shot, model, template_type)
+                
+                bash_script = "\n".join([gen_command, inference_command, eval_command])
+                script_path = f"{root_dir}/run_exps/auto/{dataset}_{shot}_{model.replace('/', '_')}.sh"
+                script_paths.append(script_path)
+                with open(script_path, "w") as f:
+                    f.write(bash_script)
 
 run_all_scripts = "\n".join([f"bash {script_path}" for script_path in script_paths])
 
