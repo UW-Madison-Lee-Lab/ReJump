@@ -45,8 +45,12 @@ def check_results(
 ):
     local_dir = get_result_dir(dataset_name, model_name, shot, template_type)
     test_dataset = pd.read_parquet(os.path.join(local_dir, 'test.parquet'))
-    for idx, row in test_dataset.iterrows():
-        print(row['prompt'])
-        print(row['response'])
-        print('-'*100)
+    while True:
+        idx = input("Enter the index of the example to check: ")
+        if idx == 'q':
+            break
+        idx = int(idx)
+        print(test_dataset.iloc[idx]['prompt'])
+        print(test_dataset.iloc[idx]['responses'][0])
+
         
