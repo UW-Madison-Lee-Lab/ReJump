@@ -30,6 +30,15 @@ def _select_rm_score_fn(data_source):
         return multiply.compute_score
     elif "countdown" in data_source:
         return countdown.compute_score
+    elif "linear" in data_source:
+        from examples.data_preprocess.linear import linear_reward_fn
+        return linear_reward_fn
+    elif "blobs" in data_source:
+        from examples.data_preprocess.blobs import blobs_reward_fn
+        return blobs_reward_fn
+    elif "moons" in data_source:
+        from examples.data_preprocess.moons import moons_reward_fn
+        return moons_reward_fn
     else:
         raise NotImplementedError
 
