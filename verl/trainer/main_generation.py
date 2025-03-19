@@ -36,6 +36,7 @@ from verl.workers.fsdp_workers import ActorRolloutRefWorker
 from verl.utils.hdfs_io import makedirs
 from verl.single_controller.ray import RayClassWithInitArgs, RayResourcePool, RayWorkerGroup
 from utils import flatten_dict, print_configs
+from constants import get_configs_via_result_dir
 from environment import WANDB_INFO
 import wandb
 
@@ -43,10 +44,12 @@ import wandb
 def main(config):
     
     if config.trainer.wandb:
+        wandb_configs = flatten_dict(config)
+        wandb_configs.update(get_configs_via_result_dir(config.data.output_path))
         wandb.init(
             project=f"{WANDB_INFO['project']}-generation",
             entity=WANDB_INFO['entity'],
-            config=flatten_dict(config)
+            config=wandb_configs
         )
     
     print_configs(flatten_dict(config))

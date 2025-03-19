@@ -83,8 +83,19 @@ def make_prefix(dp, template_type, n_classes, n_shot=0, in_context_dataset=None)
         <|im_start|>system\nYou are a helpful assistant. You first thinks about the reasoning process in the mind and then provides the user with the answer.<|im_end|>\n
         <|im_start|>user\n The dataset has {n_classes} classes: {list(range(n_classes))}. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer>1</answer>.<|im_end|>\n<|im_start|>assistant\nLet me solve this step by step.\n<think>
         """
+    elif template_type == 'no_reasoning':
+        """This do not allow any reasoning"""
+        prefix = f"""
+        <|im_start|>system
+        You are a helpful assistant. You always provide the user directly with the answer without any reasoning.
+        <|im_end|>
+        <|im_start|>user
+        The dataset has {n_classes} classes: {list(range(n_classes))}. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. Your response should be in <answer> </answer> tags without any other text, for example <answer>1</answer>.
+        <|im_end|>
+        <|im_start|>assistant
+        <answer>
+        """
     return prefix
-
 
 
 if __name__ == '__main__':
@@ -173,7 +184,7 @@ if __name__ == '__main__':
     train_dataset = train_dataset.map(function=make_map_fn('train'), with_indices=True)
     test_dataset = test_dataset.map(function=make_map_fn('test'), with_indices=True)
 
-    local_dir = os.path.join(data_dir, "moons", f"{args.n_shot}_shot")
+    local_dir = os.path.join(data_dir, "moons", f"{args.n_shot}_shot", args.template_type)
     hdfs_dir = args.hdfs_dir
 
     # Create directory if it doesn't exist
