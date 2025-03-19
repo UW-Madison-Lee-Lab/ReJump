@@ -3,7 +3,7 @@ import os
 from verl.utils.hdfs_io import copy, makedirs
 import numpy as np
 import re
-from constants import data_dir
+from constants import get_dataset_dir
 
 def format_features(features):
     return ", ".join([f"{x:.3f}" for x in features])
@@ -110,7 +110,7 @@ def save_data(
     train_dataset = train_dataset.map(function=make_map_fn('train'), with_indices=True)
     test_dataset = test_dataset.map(function=make_map_fn('test'), with_indices=True)
 
-    local_dir = os.path.join(data_dir, "moons", f"{args.n_shot}_shot", args.template_type)
+    local_dir = get_dataset_dir(data_source, args.n_shot, args.template_type)
     hdfs_dir = args.hdfs_dir
 
     # Create directory if it doesn't exist
