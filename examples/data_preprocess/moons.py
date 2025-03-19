@@ -93,5 +93,5 @@ if __name__ == '__main__':
         TEST_SIZE
     )
     
-def moons_reward_fn(response, ground_truth):
-    return classification_reward_fn(response, ground_truth)
+def moons_reward_fn(solution_str, ground_truth):
+    return classification_reward_fn(solution_str, ground_truth)

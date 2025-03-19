@@ -123,8 +123,8 @@ def save_data(
         makedirs(hdfs_dir)
         copy(src=local_dir, dst=hdfs_dir)
 
-def classification_reward_fn(response, ground_truth):
-    response_extract = re.search(r'<answer>(.*?)</answer>', response, re.DOTALL)
+def classification_reward_fn(solution_str, ground_truth):
+    response_extract = re.search(r'<answer>(.*?)</answer>', solution_str, re.DOTALL)
     if response_extract is not None and response_extract.group(1).strip().isdigit():
         response_class = int(response_extract.group(1).strip())
     else:
