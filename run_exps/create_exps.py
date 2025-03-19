@@ -100,12 +100,25 @@ for dataset in dataset_list:
                     template_type = "no_reasoning"
                 else:
                     raise ValueError(f"Mode {mode} not supported, should be in [reasoning, no_reasoning]")
-                gen_command = gen_dataset(dataset, shot, template_type)
-                inference_command = inference(dataset, shot, model, template_type)
-                eval_command = eval(dataset, shot, model, template_type)
-                
+                gen_command = gen_dataset(
+                    dataset_name=dataset,
+                    shot=shot,
+                    template_type=template_type
+                )
+                inference_command = inference(
+                    dataset_name=dataset,
+                    shot=shot,
+                    model_name=model,
+                    template_type=template_type
+                )
+                eval_command = eval(
+                    dataset_name=dataset,
+                    shot=shot,
+                    model_name=model,
+                    template_type=template_type
+                )
                 bash_script = "\n".join([gen_command, inference_command, eval_command])
-                script_path = f"{root_dir}/run_exps/auto/{dataset}_{shot}_{model.replace('/', '_')}.sh"
+                script_path = f"{root_dir}/run_exps/auto/{dataset}_{shot}_{model.replace('/', '_')}_{mode}.sh"
                 script_paths.append(script_path)
                 with open(script_path, "w") as f:
                     f.write(bash_script)
