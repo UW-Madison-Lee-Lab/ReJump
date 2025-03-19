@@ -2,16 +2,11 @@
 Preprocess dataset for moons task - a synthetic classification task with two interleaving half circles
 """
 
-import os
 import numpy as np
-from datasets import Dataset
 from sklearn.datasets import make_moons
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple
 from tqdm import tqdm
-from verl.utils.hdfs_io import copy, makedirs
 import argparse
-from constants import data_dir
-import re, pdb
 from utils import set_seed
 from examples.data_preprocess.helper import save_data, classification_reward_fn
 
