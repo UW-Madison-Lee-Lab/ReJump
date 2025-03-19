@@ -11,9 +11,11 @@ supported_model_list = [model for model in supported_llms.keys() if supported_ll
 shot_list = [10, 50, 100, 200]
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--dataset", type=str, nargs="+", default=["blobs"], choices=["blobs", "moons", "linear"])
+parser.add_argument("--dataset", type=str, nargs="+", default=["blobs", "moons", "linear"], choices=["blobs", "moons", "linear"])
 parser.add_argument("--model", type=str, nargs="+", default=supported_model_list, choices=supported_model_list)
 parser.add_argument("--mode", type=str, nargs="+", default=["reasoning", "no_reasoning"], choices=["reasoning", "no_reasoning"])
+parser.add_argument("--train", action="store_true")
+parser.add_argument("--n_gpus", type=int, default=2)
 args = parser.parse_args()
 
 dataset_list = args.dataset
@@ -44,20 +46,64 @@ python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     """
     else:
         raise ValueError(f"Dataset {dataset_name} not supported")
-    
+
+def train(
+    dataset_name,
+    shot,
+    model_name,
+    template_type="qwen-instruct",
+    prompt_length=256,
+    response_length=1024
+):
+    return f"""
+export VLLM_ATTENTION_BACKEND=XFORMERS
+
+python3 -m verl.trainer.main_ppo \
+    data.train_files={get_dataset_dir(dataset_name, shot, template_type)}/train.parquet \
+    data.val_files={get_dataset_dir(dataset_name, shot, template_type)}/test.parquet \
+    data.train_batch_size=256 \
+    data.val_batch_size=1312 \
+    data.max_prompt_length={prompt_length} \
+    data.max_response_length={response_length} \
+    actor_rollout_ref.model.path={model_name} \
+    actor_rollout_ref.model.use_remove_padding=True \
+    actor_rollout_ref.actor.use_dynamic_bsz=True \
+    actor_rollout_ref.actor.optim.lr=1e-6 \
+    actor_rollout_ref.actor.ppo_mini_batch_size=64 \
+    actor_rollout_ref.actor.ppo_micro_batch_size=8 \
+    actor_rollout_ref.rollout.log_prob_micro_batch_size=8 \
+    actor_rollout_ref.rollout.tensor_model_parallel_size={args.n_gpus} \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.4 \
+    actor_rollout_ref.ref.log_prob_micro_batch_size=4 \
+    critic.optim.lr=1e-5 \
+    critic.model.path={model_name} \
+    critic.ppo_micro_batch_size=8 \
+    algorithm.kl_ctrl.kl_coef=0.001 \
+    trainer.logger=['wandb'] \
+    +trainer.val_before_train=False \
+    trainer.default_hdfs_dir=null \
+    trainer.n_gpus_per_node={args.n_gpus} \
+    trainer.nnodes=1 \
+    trainer.save_freq=100 \
+    trainer.test_freq=100 \
+    trainer.project_name=TinyZero \
+    trainer.experiment_name={dataset_name}_{shot}_{model_name.replace('/', '_')}_{template_type} \
+    trainer.total_epochs=15 2>&1 | tee verl_demo.log
+    """
+
 def inference(
     dataset_name,
     shot,
     model_name,
     temperature=0.3,
-    template_type="qwen-instruct"
+    template_type="qwen-instruct",
+    prompt_length=256,
+    response_length=1024
 ):
-    prompt_length = ((24 * shot + 185) // 1000 + 1) * 1000
-    response_length = prompt_length // 2
     return f"""
 python -m verl.trainer.main_generation \
     trainer.nnodes=1 \
-    trainer.n_gpus_per_node=2 \
+    trainer.n_gpus_per_node={args.n_gpus} \
     data.path={get_dataset_dir(dataset_name, shot, template_type)}/test.parquet \
     data.prompt_key=prompt \
     data.n_samples=1 \
@@ -70,7 +116,7 @@ python -m verl.trainer.main_generation \
     rollout.top_p=0.9 \
     rollout.prompt_length={prompt_length} \
     rollout.response_length={response_length} \
-    rollout.tensor_model_parallel_size=2 \
+    rollout.tensor_model_parallel_size={args.n_gpus} \
     rollout.gpu_memory_utilization=0.8 \
     trainer.wandb=True
     """
@@ -92,6 +138,8 @@ os.makedirs(f"{root_dir}/run_exps/auto", exist_ok=True)
 script_paths = []
 for dataset in dataset_list:
     for shot in shot_list:
+        prompt_length = ((24 * shot + 185) // 1000 + 1) * 1000
+        response_length = prompt_length // 2
         for model in model_list:
             for mode in args.mode:
                 if mode == "reasoning":
@@ -100,25 +148,44 @@ for dataset in dataset_list:
                     template_type = "no_reasoning"
                 else:
                     raise ValueError(f"Mode {mode} not supported, should be in [reasoning, no_reasoning]")
+                
+                command_list = []
+                
                 gen_command = gen_dataset(
                     dataset_name=dataset,
                     shot=shot,
-                    template_type=template_type
+                    template_type=template_type,
                 )
-                inference_command = inference(
-                    dataset_name=dataset,
-                    shot=shot,
-                    model_name=model,
-                    template_type=template_type
-                )
-                eval_command = eval(
-                    dataset_name=dataset,
-                    shot=shot,
-                    model_name=model,
-                    template_type=template_type
-                )
-                bash_script = "\n".join([gen_command, inference_command, eval_command])
-                script_path = f"{root_dir}/run_exps/auto/{dataset}_{shot}_{model.replace('/', '_')}_{mode}.sh"
+                command_list.append(gen_command)
+                if args.train:
+                    train_command = train(
+                        dataset_name=dataset,
+                        shot=shot,
+                        model_name=model,
+                        template_type=template_type,
+                        prompt_length=prompt_length,
+                        response_length=response_length
+                    )
+                    command_list.append(train_command)
+                else:
+                    inference_command = inference(
+                        dataset_name=dataset,
+                        shot=shot,
+                        model_name=model,
+                        template_type=template_type,
+                        prompt_length=prompt_length,
+                        response_length=response_length
+                    )
+                    command_list.append(inference_command)
+                    eval_command = eval(
+                        dataset_name=dataset,
+                        shot=shot,
+                        model_name=model,
+                        template_type=template_type,
+                    )
+                    command_list.append(eval_command)
+                bash_script = "\n".join(command_list)
+                script_path = f"{root_dir}/run_exps/auto/{dataset}_{shot}_{model.replace('/', '_')}_{mode}_train_{args.train}.sh"
                 script_paths.append(script_path)
                 with open(script_path, "w") as f:
                     f.write(bash_script)
