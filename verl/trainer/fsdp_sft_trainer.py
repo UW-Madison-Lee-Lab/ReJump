@@ -170,7 +170,7 @@ class FSDPSFTTrainer(object):
 
         trust_remote_code = self.config.model.trust_remote_code
         # load config first
-        config = AutoConfig.from_pretrained(local_model_path, trust_remote_code=trust_remote_code)
+        config = AutoConfig.from_pretrained(extract_model_name(local_model_path), trust_remote_code=trust_remote_code)
 
         # This may be very large
         init_context = get_init_weight_context_manager(use_meta_tensor=not config.tie_word_embeddings)
