@@ -44,11 +44,11 @@ def main():
         print("\n=== Basic Statistics ===")
         print(df.describe())
 
-        print(type(df[["prompt"]]))
-        print(type(df[["prompt"]][:3]))
+        # print(type(df[["prompt"]]))
+        # print(type(df[["prompt"]][:3]))
         
-        print(df[["prompt"]].values.tolist())
-        print(df["prompt"].tolist())
+        # print(df[["prompt"]].values.tolist())
+        print(df["prompt"].tolist()[2])
 
     except Exception as e:
         print(f"Error reading file: {str(e)}")
