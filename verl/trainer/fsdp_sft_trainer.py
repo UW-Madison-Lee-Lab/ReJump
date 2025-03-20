@@ -420,6 +420,7 @@ class FSDPSFTTrainer(object):
             for data in self.train_dataloader:
                 data = TensorDict(data, batch_size=self.config.data.train_batch_size).cuda()
                 metric = self.training_step(data)
+                input("Press Enter to continue...")
                 if rank == 0:
                     tracking.log(data=metric, step=global_step)
                 global_step += 1
