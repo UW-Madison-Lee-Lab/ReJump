@@ -42,8 +42,9 @@ def check_results(
     shot,
     model_name,
     template_type,
+    response_length
 ):
-    local_dir = get_result_dir(dataset_name, model_name, shot, template_type)
+    local_dir = get_result_dir(dataset_name, model_name, shot, template_type, response_length)
     test_dataset = pd.read_parquet(os.path.join(local_dir, 'test.parquet'))
     while True:
         idx = input("Enter the index of the example to check: ")
