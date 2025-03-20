@@ -56,6 +56,10 @@ def get_configs_via_dataset_dir(dataset_dir):
 
 supported_llms = {
     # Qwen
+    "Qwen/Qwen2.5-0.5B": {
+        "template_type": "qwen-instruct",
+        "model_size": 500_000_000,
+    },
     "Qwen/Qwen2.5-1.5B-Instruct": {
         "template_type": "qwen-instruct",
         "model_size": 1_500_000_000,
