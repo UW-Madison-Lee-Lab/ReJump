@@ -61,9 +61,9 @@ def process_model_name_for_repo(model_path):
     if '/' in model_path:
         # If it's a path, get the last three non-empty components
         parts = [p for p in model_path.split('/') if p]
-        if len(parts) >= 3:
+        if len(parts) >= 4:
             # Take the last three parts and join them
-            base_name = '-'.join(parts[-3:])
+            base_name = '-'.join(parts[-4:])
         else:
             # If less than 3 parts, use all parts
             base_name = '-'.join(parts)
@@ -369,8 +369,7 @@ class FSDPSFTTrainer(object):
                 hub_config = self.config.trainer.hub
                 if hub_config.get('push_to_hub', False):
                     # Get the original model path
-                    local_model_path = copy_local_path_from_hdfs(src=self.config.model.partial_pretrain, verbose=True)
-                    model_name = extract_model_name(local_model_path)
+                    model_name = extract_model_name(path)
                     
                     # Process model name for repo
                     processed_name = process_model_name_for_repo(model_name)
@@ -438,7 +437,9 @@ class FSDPSFTTrainer(object):
             #     tracking.log(data=metric, step=global_step)
             # torch.distributed.barrier()
 
-            # save checkpoint
+            # save checkpoint at the end of each epoch
+            if rank == 0:
+                logger.info(f"Saving checkpoint at epoch {epoch}, step {global_step}")
             self.save_checkpoint(step=global_step)
 
 
