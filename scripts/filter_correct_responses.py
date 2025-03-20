@@ -51,7 +51,7 @@ def main():
     if os.path.exists(args.already_trained_correct_path):
         already_trained = pd.read_parquet(args.already_trained_correct_path)
         # Create a set of previously used prompt-response pairs for quick lookup
-        previous_pairs = set(zip(already_trained['prompt'], already_trained['answer']))
+        previous_pairs = set((str(p), str(a)) for p, a in zip(already_trained['prompt'], already_trained['answer']))
     
     # Extract correct responses and create new dataset
     new_data = []

@@ -47,7 +47,7 @@ def select_reward_fn(data_source):
 def main(config):
     if config.trainer.wandb:
         wandb.init(
-            project=f"{WANDB_INFO['project']}-evaluation",
+            project=f"{WANDB_INFO['project']}-{config.trainer.project_name}",
             entity=WANDB_INFO['entity'],
             config=flatten_dict(config)
         )
