@@ -104,7 +104,7 @@ def train_on_correct_responses(
         model_name_safe=$(basename ${{current_model}} | tr '/' '_')
         experiment_name="{dataset_name}-${{model_name_safe}}-iter${{iteration}}"
 
-        torchrun --standalone --nnodes=1 --nproc_per_node=2 \\
+        torchrun --standalone --nnodes=1 --nproc_per_node=1 \\
             -m verl.trainer.fsdp_sft_trainer \\
             data.train_files={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_correct_train.parquet \\
             data.val_files={root_dir}/datasets/{dataset_name}/{shot}_shot/test.parquet \\
