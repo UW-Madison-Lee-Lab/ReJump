@@ -260,7 +260,11 @@ class FSDPSFTTrainer(object):
         log_gpu_memory_usage('After initialize optimizer', logger=logger)
 
         steps_per_epoch = len(self.train_dataloader)
+        print(steps_per_epoch)
+        input("Press Enter to continue2...")
         total_steps = steps_per_epoch * self.config.trainer.total_epochs
+        print(total_steps)
+        input("Press Enter to continue3...")
 
         if self.device_mesh.get_rank() == 0:
             print(
@@ -429,6 +433,7 @@ class FSDPSFTTrainer(object):
                 if rank == 0:
                     tracking.log(data=metric, step=global_step)
                 global_step += 1
+                input("ented the training step...")
 
             # validation
             # val_losses = []
