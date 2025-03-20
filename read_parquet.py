@@ -22,6 +22,11 @@ def main():
         # Read parquet file
         df = pd.read_parquet(args.file_path)
         
+        # Set display options to show all columns and rows
+        pd.set_option('display.max_columns', None)
+        pd.set_option('display.width', None)
+        pd.set_option('display.max_colwidth', None)
+        
         # Display basic information
         print("\n=== Basic Information ===")
         print(f"Data shape: {df.shape}")
