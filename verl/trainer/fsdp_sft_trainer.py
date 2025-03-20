@@ -174,25 +174,25 @@ class FSDPSFTTrainer(object):
                                                 shuffle=True,
                                                 num_replicas=world_size,
                                                 rank=rank,
-                                                drop_last=True)
+                                                drop_last=False)
         self.train_dataloader = DataLoader(dataset=self.train_dataset,
                                            batch_size=config.data.train_batch_size,
                                            sampler=self.train_sampler,
                                            num_workers=8,
                                            pin_memory=True,
-                                           drop_last=True)
+                                           drop_last=False)
 
         self.val_sampler = DistributedSampler(self.val_dataset,
                                               shuffle=True,
                                               num_replicas=world_size,
                                               rank=rank,
-                                              drop_last=True)
+                                              drop_last=False)
         self.val_dataloader = DataLoader(dataset=self.val_dataset,
                                          batch_size=config.data.micro_batch_size,
                                          sampler=self.val_sampler,
                                          num_workers=8,
                                          pin_memory=True,
-                                         drop_last=True)
+                                         drop_last=False)
 
     def _build_model_optimizer(self):
         # TODO (zhangchi.usc1992):
