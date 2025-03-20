@@ -71,7 +71,7 @@ def generate_responses(
             rollout.top_p=0.9 \\
             rollout.prompt_length=1000 \\
             rollout.response_length=500 \\
-            rollout.tensor_model_parallel_size=2 \\
+            rollout.tensor_model_parallel_size=1 \\
             rollout.gpu_memory_utilization=0.8 \\
             trainer.wandb=True
     """
