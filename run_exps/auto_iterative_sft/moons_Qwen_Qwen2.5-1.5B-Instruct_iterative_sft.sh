@@ -9,7 +9,7 @@
 current_model="Qwen/Qwen2.5-1.5B-Instruct"  # Start with base model
 iteration=0
 
-while [ $iteration -lt 3 ]; do
+while [ $iteration -lt 5 ]; do
     echo "Starting iteration $iteration"
     
     # Generate responses using current model
@@ -20,7 +20,7 @@ while [ $iteration -lt 3 ]; do
             trainer.n_gpus_per_node=1 \
             data.path=/home/szhang967/liftr/datasets/moons/10_shot/train.parquet \
             data.prompt_key=prompt \
-            data.n_samples=5 \
+            data.n_samples=128 \
             data.batch_size=128 \
             data.output_path=/home/szhang967/liftr/results/moons/$(basename ${current_model})_10_shot_iter${iteration}_gen_train.parquet \
             model.path=${current_model} \
@@ -47,8 +47,8 @@ while [ $iteration -lt 3 ]; do
     echo "Checking accuracy"
     if 
         python /home/szhang967/liftr/scripts/check_perfect_accuracy.py \
-            --eval_path=/home/szhang967/liftr/results/moons/$(basename ${current_model})_10_shot_iter${iteration}_gen_train.parquet
-    ; then
+            --eval_path=/home/szhang967/liftr/results/moons/$(basename ${current_model})_10_shot_iter${iteration}_gen_train.parquet ;
+     then
         echo "Achieved perfect accuracy at iteration $iteration"
         break
     else

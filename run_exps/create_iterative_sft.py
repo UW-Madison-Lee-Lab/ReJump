@@ -135,7 +135,7 @@ def check_accuracy(
 ):
     return f"""
         python {root_dir}/scripts/check_perfect_accuracy.py \\
-            --eval_path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_gen_train.parquet
+            --eval_path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_gen_train.parquet ;
     """
 
 os.makedirs(f"{root_dir}/run_exps/auto_iterative_sft", exist_ok=True)
@@ -176,7 +176,7 @@ while [ $iteration -lt {max_iterations} ]; do
     
     # Check if we've achieved perfect accuracy
     echo "Checking accuracy"
-    if {check_accuracy(dataset, shot=shot, model_name="", iteration="")}; then
+    if {check_accuracy(dataset, shot=shot, model_name="", iteration="")} then
         echo "Achieved perfect accuracy at iteration $iteration"
         break
     else
