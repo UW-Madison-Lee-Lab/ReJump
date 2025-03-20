@@ -1,7 +1,10 @@
 
+#!/bin/bash
+set -e  # Exit immediately if a command exits with non-zero status
+
         python /home/szhang967/liftr/examples/data_preprocess/moons.py \
             --template_type=qwen-instruct \
-            --num_samples=20 \
+            --num_samples=1000 \
             --n_shot=10
         
 
@@ -9,7 +12,7 @@
 current_model="Qwen/Qwen2.5-1.5B-Instruct"  # Start with base model
 iteration=0
 
-while [ $iteration -lt 3 ]; do
+while [ $iteration -lt 5 ]; do
     echo "Starting iteration $iteration"
     
     # Generate responses using current model
@@ -20,7 +23,7 @@ while [ $iteration -lt 3 ]; do
             trainer.n_gpus_per_node=1 \
             data.path=/home/szhang967/liftr/datasets/moons/10_shot/train.parquet \
             data.prompt_key=prompt \
-            data.n_samples=5 \
+            data.n_samples=128 \
             data.batch_size=128 \
             data.output_path=/home/szhang967/liftr/results/moons/$(basename ${current_model})_10_shot_iter${iteration}_gen_train.parquet \
             model.path=${current_model} \

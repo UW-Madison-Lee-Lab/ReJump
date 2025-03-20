@@ -209,7 +209,10 @@ while [ $iteration -lt {max_iterations} ]; do
 done
         """)
         
-        bash_script = "\n".join(commands)
+        bash_script = '''
+#!/bin/bash
+set -e  # Exit immediately if a command exits with non-zero status
+''' + "\n".join(commands)
         script_path = f"{root_dir}/run_exps/auto_iterative_sft/{dataset}_{model.replace('/', '_')}_iterative_sft.sh"
         script_paths.append(script_path)
         with open(script_path, "w") as f:
