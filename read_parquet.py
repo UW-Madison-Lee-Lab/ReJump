@@ -45,7 +45,7 @@ def main():
         print(df.describe())
 
         print(type(df[["prompt"]]))
-        print(type(df[["prompt"]][:]))
+        print(type(df[["prompt"]][:3]))
         # print(df[["prompt"]][:3])
         # print(df[["prompt"]][1])
         # print(df["prompt"].tolist())
