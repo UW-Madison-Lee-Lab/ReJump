@@ -100,7 +100,7 @@ def train_on_correct_responses(
     local_dir,
 ):
     return f"""
-        # 为实验名创建安全的模型名版本
+        
         model_name_safe=$(basename ${{current_model}} | tr '/' '_')
         experiment_name="{dataset_name}-${{model_name_safe}}-iter${{iteration}}"
 
