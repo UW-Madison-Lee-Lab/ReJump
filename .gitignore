@@ -113,6 +113,6 @@ tests/e2e/toy_examples/deepspeed/synchronous/output.txt
 *.swp
 datasets/
 results/
-environment.py
+# environment.py
 **/auto/
 **/trials/
