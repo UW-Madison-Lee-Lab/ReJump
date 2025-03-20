@@ -53,7 +53,7 @@ def extract_step(path):
     match = re.search(r'global_step_(\d+)', path)
     if match:
         return int(match.group(1))
-    return None
+    raise ValueError(f"No valid step found in {path}")
 
 def process_model_name_for_repo(model_path):
     """Process model path to create a valid repo name."""
