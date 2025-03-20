@@ -18,7 +18,7 @@ def select_reward_fn(data_source):
     else:
         raise NotImplementedError
 
-def evaluate_responses(row):#this is hard coding!!!!!!!
+def evaluate_responses(row):
     response_lst = row['responses']
     data_source = row['data_source']
     reward_data = row['reward_model']
@@ -39,15 +39,25 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_path", type=str, required=True)
     parser.add_argument("--output_path", type=str, required=True)
+    parser.add_argument("--previous_correct_path", type=str, default=None, 
+                       help="Path to previously used correct responses")
     args = parser.parse_args()
     
     # Read the generated responses
     df = pd.read_parquet(args.input_path)
     
+    # Read previously used correct responses if provided
+    previous_correct = None
+    if args.previous_correct_path:
+        previous_correct = pd.read_parquet(args.previous_correct_path)
+        # Create a set of previously used prompt-response pairs for quick lookup
+        previous_pairs = set(zip(previous_correct['prompt'], previous_correct['answer']))
+    
     # Extract correct responses and create new dataset
     new_data = []
     total_responses = 0
     correct_responses = 0
+    new_correct_responses = 0
     
     for _, row in df.iterrows():
         correct_responses_lst = evaluate_responses(row)
@@ -58,9 +68,12 @@ def main():
         row_data = row.drop('responses').to_dict()
         
         for response in correct_responses_lst:
-            # Add the correct response to the row data
-            row_data['answer'] = response
-            new_data.append(row_data)
+            # Check if this prompt-response pair was previously used
+            if previous_correct is None or (row_data['prompt'], response) not in previous_pairs:
+                # Add the correct response to the row data
+                row_data['answer'] = response
+                new_data.append(row_data)
+                new_correct_responses += 1
     
     # Create new dataframe with correct responses
     correct_df = pd.DataFrame(new_data)
@@ -72,6 +85,7 @@ def main():
     print(f'Total responses: {total_responses}')
     print(f'Correct responses: {correct_responses}')
     print(f'Accuracy: {correct_responses/total_responses:.4f}')
+    print(f'New correct responses (not used before): {new_correct_responses}')
     print(f'Number of prompt-response pairs in new dataset: {len(correct_df)}')
     print('\nColumns in output dataset:')
     for col in correct_df.columns:

@@ -4,12 +4,13 @@ set -e  # Exit immediately if a command exits with non-zero status
 
         python /home/szhang967/liftr/examples/data_preprocess/moons.py \
             --template_type=qwen-instruct \
-            --num_samples=20 \
+            --num_samples=260 \
             --n_shot=1
         
 
 # Initialize variables
 current_model="Qwen/Qwen2.5-1.5B-Instruct"  # Start with base model
+previous_correct_path=""
 iteration=0
 
 while [ $iteration -lt 3 ]; do
@@ -60,7 +61,8 @@ while [ $iteration -lt 3 ]; do
         
         python /home/szhang967/liftr/scripts/filter_correct_responses.py \
             --input_path=/home/szhang967/liftr/results/moons/$(basename ${current_model})_1_shot_iter${iteration}_gen_train.parquet \
-            --output_path=/home/szhang967/liftr/results/moons/$(basename ${current_model})_1_shot_iter${iteration}_correct_train.parquet
+            --output_path=/home/szhang967/liftr/results/moons/$(basename ${current_model})_1_shot_iter${iteration}_correct_train.parquet \
+            --previous_correct_path=${previous_correct_path}
     
         
         # Create local directory for this iteration
@@ -91,6 +93,7 @@ while [ $iteration -lt 3 ]; do
         
         # Update current model to the newly trained model
         current_model="$iteration_dir"
+        previous_correct_path="/home/szhang967/liftr/results/moons/$(basename ${current_model})_1_shot_iter${iteration}_correct_train.parquet"
         
         # Increment iteration counter
         iteration=$((iteration+1))

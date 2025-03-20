@@ -128,7 +128,8 @@ def filter_correct_responses(
     return f"""
         python {root_dir}/scripts/filter_correct_responses.py \\
             --input_path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_gen_train.parquet \\
-            --output_path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_correct_train.parquet
+            --output_path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_correct_train.parquet \\
+            --previous_correct_path=${{previous_correct_path}}
     """
 
 def check_accuracy(
@@ -165,6 +166,7 @@ for dataset in dataset_list:
         commands.append(f"""
 # Initialize variables
 current_model="{model}"  # Start with base model
+previous_correct_path=""
 iteration=0
 
 while [ $iteration -lt {max_iterations} ]; do
@@ -204,6 +206,7 @@ while [ $iteration -lt {max_iterations} ]; do
         
         # Update current model to the newly trained model
         current_model="$iteration_dir"
+        previous_correct_path="{root_dir}/results/{dataset}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_correct_train.parquet"
         
         # Increment iteration counter
         iteration=$((iteration+1))
