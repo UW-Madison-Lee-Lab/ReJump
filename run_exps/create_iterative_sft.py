@@ -179,7 +179,6 @@ def filter_correct_responses(
             --output_path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_correct_train.parquet \\
             --already_trained_correct_path=${{already_trained_correct_path}} \\
             --wandb_project={dataset_name}_{model.replace('/', '_')}_shot{shot}_epochs{total_epochs}_maxiter{max_iterations}_samples{num_samples}_responses{num_responses}-iterative-sft \\
-            --wandb_entity=liftr \\
             --wandb_run_name=${{experiment_name}}
     """
 
