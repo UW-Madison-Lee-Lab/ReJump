@@ -124,9 +124,20 @@ def save_data(
         copy(src=local_dir, dst=hdfs_dir)
 
 def classification_reward_fn(solution_str, ground_truth):
-    response_extract = re.search(r'<answer>(.*?)</answer>', solution_str, re.DOTALL)
-    if response_extract is not None and response_extract.group(1).strip().isdigit():
-        response_class = int(response_extract.group(1).strip())
+    
+
+    all_matches = list(re.finditer(r'<answer>(.*?)</answer>', solution_str, re.DOTALL))
+    if all_matches:
+        response_extract = None
+        for match in all_matches[::-1]:
+            if match.group(1).strip().isdigit():
+                response_extract = match
+                break
+        if response_extract is not None and response_extract.group(1).strip().isdigit():
+            response_class = int(response_extract.group(1).strip())
+            return response_class == ground_truth['label']
+        else:
+            return 0
     else:
         return 0
-    return response_class == ground_truth['label']
+    
