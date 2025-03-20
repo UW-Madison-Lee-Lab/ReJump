@@ -91,7 +91,7 @@ def generate_test_responses(
         python -m verl.trainer.main_generation \\
             trainer.nnodes=1 \\
             trainer.n_gpus_per_node=1 \\
-            data.path={root_dir}/datasets/{dataset_name}/{shot}_shot/train.parquet \\
+            data.path={root_dir}/datasets/{dataset_name}/{shot}_shot/test.parquet \\
             data.prompt_key=prompt \\
             data.n_samples={num_responses} \\
             data.batch_size=128 \\
