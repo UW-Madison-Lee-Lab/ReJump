@@ -117,7 +117,7 @@ class SFTDataset(Dataset):
         except:
             print("--------------------------------")
             print(self.prompts[item])
-            input("Press Enter to continue...")
+            raise Exception("Error in prompt")
         
         response = self.responses[item]
 
