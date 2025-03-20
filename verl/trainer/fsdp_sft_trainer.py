@@ -153,11 +153,11 @@ class FSDPSFTTrainer(object):
                                         response_dict_keys=config.data.get('response_dict_keys', None),
                                         max_length=config.data.max_length,
                                         truncation=config.data.truncation)
-        input("Press Enter to continue...")
-        print(self.train_dataset)
-        print(len(self.train_dataset))
+        # input("Press Enter to continue...")
+        # print(self.train_dataset)
+        # print(len(self.train_dataset))
         # print(self.train_dataset[1])
-        input("Press Enter to continue1...")
+        # input("Press Enter to continue1...")
         self.val_dataset = SFTDataset(parquet_files=config.data.val_files,
                                       tokenizer=self.tokenizer,
                                       prompt_key=config.data.prompt_key,
@@ -260,11 +260,11 @@ class FSDPSFTTrainer(object):
         log_gpu_memory_usage('After initialize optimizer', logger=logger)
 
         steps_per_epoch = len(self.train_dataloader)
-        print(steps_per_epoch)
-        input("Press Enter to continue2...")
+        # print(steps_per_epoch)
+        # input("Press Enter to continue2...")
         total_steps = steps_per_epoch * self.config.trainer.total_epochs
-        print(total_steps)
-        input("Press Enter to continue3...")
+        # print(total_steps)
+        # input("Press Enter to continue3...")
 
         if self.device_mesh.get_rank() == 0:
             print(
@@ -429,11 +429,11 @@ class FSDPSFTTrainer(object):
             for data in self.train_dataloader:
                 data = TensorDict(data, batch_size=self.config.data.train_batch_size).cuda()
                 metric = self.training_step(data)
-                input("Press Enter to continue...")
+                # input("Press Enter to continue...")
                 if rank == 0:
                     tracking.log(data=metric, step=global_step)
                 global_step += 1
-                input("ented the training step...")
+                # input("ented the training step...")
 
             # validation
             # val_losses = []
