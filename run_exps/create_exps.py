@@ -16,7 +16,7 @@ parser.add_argument("--model", type=str, nargs="+", default=supported_model_list
 parser.add_argument("--mode", type=str, nargs="+", default=["reasoning", "no_reasoning"], choices=["reasoning", "no_reasoning"])
 parser.add_argument("--train", action="store_true")
 parser.add_argument("--n_gpus", type=int, default=2)
-parser.add_argument("--response_length_thinking_factor", type=float, default=2.0)
+parser.add_argument("--response_length_thinking_factor", type=float, default=1.0)
 args = parser.parse_args()
 
 dataset_list = args.dataset
