@@ -40,9 +40,9 @@ class SFTDataset(Dataset):
                  parquet_files: Union[str, List[str]],
                  tokenizer,
                  prompt_key='prompt',
-                 prompt_dict_keys=None,
+                 prompt_dict_keys=["prompt"],
                  response_key='response',
-                 response_dict_keys=None,
+                 response_dict_keys=["response"],
                  max_length=1024,
                  truncation='error'):
         assert truncation in ['error', 'left', 'right']
