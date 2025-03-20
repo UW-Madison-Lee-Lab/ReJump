@@ -54,6 +54,21 @@ def extract_step(path):
         return int(match.group(1))
     return None
 
+def extract_model_name(local_model_path):#find the path that has the maximum gloable step number 
+    paths = os.listdir(local_model_path)
+    max_step = -1
+    max_step_path = None
+    for path in paths:
+        step = extract_step(path)
+        if step > max_step:
+            max_step = step
+            max_step_path = path
+
+    if max_step_path is None:
+        raise ValueError(f"No valid model path found in {local_model_path}")
+    else:
+        return os.path.join(local_model_path, max_step_path)
+
 
 class FSDPSFTTrainer(object):
 
@@ -157,7 +172,7 @@ class FSDPSFTTrainer(object):
         init_context = get_init_weight_context_manager(use_meta_tensor=not config.tie_word_embeddings)
 
         with init_context():
-            self.model: PreTrainedModel = AutoModelForCausalLM.from_pretrained(local_model_path,
+            self.model: PreTrainedModel = AutoModelForCausalLM.from_pretrained(extract_model_name(local_model_path),
                                                                                config=config,
                                                                                torch_dtype=torch.float32,
                                                                                attn_implementation='flash_attention_2',
