@@ -170,28 +170,28 @@ for dataset in dataset_list:
                         prompt_length=prompt_length,
                         response_length=response_length
                     )
-                    global_step = input("Enter the global step: ")
                     model_path= f"{get_model_dir(dataset, model, shot, template_type, response_length)}/actor/global_step_{global_step}"
                     command_list.append(train_command)
                 else:
                     model_path = model
                 
-                inference_command = inference(
-                    dataset_name=dataset,
-                    shot=shot,
-                    model_name=model_path,
-                    template_type=template_type,
-                    prompt_length=prompt_length,
-                    response_length=response_length
-                )
-                command_list.append(inference_command)
-                eval_command = eval(
-                    dataset_name=dataset,
-                    shot=shot,
-                    model_name=model_path,
-                    template_type=template_type,
-                )
-                command_list.append(eval_command)
+                    inference_command = inference(
+                        dataset_name=dataset,
+                        shot=shot,
+                        model_name=model_path,
+                        template_type=template_type,
+                        prompt_length=prompt_length,
+                        response_length=response_length
+                    )
+                    command_list.append(inference_command)
+                    eval_command = eval(
+                        dataset_name=dataset,
+                        shot=shot,
+                        model_name=model_path,
+                        template_type=template_type,
+                    )
+                    command_list.append(eval_command)
+                    
                 bash_script = "\n".join(command_list)
                 script_path = f"{root_dir}/run_exps/auto/{dataset}_{shot}_{model.replace('/', '_')}_{mode}_train_{args.train}.sh"
                 script_paths.append(script_path)
