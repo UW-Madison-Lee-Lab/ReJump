@@ -19,7 +19,11 @@ from verl import DataProto
 import torch
 from verl.utils.reward_score import gsm8k, math, multiply, countdown
 from verl.trainer.ppo.ray_trainer import RayPPOTrainer
-
+import wandb
+from utils import flatten_dict
+from constants import get_configs_via_dataset_dir
+from environment import WANDB_INFO
+import os
 
 def _select_rm_score_fn(data_source):
     if data_source == 'openai/gsm8k':
@@ -105,11 +109,22 @@ import hydra
 
 @hydra.main(config_path='config', config_name='ppo_trainer', version_base=None)
 def main(config):
+    if 'wandb' in config.trainer.logger[0]:
+        wandb_configs = flatten_dict(config)
+        wandb_configs.update(get_configs_via_dataset_dir(os.path.dirname(config.data.train_files)))
+        wandb.init(
+            project=f"{WANDB_INFO['project']}-rl",
+            entity=WANDB_INFO['entity'],
+            config=wandb_configs
+        )
     if not ray.is_initialized():
         # this is for local ray cluster
         ray.init(runtime_env={'env_vars': {'TOKENIZERS_PARALLELISM': 'true', 'NCCL_DEBUG': 'WARN'}})
 
     ray.get(main_task.remote(config))
+    
+    if wandb.run is not None:
+        wandb.finish()
 
 
 @ray.remote

@@ -78,7 +78,7 @@ def train(
     return f"""
 export VLLM_ATTENTION_BACKEND=XFORMERS
 
-python3 -m verl.trainer.main_ppo \
+python -m verl.trainer.main_ppo \
     algorithm.adv_estimator=grpo \
     data.train_files={get_dataset_dir(dataset_name, shot, template_type)}/train.parquet \
     data.val_files={get_dataset_dir(dataset_name, shot, template_type)}/test.parquet \
