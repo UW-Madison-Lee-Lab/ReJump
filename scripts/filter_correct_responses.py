@@ -18,7 +18,7 @@ def select_reward_fn(data_source):
     else:
         raise NotImplementedError
 
-def evaluate_responses(row):
+def evaluate_responses(row):#this is hard coding!!!!!!!
     response_lst = row['responses']
     data_source = row['data_source']
     reward_data = row['reward_model']
