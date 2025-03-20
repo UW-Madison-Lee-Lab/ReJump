@@ -4,6 +4,7 @@ import numpy as np
 from verl.utils.reward_score import math, gsm8k
 import sys
 import wandb
+from environment import WANDB_INFO
 
 def select_reward_fn(data_source):
     if data_source == 'lighteval/MATH':
@@ -47,8 +48,6 @@ def main():
                        help="Minimum number of correct responses required to continue")
     parser.add_argument("--wandb_project", type=str, default=None,
                        help="Weights & Biases project name for logging (optional)")
-    parser.add_argument("--wandb_entity", type=str, default=None,
-                       help="Weights & Biases entity name for logging (optional)")
     parser.add_argument("--wandb_run_name", type=str, default=None,
                        help="Weights & Biases run name (optional)")
     args = parser.parse_args()
@@ -57,7 +56,7 @@ def main():
     if args.wandb_project:
         wandb_run = wandb.init(
             project=args.wandb_project,
-            entity=args.wandb_entity,
+            entity=WANDB_INFO['entity'],
             name=args.wandb_run_name,
             config={
                 "input_path": args.input_path,
