@@ -36,11 +36,13 @@ from verl.workers.fsdp_workers import ActorRolloutRefWorker
 from verl.utils.hdfs_io import makedirs
 from verl.single_controller.ray import RayClassWithInitArgs, RayResourcePool, RayWorkerGroup
 from utils import flatten_dict, print_configs
+from verl.trainer.fsdp_sft_trainer import extract_model_name
 from environment import WANDB_INFO
 import wandb
 
 @hydra.main(config_path='config', config_name='generation', version_base=None)
 def main(config):
+    config.model.path = extract_model_name(config.model.path)
     
     if config.trainer.wandb:
         wandb.init(
