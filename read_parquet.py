@@ -6,7 +6,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Read and analyze a parquet file')
     parser.add_argument('--file_path', 
                        type=str,
-                       default="/var/lib/condor/execute/slot1/dir_1963007/liftr/results/moons/Qwen2.5-1.5B-Instruct_1_shot_iter0_correct_train.parquet",
+                    #    default="/var/lib/condor/execute/slot1/dir_1963007/liftr/results/moons/Qwen2.5-1.5B-Instruct_1_shot_iter0_correct_train.parquet",
+                       default = "/var/lib/condor/execute/slot1/dir_1963007/liftr/results/moons/Qwen2.5-1.5B-Instruct_1_shot_iter0_correct_train.parquet",
                        help='Path to the parquet file')
     return parser.parse_args()
 
@@ -49,7 +50,7 @@ def main():
         
         # print(df[["prompt"]].values.tolist())
         print(df["prompt"].tolist()[2])
-        print(df["response"].tolist()[2])
+        print(df["answer"].tolist()[2])
 
     except Exception as e:
         print(f"Error reading file: {str(e)}")
