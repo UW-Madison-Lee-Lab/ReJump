@@ -77,7 +77,48 @@ def generate_responses(
             rollout.response_length=500 \\
             rollout.tensor_model_parallel_size=1 \\
             rollout.gpu_memory_utilization=0.8 \\
-            trainer.wandb=True
+            trainer.wandb=True \\
+            trainer.project_name={dataset_name}-iterative-sft-train-generation
+    """
+def generate_test_responses(
+    dataset_name,
+    shot,
+    model_name,
+    iteration,
+    temperature=0.3,
+):
+    return f"""
+        python -m verl.trainer.main_generation \\
+            trainer.nnodes=1 \\
+            trainer.n_gpus_per_node=1 \\
+            data.path={root_dir}/datasets/{dataset_name}/{shot}_shot/train.parquet \\
+            data.prompt_key=prompt \\
+            data.n_samples={num_responses} \\
+            data.batch_size=128 \\
+            data.output_path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_gen_test.parquet \\
+            model.path=${{current_model}} \\
+            +model.trust_remote_code=True \\
+            rollout.temperature={temperature} \\
+            rollout.top_k=10 \\
+            rollout.top_p=0.9 \\
+            rollout.prompt_length=1000 \\
+            rollout.response_length=500 \\
+            rollout.tensor_model_parallel_size=1 \\
+            rollout.gpu_memory_utilization=0.8 \\
+            trainer.wandb=True \\
+            trainer.project_name={dataset_name}-iterative-sft-test-generation
+    """
+def evaluate_test_responses(
+    dataset_name,
+    shot,
+    model_name,
+    iteration,
+):
+    return f"""
+        python -m verl.trainer.main_eval \\
+            data.path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_gen_test.parquet \\
+            trainer.wandb=True \\
+            trainer.project_name={dataset_name}-iterative-sft-test-evaluation
     """
 
 def evaluate_responses(
@@ -89,7 +130,8 @@ def evaluate_responses(
     return f"""
         python -m verl.trainer.main_eval \\
             data.path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_gen_train.parquet \\
-            trainer.wandb=True
+            trainer.wandb=True \\
+            trainer.project_name={dataset_name}-iterative-sft-train-evaluation
     """
 
 def train_on_correct_responses(
@@ -177,6 +219,11 @@ while [ $iteration -lt {max_iterations} ]; do
     
     # Generate responses using current model
     echo "Generating responses with model: $current_model"
+
+    {generate_test_responses(dataset, shot=shot, model_name="", iteration="")}
+
+    {evaluate_test_responses(dataset, shot=shot, model_name="", iteration="")}
+
     {generate_responses(dataset, shot=shot, model_name="", iteration="")}
     
     # Evaluate the generated responses

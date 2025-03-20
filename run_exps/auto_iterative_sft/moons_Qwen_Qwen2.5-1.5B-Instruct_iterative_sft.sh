@@ -21,6 +21,36 @@ while [ $iteration -lt 3 ]; do
     
     # Generate responses using current model
     echo "Generating responses with model: $current_model"
+
+    
+        python -m verl.trainer.main_generation \
+            trainer.nnodes=1 \
+            trainer.n_gpus_per_node=1 \
+            data.path=/home/szhang967/liftr/datasets/moons/1_shot/train.parquet \
+            data.prompt_key=prompt \
+            data.n_samples=5 \
+            data.batch_size=128 \
+            data.output_path=/home/szhang967/liftr/results/moons/$(basename ${current_model})_1_shot_iter${iteration}_gen_test.parquet \
+            model.path=${current_model} \
+            +model.trust_remote_code=True \
+            rollout.temperature=0.3 \
+            rollout.top_k=10 \
+            rollout.top_p=0.9 \
+            rollout.prompt_length=1000 \
+            rollout.response_length=500 \
+            rollout.tensor_model_parallel_size=1 \
+            rollout.gpu_memory_utilization=0.8 \
+            trainer.wandb=True \
+            trainer.project_name=moons-iterative-sft-test-generation
+    
+
+    
+        python -m verl.trainer.main_eval \
+            data.path=/home/szhang967/liftr/results/moons/$(basename ${current_model})_1_shot_iter${iteration}_gen_test.parquet \
+            trainer.wandb=True \
+            trainer.project_name=moons-iterative-sft-test-evaluation
+    
+
     
         python -m verl.trainer.main_generation \
             trainer.nnodes=1 \
@@ -39,7 +69,8 @@ while [ $iteration -lt 3 ]; do
             rollout.response_length=500 \
             rollout.tensor_model_parallel_size=1 \
             rollout.gpu_memory_utilization=0.8 \
-            trainer.wandb=True
+            trainer.wandb=True \
+            trainer.project_name=moons-iterative-sft-train-generation
     
     
     # Evaluate the generated responses
@@ -47,7 +78,8 @@ while [ $iteration -lt 3 ]; do
     
         python -m verl.trainer.main_eval \
             data.path=/home/szhang967/liftr/results/moons/$(basename ${current_model})_1_shot_iter${iteration}_gen_train.parquet \
-            trainer.wandb=True
+            trainer.wandb=True \
+            trainer.project_name=moons-iterative-sft-train-evaluation
     
     
     # Check if we've achieved perfect accuracy
