@@ -34,7 +34,7 @@ from verl.utils.torch_functional import get_cosine_schedule_with_warmup
 from tensordict import TensorDict
 from torch.utils.data import DataLoader, DistributedSampler
 from huggingface_hub import HfApi, create_repo
-
+from tqdm import tqdm
 from verl.utils.fsdp_utils import get_fsdp_wrap_policy, init_fn, get_init_weight_context_manager
 from verl.utils.dataset import SFTDataset
 from verl.utils.fs import copy_local_path_from_hdfs
@@ -426,14 +426,22 @@ class FSDPSFTTrainer(object):
 
         for epoch in range(self.config.trainer.total_epochs):
             self.train_sampler.set_epoch(epoch=epoch)
+            
+            # Add tqdm progress bar on rank 0
+            if rank == 0:
+                pbar = tqdm(total=len(self.train_dataloader), desc=f"Epoch {epoch+1}/{self.config.trainer.total_epochs}")
+            
             for data in self.train_dataloader:
                 data = TensorDict(data, batch_size=self.config.data.train_batch_size).cuda()
                 metric = self.training_step(data)
-                # input("Press Enter to continue...")
+                
+                # Update progress bar on rank 0
                 if rank == 0:
+                    pbar.set_description(f"Epoch {epoch+1}/{self.config.trainer.total_epochs} | Step {global_step}")
+                    pbar.update(1)
                     tracking.log(data=metric, step=global_step)
+                
                 global_step += 1
-                # input("ented the training step...")
 
             # validation
             # val_losses = []
@@ -446,6 +454,8 @@ class FSDPSFTTrainer(object):
             #     metric = {'val/loss': val_loss.detach().item()}
             #     tracking.log(data=metric, step=global_step)
             # torch.distributed.barrier()
+            if rank == 0:
+                pbar.close()
 
             # save checkpoint at the end of each epoch
             if rank == 0:

@@ -19,6 +19,7 @@ import numpy as np
 import hydra
 import os
 import time
+from datetime import datetime
 
 os.environ['NCCL_DEBUG'] = 'WARN'
 os.environ['TOKENIZERS_PARALLELISM'] = 'true'
@@ -45,9 +46,11 @@ def main(config):
     config.model.path = extract_model_name(config.model.path)
     
     if config.trainer.wandb:
+        run_name = f"run-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
         wandb.init(
             project=f"{WANDB_INFO['project']}-{config.trainer.project_name}",
             entity=WANDB_INFO['entity'],
+            name=run_name,
             config=flatten_dict(config)
         )
     
