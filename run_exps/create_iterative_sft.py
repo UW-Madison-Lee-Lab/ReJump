@@ -14,6 +14,7 @@ parser.add_argument("--max_iterations", type=int, default=10)
 parser.add_argument("--num_responses", type=int, default=5)
 parser.add_argument("--shot", type=int, default=10, help="Number of examples in few-shot learning")
 parser.add_argument("--num_samples", type=int, default=1000, help="Number of samples in the dataset")
+parser.add_argument("--total_epochs", type=int, default=4, help="Number of training epochs")
 args = parser.parse_args()
 
 dataset_list = args.dataset
@@ -22,6 +23,7 @@ max_iterations = args.max_iterations
 num_responses = args.num_responses
 shot = args.shot
 num_samples = args.num_samples
+total_epochs = args.total_epochs
 
 def gen_dataset(
     dataset_name, 
@@ -113,7 +115,7 @@ def train_on_correct_responses(
             trainer.default_local_dir={local_dir} \\
             trainer.project_name={dataset_name}-iterative-sft \\
             trainer.experiment_name=${{experiment_name}} \\
-            trainer.total_epochs=4 \\
+            trainer.total_epochs={total_epochs} \\
             trainer.logger=['console','wandb']
     """
 
