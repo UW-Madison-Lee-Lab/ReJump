@@ -107,7 +107,7 @@ def train_on_correct_responses(
         torchrun --standalone --nnodes=1 --nproc_per_node=1 \\
             -m verl.trainer.fsdp_sft_trainer \\
             data.train_files={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_correct_train.parquet \\
-            data.val_files={root_dir}/datasets/{dataset_name}/{shot}_shot/test.parquet \\
+            data.val_files={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_correct_train.parquet \\
             data.prompt_key=prompt \\
             data.response_key=answer \\
             data.micro_batch_size=8 \\
