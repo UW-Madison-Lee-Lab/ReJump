@@ -70,14 +70,14 @@ while [ $iteration -lt 3 ]; do
         # Train on correct responses to get a new model
         echo "Training new model"
         
-        # 为实验名创建安全的模型名版本
+        
         model_name_safe=$(basename ${current_model} | tr '/' '_')
         experiment_name="moons-${model_name_safe}-iter${iteration}"
 
         torchrun --standalone --nnodes=1 --nproc_per_node=1 \
             -m verl.trainer.fsdp_sft_trainer \
             data.train_files=/home/szhang967/liftr/results/moons/$(basename ${current_model})_1_shot_iter${iteration}_correct_train.parquet \
-            data.val_files=/home/szhang967/liftr/datasets/moons/1_shot/test.parquet \
+            data.val_files=/home/szhang967/liftr/results/moons/$(basename ${current_model})_1_shot_iter${iteration}_correct_train.parquet \
             data.prompt_key=prompt \
             data.response_key=answer \
             data.micro_batch_size=8 \
