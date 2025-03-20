@@ -4,15 +4,15 @@ set -e  # Exit immediately if a command exits with non-zero status
 
         python /home/szhang967/liftr/examples/data_preprocess/moons.py \
             --template_type=qwen-instruct \
-            --num_samples=1000 \
-            --n_shot=10
+            --num_samples=20 \
+            --n_shot=1
         
 
 # Initialize variables
 current_model="Qwen/Qwen2.5-1.5B-Instruct"  # Start with base model
 iteration=0
 
-while [ $iteration -lt 5 ]; do
+while [ $iteration -lt 3 ]; do
     echo "Starting iteration $iteration"
     
     # Generate responses using current model
@@ -21,11 +21,11 @@ while [ $iteration -lt 5 ]; do
         python -m verl.trainer.main_generation \
             trainer.nnodes=1 \
             trainer.n_gpus_per_node=1 \
-            data.path=/home/szhang967/liftr/datasets/moons/10_shot/train.parquet \
+            data.path=/home/szhang967/liftr/datasets/moons/1_shot/train.parquet \
             data.prompt_key=prompt \
-            data.n_samples=128 \
+            data.n_samples=5 \
             data.batch_size=128 \
-            data.output_path=/home/szhang967/liftr/results/moons/$(basename ${current_model})_10_shot_iter${iteration}_gen_train.parquet \
+            data.output_path=/home/szhang967/liftr/results/moons/$(basename ${current_model})_1_shot_iter${iteration}_gen_train.parquet \
             model.path=${current_model} \
             +model.trust_remote_code=True \
             rollout.temperature=0.3 \
@@ -42,7 +42,7 @@ while [ $iteration -lt 5 ]; do
     echo "Evaluating responses"
     
         python -m verl.trainer.main_eval \
-            data.path=/home/szhang967/liftr/results/moons/$(basename ${current_model})_10_shot_iter${iteration}_gen_train.parquet \
+            data.path=/home/szhang967/liftr/results/moons/$(basename ${current_model})_1_shot_iter${iteration}_gen_train.parquet \
             trainer.wandb=True
     
     
@@ -50,7 +50,7 @@ while [ $iteration -lt 5 ]; do
     echo "Checking accuracy"
     if 
         python /home/szhang967/liftr/scripts/check_perfect_accuracy.py \
-            --eval_path=/home/szhang967/liftr/results/moons/$(basename ${current_model})_10_shot_iter${iteration}_gen_train.parquet ;
+            --eval_path=/home/szhang967/liftr/results/moons/$(basename ${current_model})_1_shot_iter${iteration}_gen_train.parquet ;
      then
         echo "Achieved perfect accuracy at iteration $iteration"
         break
@@ -59,8 +59,8 @@ while [ $iteration -lt 5 ]; do
         echo "Filtering correct responses"
         
         python /home/szhang967/liftr/scripts/filter_correct_responses.py \
-            --input_path=/home/szhang967/liftr/results/moons/$(basename ${current_model})_10_shot_iter${iteration}_gen_train.parquet \
-            --output_path=/home/szhang967/liftr/results/moons/$(basename ${current_model})_10_shot_iter${iteration}_correct_train.parquet
+            --input_path=/home/szhang967/liftr/results/moons/$(basename ${current_model})_1_shot_iter${iteration}_gen_train.parquet \
+            --output_path=/home/szhang967/liftr/results/moons/$(basename ${current_model})_1_shot_iter${iteration}_correct_train.parquet
     
         
         # Create local directory for this iteration
@@ -74,10 +74,10 @@ while [ $iteration -lt 5 ]; do
         model_name_safe=$(basename ${current_model} | tr '/' '_')
         experiment_name="moons-${model_name_safe}-iter${iteration}"
 
-        torchrun --standalone --nnodes=1 --nproc_per_node=2 \
+        torchrun --standalone --nnodes=1 --nproc_per_node=1 \
             -m verl.trainer.fsdp_sft_trainer \
-            data.train_files=/home/szhang967/liftr/results/moons/$(basename ${current_model})_10_shot_iter${iteration}_correct_train.parquet \
-            data.val_files=/home/szhang967/liftr/datasets/moons/10_shot/test.parquet \
+            data.train_files=/home/szhang967/liftr/results/moons/$(basename ${current_model})_1_shot_iter${iteration}_correct_train.parquet \
+            data.val_files=/home/szhang967/liftr/datasets/moons/1_shot/test.parquet \
             data.prompt_key=prompt \
             data.response_key=answer \
             data.micro_batch_size=8 \
@@ -85,7 +85,7 @@ while [ $iteration -lt 5 ]; do
             trainer.default_local_dir=$iteration_dir \
             trainer.project_name=moons-iterative-sft \
             trainer.experiment_name=${experiment_name} \
-            trainer.total_epochs=4 \
+            trainer.total_epochs=1 \
             trainer.logger=['console','wandb']
     
         
