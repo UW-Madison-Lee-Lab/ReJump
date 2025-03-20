@@ -189,6 +189,7 @@ for dataset in dataset_list:
                         shot=shot,
                         model_name=model_path,
                         template_type=template_type,
+                        response_length=response_length
                     )
                     command_list.append(eval_command)
                     
