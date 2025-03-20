@@ -69,7 +69,7 @@ def main():
         
         for response in correct_responses_lst:
             # Check if this prompt-response pair was previously used
-            if already_trained is None or (row_data['prompt'], response) not in previous_pairs:
+            if already_trained is None or (str(row_data['prompt']), str(response)) not in previous_pairs:
                 # Add the correct response to the row data
                 row_data['answer'] = response
                 new_data.append(row_data)
@@ -78,7 +78,10 @@ def main():
     # Create new dataframe with correct responses
     correct_df = pd.DataFrame(new_data)
     
-    already_trained = pd.concat([already_trained, correct_df], ignore_index=True)
+    if already_trained is None:
+        already_trained = correct_df
+    else:
+        already_trained = pd.concat([already_trained, correct_df], ignore_index=True)
     already_trained.to_parquet(args.already_trained_correct_path)
     
     # Save filtered dataset
