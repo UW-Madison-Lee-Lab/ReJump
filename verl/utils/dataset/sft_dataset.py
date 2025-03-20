@@ -112,7 +112,7 @@ class SFTDataset(Dataset):
         tokenizer = self.tokenizer
 
         prompt = self.prompts[item]
-        response = self.responses[item]
+        response = str(self.responses[item])
 
         # apply chat template
         prompt_chat = [{'role': 'user', 'content': prompt}]
