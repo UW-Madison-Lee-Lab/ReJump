@@ -1,7 +1,7 @@
 
         python /home/szhang967/liftr/examples/data_preprocess/moons.py \
             --template_type=qwen-instruct \
-            --num_samples=1000 \
+            --num_samples=20 \
             --n_shot=10
         
 
@@ -9,7 +9,7 @@
 current_model="Qwen/Qwen2.5-1.5B-Instruct"  # Start with base model
 iteration=0
 
-while [ $iteration -lt 5 ]; do
+while [ $iteration -lt 3 ]; do
     echo "Starting iteration $iteration"
     
     # Generate responses using current model
@@ -20,7 +20,7 @@ while [ $iteration -lt 5 ]; do
             trainer.n_gpus_per_node=1 \
             data.path=/home/szhang967/liftr/datasets/moons/10_shot/train.parquet \
             data.prompt_key=prompt \
-            data.n_samples=128 \
+            data.n_samples=5 \
             data.batch_size=128 \
             data.output_path=/home/szhang967/liftr/results/moons/$(basename ${current_model})_10_shot_iter${iteration}_gen_train.parquet \
             model.path=${current_model} \
@@ -30,7 +30,7 @@ while [ $iteration -lt 5 ]; do
             rollout.top_p=0.9 \
             rollout.prompt_length=1000 \
             rollout.response_length=500 \
-            rollout.tensor_model_parallel_size=2 \
+            rollout.tensor_model_parallel_size=1 \
             rollout.gpu_memory_utilization=0.8 \
             trainer.wandb=True
     
