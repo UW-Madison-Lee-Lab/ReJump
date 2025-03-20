@@ -51,7 +51,7 @@ def check_results(
         if idx == 'q':
             break
         idx = int(idx)
-        print(f"prompt: {test_dataset.iloc[idx]['prompt']}")
+        print(f"prompt: {test_dataset.iloc[idx]['prompt'][0]['content']}")
         print(f"label: {test_dataset.iloc[idx]['label']}")
         print(f"response: {test_dataset.iloc[idx]['responses'][0]}")
         print('-'*100)

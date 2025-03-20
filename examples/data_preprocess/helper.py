@@ -67,11 +67,18 @@ def save_data(
     raw_in_context_dataset = Dataset.from_dict(in_context_dataset_dict)
     
     assert len(raw_dataset) >= TRAIN_SIZE + TEST_SIZE
-    train_dataset = raw_dataset.select(range(TRAIN_SIZE))
-    test_dataset = raw_dataset.select(range(TRAIN_SIZE, TRAIN_SIZE + TEST_SIZE))
+    # Create non-overlapping train and test sets
+    all_indices = np.arange(len(raw_dataset))
+    train_indices = np.random.choice(all_indices, TRAIN_SIZE, replace=False)
+    # Remove train indices from the pool before selecting test indices
+    remaining_indices = np.setdiff1d(all_indices, train_indices)
+    test_indices = np.random.choice(remaining_indices, TEST_SIZE, replace=False)
+    
+    train_dataset = raw_dataset.select(train_indices)
+    test_dataset = raw_dataset.select(test_indices)
     in_context_dataset = {
-        "train": raw_in_context_dataset.select(range(TRAIN_SIZE)),
-        "test": raw_in_context_dataset.select(range(TRAIN_SIZE, TRAIN_SIZE + TEST_SIZE))
+        "train": raw_in_context_dataset.select(train_indices),
+        "test": raw_in_context_dataset.select(test_indices)
     }
 
     def make_map_fn(split):
