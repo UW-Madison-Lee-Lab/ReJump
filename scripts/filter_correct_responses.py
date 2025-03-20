@@ -2,6 +2,8 @@ import pandas as pd
 import argparse, os
 import numpy as np
 from verl.utils.reward_score import math, gsm8k
+import sys
+import wandb
 
 def select_reward_fn(data_source):
     if data_source == 'lighteval/MATH':
@@ -41,7 +43,29 @@ def main():
     parser.add_argument("--output_path", type=str, required=True)
     parser.add_argument("--already_trained_correct_path", type=str, required=True,
                        help="Path to already trained correct responses")
+    parser.add_argument("--min_correct_count", type=int, default=10,
+                       help="Minimum number of correct responses required to continue")
+    parser.add_argument("--wandb_project", type=str, default=None,
+                       help="Weights & Biases project name for logging (optional)")
+    parser.add_argument("--wandb_entity", type=str, default=None,
+                       help="Weights & Biases entity name for logging (optional)")
+    parser.add_argument("--wandb_run_name", type=str, default=None,
+                       help="Weights & Biases run name (optional)")
     args = parser.parse_args()
+    
+    # Initialize wandb if project name is provided
+    if args.wandb_project:
+        wandb_run = wandb.init(
+            project=args.wandb_project,
+            entity=args.wandb_entity,
+            name=args.wandb_run_name,
+            config={
+                "input_path": args.input_path,
+                "output_path": args.output_path,
+                "already_trained_path": args.already_trained_correct_path,
+                "min_correct_count": args.min_correct_count
+            }
+        )
     
     # Read the generated responses
     df = pd.read_parquet(args.input_path)
@@ -78,24 +102,62 @@ def main():
     # Create new dataframe with correct responses
     correct_df = pd.DataFrame(new_data)
     
+    # Print statistics
+    accuracy = correct_responses/total_responses if total_responses > 0 else 0
+    print(f'Total responses: {total_responses}')
+    print(f'Correct responses: {correct_responses}')
+    print(f'Accuracy: {accuracy:.4f}')
+    print(f'New correct responses (not used before): {new_correct_responses}')
+    print(f'Number of prompt-response pairs in new dataset: {len(correct_df)}')
+    
+    # Log metrics to wandb if enabled
+    if args.wandb_project:
+        wandb.log({
+            "total_responses": total_responses,
+            "correct_responses": correct_responses,
+            "accuracy": accuracy,
+            "new_correct_responses": new_correct_responses,
+            "dataset_size": len(correct_df)
+        })
+        
+        # Create a table for column information
+        columns_table = wandb.Table(columns=["column_name"])
+        for col in correct_df.columns:
+            columns_table.add_data(col)
+        wandb.log({"dataset_columns": columns_table})
+    
+    # Check if we have enough new correct responses
+    if new_correct_responses < args.min_correct_count:
+        error_msg = f"ERROR: Only found {new_correct_responses} new correct responses, which is less than the minimum required ({args.min_correct_count})."
+        print(error_msg)
+        if args.wandb_project:
+            wandb.log({"error": error_msg})
+            wandb.finish()
+        sys.exit(1)  
+    
+    # Update the already_trained dataset only if we have new correct responses
     if already_trained is None:
         already_trained = correct_df
     else:
+        # Concatenate and drop duplicates based on prompt and answer
         already_trained = pd.concat([already_trained, correct_df], ignore_index=True)
+        already_trained = already_trained.drop_duplicates(subset=['prompt', 'answer'])
+    
     already_trained.to_parquet(args.already_trained_correct_path)
     
     # Save filtered dataset
     correct_df.to_parquet(args.output_path)
     
-    # Print statistics
-    print(f'Total responses: {total_responses}')
-    print(f'Correct responses: {correct_responses}')
-    print(f'Accuracy: {correct_responses/total_responses:.4f}')
-    print(f'New correct responses (not used before): {new_correct_responses}')
-    print(f'Number of prompt-response pairs in new dataset: {len(correct_df)}')
     print('\nColumns in output dataset:')
     for col in correct_df.columns:
         print(f'- {col}')
+    
+    # Finish wandb run if enabled
+    if args.wandb_project:
+        wandb.finish()
+    
+    # Return success (0)
+    return 0
 
 if __name__ == "__main__":
-    main() 
+    sys.exit(main())

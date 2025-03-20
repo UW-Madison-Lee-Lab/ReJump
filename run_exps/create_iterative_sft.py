@@ -15,6 +15,8 @@ parser.add_argument("--num_responses", type=int, default=5)
 parser.add_argument("--shot", type=int, default=10, help="Number of examples in few-shot learning")
 parser.add_argument("--num_samples", type=int, default=1000, help="Number of samples in the dataset")
 parser.add_argument("--total_epochs", type=int, default=4, help="Number of training epochs")
+parser.add_argument("--nproc_per_node", type=int, default=1, help="Number of processes per node for distributed training")
+parser.add_argument("--n_gpus_per_node", type=int, default=1, help="Number of GPUs per node")
 args = parser.parse_args()
 
 dataset_list = args.dataset
@@ -24,6 +26,8 @@ num_responses = args.num_responses
 shot = args.shot
 num_samples = args.num_samples
 total_epochs = args.total_epochs
+nproc_per_node = args.nproc_per_node
+n_gpus_per_node = args.n_gpus_per_node
 
 def gen_dataset(
     dataset_name, 
@@ -62,7 +66,7 @@ def generate_responses(
     return f"""
         python -m verl.trainer.main_generation \\
             trainer.nnodes=1 \\
-            trainer.n_gpus_per_node=1 \\
+            trainer.n_gpus_per_node={n_gpus_per_node} \\
             data.path={root_dir}/datasets/{dataset_name}/{shot}_shot/train.parquet \\
             data.prompt_key=prompt \\
             data.n_samples={num_responses} \\
@@ -78,7 +82,7 @@ def generate_responses(
             rollout.tensor_model_parallel_size=1 \\
             rollout.gpu_memory_utilization=0.8 \\
             trainer.wandb=True \\
-            trainer.project_name={dataset_name}-iterative-sft-train-generation
+            trainer.project_name={dataset}_{model.replace('/', '_')}_shot{shot}_epochs{total_epochs}_maxiter{max_iterations}_samples{num_samples}_responses{num_responses}-iterative-sft-train-generation
     """
 def generate_test_responses(
     dataset_name,
@@ -90,7 +94,7 @@ def generate_test_responses(
     return f"""
         python -m verl.trainer.main_generation \\
             trainer.nnodes=1 \\
-            trainer.n_gpus_per_node=1 \\
+            trainer.n_gpus_per_node={n_gpus_per_node} \\
             data.path={root_dir}/datasets/{dataset_name}/{shot}_shot/test.parquet \\
             data.prompt_key=prompt \\
             data.n_samples={num_responses} \\
@@ -106,7 +110,7 @@ def generate_test_responses(
             rollout.tensor_model_parallel_size=1 \\
             rollout.gpu_memory_utilization=0.8 \\
             trainer.wandb=True \\
-            trainer.project_name={dataset_name}-iterative-sft-test-generation
+            trainer.project_name={dataset_name}_{model.replace('/', '_')}_shot{shot}_epochs{total_epochs}_maxiter{max_iterations}_samples{num_samples}_responses{num_responses}-iterative-sft-test-generation
     """
 def evaluate_test_responses(
     dataset_name,
@@ -118,7 +122,7 @@ def evaluate_test_responses(
         python -m verl.trainer.main_eval \\
             data.path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_gen_test.parquet \\
             trainer.wandb=True \\
-            trainer.project_name={dataset_name}-iterative-sft-test-evaluation
+            trainer.project_name={dataset_name}_{model.replace('/', '_')}_shot{shot}_epochs{total_epochs}_maxiter{max_iterations}_samples{num_samples}_responses{num_responses}-iterative-sft-test-evaluation
     """
 
 def evaluate_responses(
@@ -131,7 +135,7 @@ def evaluate_responses(
         python -m verl.trainer.main_eval \\
             data.path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_gen_train.parquet \\
             trainer.wandb=True \\
-            trainer.project_name={dataset_name}-iterative-sft-train-evaluation
+            trainer.project_name={dataset_name}_{model.replace('/', '_')}_shot{shot}_epochs{total_epochs}_maxiter{max_iterations}_samples{num_samples}_responses{num_responses}-iterative-sft-train-evaluation
     """
 
 def train_on_correct_responses(
@@ -146,7 +150,7 @@ def train_on_correct_responses(
         model_name_safe=$(basename ${{current_model}} | tr '/' '_')
         experiment_name="{dataset_name}-${{model_name_safe}}-iter${{iteration}}"
 
-        torchrun --standalone --nnodes=1 --nproc_per_node=1 \\
+        torchrun --standalone --nnodes=1 --nproc_per_node={nproc_per_node} \\
             -m verl.trainer.fsdp_sft_trainer \\
             data.train_files={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_correct_train.parquet \\
             data.val_files={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_correct_train.parquet \\
@@ -155,7 +159,7 @@ def train_on_correct_responses(
             data.micro_batch_size=8 \\
             model.partial_pretrain=${{current_model}} \\
             trainer.default_local_dir={local_dir} \\
-            trainer.project_name={dataset_name}-iterative-sft \\
+            trainer.project_name={dataset_name}_{model.replace('/', '_')}_shot{shot}_epochs{total_epochs}_maxiter{max_iterations}_samples{num_samples}_responses{num_responses}-iterative-sft \\
             trainer.experiment_name=${{experiment_name}} \\
             trainer.total_epochs={total_epochs} \\
             trainer.logger=['console','wandb']
@@ -171,7 +175,10 @@ def filter_correct_responses(
         python {root_dir}/scripts/filter_correct_responses.py \\
             --input_path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_gen_train.parquet \\
             --output_path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_correct_train.parquet \\
-            --already_trained_correct_path=${{already_trained_correct_path}}
+            --already_trained_correct_path=${{already_trained_correct_path}} \\
+            --wandb_project={dataset_name}_{model.replace('/', '_')}_shot{shot}_epochs{total_epochs}_maxiter{max_iterations}_samples{num_samples}_responses{num_responses}-iterative-sft \\
+            --wandb_entity=liftr \\
+            --wandb_run_name=${{experiment_name}}
     """
 
 def check_accuracy(
@@ -267,12 +274,15 @@ done
 #!/bin/bash
 set -e  # Exit immediately if a command exits with non-zero status
 ''' + "\n".join(commands)
-        script_path = f"{root_dir}/run_exps/auto_iterative_sft/{dataset}_{model.replace('/', '_')}_iterative_sft.sh"
+        script_path = f"{root_dir}/run_exps/auto_iterative_sft/{dataset}_{model.replace('/', '_')}_shot{shot}_epochs{total_epochs}_maxiter{max_iterations}_samples{num_samples}_responses{num_responses}_iterative_sft.sh"
         script_paths.append(script_path)
         with open(script_path, "w") as f:
             f.write(bash_script)
 
-run_all_scripts = "\n".join([f"bash {script_path}" for script_path in script_paths])
+print("-----------Run following scripts:-----------")
+for script_path in script_paths:
+    print(f"bash {script_path}")
+# run_all_scripts = "\n".join([f"bash {script_path}" for script_path in script_paths])
 
-with open(f"{root_dir}/run_exps/auto_iterative_sft/run_all.sh", "w") as f:
-    f.write(run_all_scripts)
+# with open(f"{root_dir}/run_exps/auto_iterative_sft/run_all.sh", "w") as f:
+#     f.write(run_all_scripts)
