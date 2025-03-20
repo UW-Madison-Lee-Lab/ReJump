@@ -162,7 +162,8 @@ def train_on_correct_responses(
             trainer.project_name={dataset_name}_{model.replace('/', '_')}_shot{shot}_epochs{total_epochs}_maxiter{max_iterations}_samples{num_samples}_responses{num_responses}-iterative-sft \\
             trainer.experiment_name=${{experiment_name}} \\
             trainer.total_epochs={total_epochs} \\
-            trainer.logger=['console','wandb']
+            trainer.logger=['console','wandb'] \\
+            trainer.hub.push_to_hub=false \\
     """
 
 def filter_correct_responses(
