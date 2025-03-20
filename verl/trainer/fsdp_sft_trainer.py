@@ -369,10 +369,9 @@ class FSDPSFTTrainer(object):
                 hub_config = self.config.trainer.hub
                 if hub_config.get('push_to_hub', False):
                     # Get the original model path
-                    model_name = extract_model_name(path)
                     
                     # Process model name for repo
-                    processed_name = process_model_name_for_repo(model_name)
+                    processed_name = process_model_name_for_repo(path)
                     
                     # Get username from token or use default
                     username = hub_config.get('username', 'default-user')
