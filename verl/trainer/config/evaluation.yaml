@@ -7,3 +7,4 @@ data:
 
 trainer:
   wandb: False  # Set to True to enable wandb logging
+  project_name: evaluation  # Project name for Weights and Biases; default is "evaluation".
