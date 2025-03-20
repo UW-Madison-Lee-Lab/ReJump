@@ -344,8 +344,8 @@ class FSDPSFTTrainer(object):
             #     tracking.log(data=metric, step=global_step)
             # torch.distributed.barrier()
 
-            # # save checkpoint
-            # self.save_checkpoint(step=global_step)
+            # save checkpoint
+            self.save_checkpoint(step=global_step)
 
 
 from verl.trainer.fsdp_sft_trainer import FSDPSFTTrainer
