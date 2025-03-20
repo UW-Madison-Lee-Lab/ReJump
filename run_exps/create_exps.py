@@ -146,7 +146,7 @@ for dataset in dataset_list:
             for mode in args.mode:
                 if mode == "reasoning":
                     template_type = supported_llms[model]["template_type"]
-                    response_length = prompt_length * args.response_length_thinking_factor
+                    response_length = int(prompt_length * args.response_length_thinking_factor)
                 elif mode == "no_reasoning":
                     template_type = "no_reasoning"
                     response_length = 100
