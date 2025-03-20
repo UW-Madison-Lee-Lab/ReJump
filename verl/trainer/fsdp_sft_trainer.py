@@ -33,6 +33,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, PreTrainedModel, A
 from verl.utils.torch_functional import get_cosine_schedule_with_warmup
 from tensordict import TensorDict
 from torch.utils.data import DataLoader, DistributedSampler
+from huggingface_hub import HfApi, create_repo
 
 from verl.utils.fsdp_utils import get_fsdp_wrap_policy, init_fn, get_init_weight_context_manager
 from verl.utils.dataset import SFTDataset
@@ -53,6 +54,39 @@ def extract_step(path):
     if match:
         return int(match.group(1))
     return None
+
+def process_model_name_for_repo(model_path):
+    """Process model path to create a valid repo name."""
+    # Handle both file paths and model names
+    if '/' in model_path:
+        # If it's a path, get the last three non-empty components
+        parts = [p for p in model_path.split('/') if p]
+        if len(parts) >= 3:
+            # Take the last three parts and join them
+            base_name = '-'.join(parts[-3:])
+        else:
+            # If less than 3 parts, use all parts
+            base_name = '-'.join(parts)
+    else:
+        base_name = model_path
+    
+    # Remove any special characters and replace spaces with hyphens
+    repo_name = re.sub(r'[^a-zA-Z0-9-]', '-', base_name)
+    
+    # Remove multiple consecutive hyphens
+    repo_name = re.sub(r'-+', '-', repo_name)
+    
+    # Remove leading/trailing hyphens
+    repo_name = repo_name.strip('-')
+    
+    # Convert to lowercase
+    repo_name = repo_name.lower()
+    
+    # Ensure the name is not too long (Hugging Face has a limit)
+    if len(repo_name) > 100:
+        repo_name = repo_name[:100]
+    
+    return repo_name
 
 from constants import supported_llms
 def extract_model_name(local_model_path):
@@ -324,9 +358,50 @@ class FSDPSFTTrainer(object):
             os.makedirs(path, exist_ok=True)
             self.model.save_pretrained(path, state_dict=state_dict)
             self.tokenizer.save_pretrained(path)
+            
+            # Push to HDFS if configured
             if self.config.trainer.default_hdfs_dir:
                 hdfs_io.makedirs(self.config.trainer.default_hdfs_dir, exist_ok=True)
                 hdfs_io.copy(src=path, dst=self.config.trainer.default_hdfs_dir, dirs_exist_ok=True)
+            
+            # Push to Hugging Face Hub if configured
+            if hasattr(self.config.trainer, 'hub') and self.config.trainer.hub:
+                hub_config = self.config.trainer.hub
+                if hub_config.get('push_to_hub', False):
+                    # Get the original model path
+                    local_model_path = copy_local_path_from_hdfs(src=self.config.model.partial_pretrain, verbose=True)
+                    model_name = extract_model_name(local_model_path)
+                    
+                    # Process model name for repo
+                    processed_name = process_model_name_for_repo(model_name)
+                    
+                    # Get username from token or use default
+                    username = hub_config.get('username', 'default-user')
+                    repo_id = f"{username}/{processed_name}"
+                    
+                    # Create repo if it doesn't exist
+                    api = HfApi()
+                    try:
+                        create_repo(repo_id, exist_ok=True, token=hub_config.get('token'))
+                    except Exception as e:
+                        logger.warning(f"Failed to create repo {repo_id}: {e}")
+                    
+                    # Push to hub
+                    try:
+                        self.model.push_to_hub(
+                            repo_id,
+                            commit_message=f"Checkpoint at step {step}",
+                            token=hub_config.get('token')
+                        )
+                        self.tokenizer.push_to_hub(
+                            repo_id,
+                            commit_message=f"Tokenizer at step {step}",
+                            token=hub_config.get('token')
+                        )
+                        logger.info(f"Successfully pushed checkpoint to {repo_id}")
+                    except Exception as e:
+                        logger.warning(f"Failed to push to hub: {e}")
+        
         torch.distributed.barrier()
 
     def fit(self):

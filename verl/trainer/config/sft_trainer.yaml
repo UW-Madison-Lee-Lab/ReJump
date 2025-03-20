@@ -35,4 +35,8 @@ trainer:
   total_epochs: 4
   logger: ['console']
   seed: 1
+  hub:
+    push_to_hub: true  # Set to true to enable pushing to Hugging Face Hub
+    username: "Shuibai12138"  # Your Hugging Face username
+    token: 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  # Your Hugging Face token (can be set via environment variable HUGGING_FACE_HUB_TOKEN)
 
