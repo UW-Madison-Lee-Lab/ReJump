@@ -47,7 +47,7 @@ def main():
         print(type(df[["prompt"]]))
         print(type(df[["prompt"]][:3]))
         
-        print(df[["prompt"]].tolist())
+        print(df[["prompt"]].values.tolist())
 
     except Exception as e:
         print(f"Error reading file: {str(e)}")
