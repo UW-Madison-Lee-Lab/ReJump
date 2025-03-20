@@ -17,6 +17,7 @@ parser.add_argument("--num_samples", type=int, default=1000, help="Number of sam
 parser.add_argument("--total_epochs", type=int, default=4, help="Number of training epochs")
 parser.add_argument("--nproc_per_node", type=int, default=1, help="Number of processes per node for distributed training")
 parser.add_argument("--n_gpus_per_node", type=int, default=1, help="Number of GPUs per node")
+parser.add_argument("--push_to_hub", type=bool, default=False, help="Whether to push the model to the hub")
 args = parser.parse_args()
 
 dataset_list = args.dataset
@@ -163,7 +164,7 @@ def train_on_correct_responses(
             trainer.experiment_name=${{experiment_name}} \\
             trainer.total_epochs={total_epochs} \\
             trainer.logger=['console','wandb'] \\
-            trainer.hub.push_to_hub=false \\
+            trainer.hub.push_to_hub={args.push_to_hub} \\
     """
 
 def filter_correct_responses(
