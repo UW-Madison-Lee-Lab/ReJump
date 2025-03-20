@@ -1,6 +1,6 @@
 import pandas as pd
 import os
-from constants import supported_llms, get_result_dir, get_dataset_dir
+from constants import supported_llms, get_result_dir, get_dataset_dir, get_model_name, get_model_dir
 from environment import root_dir
 import argparse
 
@@ -16,6 +16,7 @@ parser.add_argument("--model", type=str, nargs="+", default=supported_model_list
 parser.add_argument("--mode", type=str, nargs="+", default=["reasoning", "no_reasoning"], choices=["reasoning", "no_reasoning"])
 parser.add_argument("--train", action="store_true")
 parser.add_argument("--n_gpus", type=int, default=2)
+parser.add_argument("--response_length_thinking_factor", type=float, default=2.0)
 args = parser.parse_args()
 
 dataset_list = args.dataset
@@ -58,7 +59,7 @@ def train(
     return f"""
 export VLLM_ATTENTION_BACKEND=XFORMERS
 
-python3 -m verl.trainer.main_ppo \
+python -m verl.trainer.main_ppo \
     data.train_files={get_dataset_dir(dataset_name, shot, template_type)}/train.parquet \
     data.val_files={get_dataset_dir(dataset_name, shot, template_type)}/test.parquet \
     data.train_batch_size=256 \
@@ -88,7 +89,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.save_freq=100 \
     trainer.test_freq=100 \
     trainer.project_name=TinyZero \
-    trainer.experiment_name={dataset_name}_{shot}_{model_name.replace('/', '_')}_{template_type} \
+    trainer.experiment_name={get_model_name(dataset_name, model_name, shot, template_type, response_length)} \
     trainer.total_epochs=15 2>&1 | tee verl_demo.log
     """
 
@@ -109,7 +110,7 @@ python -m verl.trainer.main_generation \
     data.prompt_key=prompt \
     data.n_samples=1 \
     data.batch_size=128 \
-    data.output_path={get_result_dir(dataset_name, model_name, shot, template_type)}/test.parquet \
+    data.output_path={get_result_dir(dataset_name, model_name, shot, template_type, response_length)}/test.parquet \
     model.path={model_name} \
     +model.trust_remote_code=True \
     rollout.temperature={temperature} \
@@ -127,10 +128,11 @@ def eval(
     shot,
     model_name,
     template_type="qwen-instruct",
+    response_length=1024
 ):
     return f"""
 python -m verl.trainer.main_eval \
-    data.path={get_result_dir(dataset_name, model_name, shot, template_type)}/test.parquet \
+    data.path={get_result_dir(dataset_name, model_name, shot, template_type, response_length)}/test.parquet \
     trainer.wandb=True
     """
 
@@ -144,10 +146,10 @@ for dataset in dataset_list:
             for mode in args.mode:
                 if mode == "reasoning":
                     template_type = supported_llms[model]["template_type"]
-                    response_length = prompt_length * 5
+                    response_length = prompt_length * args.response_length_thinking_factor
                 elif mode == "no_reasoning":
                     template_type = "no_reasoning"
-                    response_length = prompt_length // 2
+                    response_length = 100
                 else:
                     raise ValueError(f"Mode {mode} not supported, should be in [reasoning, no_reasoning]")
                 
@@ -168,24 +170,28 @@ for dataset in dataset_list:
                         prompt_length=prompt_length,
                         response_length=response_length
                     )
+                    global_step = input("Enter the global step: ")
+                    model_path= f"{get_model_dir(dataset, model, shot, template_type, response_length)}/actor/global_step_{global_step}"
                     command_list.append(train_command)
                 else:
-                    inference_command = inference(
-                        dataset_name=dataset,
-                        shot=shot,
-                        model_name=model,
-                        template_type=template_type,
-                        prompt_length=prompt_length,
-                        response_length=response_length
-                    )
-                    command_list.append(inference_command)
-                    eval_command = eval(
-                        dataset_name=dataset,
-                        shot=shot,
-                        model_name=model,
-                        template_type=template_type,
-                    )
-                    command_list.append(eval_command)
+                    model_path = model
+                
+                inference_command = inference(
+                    dataset_name=dataset,
+                    shot=shot,
+                    model_name=model_path,
+                    template_type=template_type,
+                    prompt_length=prompt_length,
+                    response_length=response_length
+                )
+                command_list.append(inference_command)
+                eval_command = eval(
+                    dataset_name=dataset,
+                    shot=shot,
+                    model_name=model_path,
+                    template_type=template_type,
+                )
+                command_list.append(eval_command)
                 bash_script = "\n".join(command_list)
                 script_path = f"{root_dir}/run_exps/auto/{dataset}_{shot}_{model.replace('/', '_')}_{mode}_train_{args.train}.sh"
                 script_paths.append(script_path)

@@ -3,25 +3,32 @@ root_dir = os.path.dirname(os.path.abspath(__file__))
 
 data_dir = os.path.join(root_dir, 'datasets')
 
-def get_result_dir(dataset_name, model_name, shot, template_type):
-    return os.path.join(root_dir, 'results', dataset_name, f"{model_name.replace('/', '_')}_{shot}_shot_{template_type}_gen")
+def get_model_name(dataset_name, model_name, shot, template_type, response_length):
+    return f"{model_name.replace('/', '_')}_{dataset_name}_{shot}_shot_{template_type}_reslen_{response_length}"
+def get_model_dir(dataset_name, model_name, shot, template_type, response_length):
+    return os.path.join(root_dir, 'checkpoints', 'TinyZero', get_model_name(dataset_name, model_name, shot, template_type, response_length))
+
+def get_result_dir(dataset_name, model_name, shot, template_type, response_length):
+    return os.path.join(root_dir, 'results', dataset_name, f"{model_name.replace('/', '_')}_{shot}_shot_{template_type}_reslen_{response_length}")
 def get_configs_via_result_dir(result_dir):
     basename = os.path.basename(result_dir)
     dirname = os.path.dirname(result_dir)
     dataset_name = os.path.basename(dirname)
     
-    pattern = r"(.+)_(\d+)_shot_(.+)_gen"
+    pattern = r"(.+)_(\d+)_shot_(.+)_reslen_(.+)"
     match = re.match(pattern, basename)
     
     if match:
         model_name = match.group(1)
         shot = int(match.group(2))
         template_type = match.group(3)
+        response_length = int(match.group(4))
         return {
             "dataset_name": dataset_name,
             "model_name": model_name,
             "shot": shot,
-            "template_type": template_type
+            "template_type": template_type,
+            "response_length": response_length
         }
     else:
         return {}
