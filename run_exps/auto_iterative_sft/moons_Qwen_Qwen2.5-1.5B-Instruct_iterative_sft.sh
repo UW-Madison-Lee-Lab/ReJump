@@ -26,7 +26,7 @@ while [ $iteration -lt 3 ]; do
         python -m verl.trainer.main_generation \
             trainer.nnodes=1 \
             trainer.n_gpus_per_node=1 \
-            data.path=/home/szhang967/liftr/datasets/moons/1_shot/train.parquet \
+            data.path=/home/szhang967/liftr/datasets/moons/1_shot/test.parquet \
             data.prompt_key=prompt \
             data.n_samples=5 \
             data.batch_size=128 \
