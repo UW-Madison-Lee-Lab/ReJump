@@ -13,6 +13,7 @@ parser.add_argument("--model", type=str, nargs="+", default=supported_model_list
 parser.add_argument("--max_iterations", type=int, default=10)
 parser.add_argument("--num_responses", type=int, default=5)
 parser.add_argument("--shot", type=int, default=10, help="Number of examples in few-shot learning")
+parser.add_argument("--num_samples", type=int, default=1000, help="Number of samples in the dataset")
 args = parser.parse_args()
 
 dataset_list = args.dataset
@@ -20,6 +21,7 @@ model_list = args.model
 max_iterations = args.max_iterations
 num_responses = args.num_responses
 shot = args.shot
+num_samples = args.num_samples
 
 def gen_dataset(
     dataset_name, 
@@ -30,7 +32,7 @@ def gen_dataset(
         return f"""
         python {root_dir}/examples/data_preprocess/{dataset_name}.py \\
             --template_type={template_type} \\
-            --num_samples=1000 \\
+            --num_samples={num_samples} \\
             --n_features=2 \\
             --centers=3 \\
             --cluster_std=1.0 \\
@@ -41,7 +43,7 @@ def gen_dataset(
         return f"""
         python {root_dir}/examples/data_preprocess/{dataset_name}.py \\
             --template_type={template_type} \\
-            --num_samples=1000 \\
+            --num_samples={num_samples} \\
             --n_shot={shot}
         """
     else:
