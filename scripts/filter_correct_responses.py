@@ -1,5 +1,5 @@
 import pandas as pd
-import argparse
+import argparse, os
 import numpy as np
 from verl.utils.reward_score import math, gsm8k
 
@@ -39,19 +39,19 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_path", type=str, required=True)
     parser.add_argument("--output_path", type=str, required=True)
-    parser.add_argument("--previous_correct_path", type=str, default=None, 
-                       help="Path to previously used correct responses")
+    parser.add_argument("--already_trained_correct_path", type=str, required=True,
+                       help="Path to already trained correct responses")
     args = parser.parse_args()
     
     # Read the generated responses
     df = pd.read_parquet(args.input_path)
     
-    # Read previously used correct responses if provided
-    previous_correct = None
-    if args.previous_correct_path:
-        previous_correct = pd.read_parquet(args.previous_correct_path)
+    # Read already trained correct responses if provided
+    already_trained = None
+    if os.path.exists(args.already_trained_correct_path):
+        already_trained = pd.read_parquet(args.already_trained_correct_path)
         # Create a set of previously used prompt-response pairs for quick lookup
-        previous_pairs = set(zip(previous_correct['prompt'], previous_correct['answer']))
+        previous_pairs = set(zip(already_trained['prompt'], already_trained['answer']))
     
     # Extract correct responses and create new dataset
     new_data = []
@@ -69,7 +69,7 @@ def main():
         
         for response in correct_responses_lst:
             # Check if this prompt-response pair was previously used
-            if previous_correct is None or (row_data['prompt'], response) not in previous_pairs:
+            if already_trained is None or (row_data['prompt'], response) not in previous_pairs:
                 # Add the correct response to the row data
                 row_data['answer'] = response
                 new_data.append(row_data)
@@ -77,6 +77,9 @@ def main():
     
     # Create new dataframe with correct responses
     correct_df = pd.DataFrame(new_data)
+    
+    already_trained = pd.concat([already_trained, correct_df], ignore_index=True)
+    already_trained.to_parquet(args.already_trained_correct_path)
     
     # Save filtered dataset
     correct_df.to_parquet(args.output_path)
