@@ -54,7 +54,11 @@ def extract_step(path):
         return int(match.group(1))
     return None
 
-def extract_model_name(local_model_path):#find the path that has the maximum gloable step number 
+from constants import supported_llms
+def extract_model_name(local_model_path):
+    #find the pathloc that has the maximum gloable step number 
+    if local_model_path in supported_llms.keys():
+        return local_model_path
     paths = os.listdir(local_model_path)
     max_step = -1
     max_step_path = None
