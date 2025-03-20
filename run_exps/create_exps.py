@@ -14,10 +14,22 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--dataset", type=str, nargs="+", default=["blobs", "moons", "linear"], choices=["blobs", "moons", "linear"])
 parser.add_argument("--model", type=str, nargs="+", default=supported_model_list, choices=supported_model_list)
 parser.add_argument("--mode", type=str, nargs="+", default=["reasoning", "no_reasoning"], choices=["reasoning", "no_reasoning"])
+parser.add_argument("--shot", type=int, nargs="+", default=shot_list)
 parser.add_argument("--train", action="store_true")
 parser.add_argument("--n_gpus", type=int, default=2)
 parser.add_argument("--response_length_thinking_factor", type=float, default=2.0)
+parser.add_argument("--load_train_step", type=int, default=None)
+
 args = parser.parse_args()
+
+if args.load_train_step is not None:
+    if len(args.model) > 1:
+        raise ValueError("Only one model is supported when loading train step")
+    if len(args.dataset) > 1:
+        raise ValueError("Only one dataset is supported when loading train step")
+    if len(args.mode) > 1:
+        raise ValueError("Only one mode is supported when loading train step")
+    
 
 dataset_list = args.dataset
 model_list = args.model
@@ -147,7 +159,7 @@ os.makedirs(f"{root_dir}/run_exps/auto", exist_ok=True)
  
 script_paths = []
 for dataset in dataset_list:
-    for shot in shot_list:
+    for shot in args.shot:
         prompt_length = int((24 * shot + 185) * 1.1)
         for model in model_list:
             for mode in args.mode:
@@ -177,10 +189,12 @@ for dataset in dataset_list:
                         prompt_length=prompt_length,
                         response_length=response_length
                     )
-                    # model_path= f"{get_model_dir(dataset, model, shot, template_type, response_length)}/actor/global_step_{global_step}"
                     command_list.append(train_command)
                 else:
-                    model_path = model
+                    if args.load_train_step is not None:
+                        model_path = f"{get_model_dir(dataset, model, shot, template_type, response_length)}/actor/global_step_{args.load_train_step}"
+                    else:
+                        model_path = model
                 
                     inference_command = inference(
                         dataset_name=dataset,
