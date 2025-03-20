@@ -21,7 +21,7 @@ def select_reward_fn(data_source):
 def evaluate_responses(row):
     response_lst = row['responses']
     data_source = row['data_source']
-    reward_data = row['reward_model_data']
+    reward_data = row['reward_model']
     reward_fn = select_reward_fn(data_source)
     ground_truth = reward_data['ground_truth']
     
