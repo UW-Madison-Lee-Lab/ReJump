@@ -112,8 +112,13 @@ class SFTDataset(Dataset):
 
     def __getitem__(self, item):
         tokenizer = self.tokenizer
-
-        prompt = self.prompts[item][0]['content']
+        try:
+            prompt = self.prompts[item][0]['content']
+        except:
+            print("--------------------------------")
+            print(self.prompts[item])
+            input("Press Enter to continue...")
+        
         response = self.responses[item]
 
         # apply chat template
