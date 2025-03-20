@@ -85,6 +85,7 @@ class SFTDataset(Dataset):
             dataframes.append(dataframe)
         self.dataframe = pd.concat(dataframes)
         self.prompts = self.dataframe[self.prompt_key]
+        print(self.prompts)
         for key in self.prompt_dict_keys:
             # type(x): pandas.core.series.Series
             # type(x[0]): numpy.ndarray
@@ -102,7 +103,7 @@ class SFTDataset(Dataset):
             except Exception:
                 print(f'self.responses={self.responses}')
                 raise
-        self.responses = self.responses.tolist()
+        self.responses = self.responses['label'].tolist()
 
     def __len__(self):
         return len(self.prompts)
