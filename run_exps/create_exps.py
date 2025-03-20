@@ -170,7 +170,7 @@ for dataset in dataset_list:
                         prompt_length=prompt_length,
                         response_length=response_length
                     )
-                    model_path= f"{get_model_dir(dataset, model, shot, template_type, response_length)}/actor/global_step_{global_step}"
+                    # model_path= f"{get_model_dir(dataset, model, shot, template_type, response_length)}/actor/global_step_{global_step}"
                     command_list.append(train_command)
                 else:
                     model_path = model
