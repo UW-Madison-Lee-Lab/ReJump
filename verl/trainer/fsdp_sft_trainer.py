@@ -155,8 +155,8 @@ class FSDPSFTTrainer(object):
                                         truncation=config.data.truncation)
         input("Press Enter to continue...")
         print(self.train_dataset)
-        print(self.train_dataset[0])
-        print(self.train_dataset[1])
+        print(len(self.train_dataset))
+        # print(self.train_dataset[1])
         input("Press Enter to continue1...")
         self.val_dataset = SFTDataset(parquet_files=config.data.val_files,
                                       tokenizer=self.tokenizer,
