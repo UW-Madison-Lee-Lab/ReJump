@@ -16,7 +16,7 @@ parser.add_argument("--model", type=str, nargs="+", default=supported_model_list
 parser.add_argument("--mode", type=str, nargs="+", default=["reasoning", "no_reasoning"], choices=["reasoning", "no_reasoning"])
 parser.add_argument("--train", action="store_true")
 parser.add_argument("--n_gpus", type=int, default=2)
-parser.add_argument("--response_length_thinking_factor", type=float, default=1.0)
+parser.add_argument("--response_length_thinking_factor", type=float, default=2.0)
 args = parser.parse_args()
 
 dataset_list = args.dataset
@@ -59,38 +59,45 @@ def train(
     return f"""
 export VLLM_ATTENTION_BACKEND=XFORMERS
 
-python -m verl.trainer.main_ppo \
+python3 -m verl.trainer.main_ppo \
+    algorithm.adv_estimator=grpo \
     data.train_files={get_dataset_dir(dataset_name, shot, template_type)}/train.parquet \
     data.val_files={get_dataset_dir(dataset_name, shot, template_type)}/test.parquet \
-    data.train_batch_size=256 \
-    data.val_batch_size=1312 \
+    data.train_batch_size=128 \
+    data.val_batch_size=640 \
     data.max_prompt_length={prompt_length} \
     data.max_response_length={response_length} \
     actor_rollout_ref.model.path={model_name} \
-    actor_rollout_ref.model.use_remove_padding=True \
-    actor_rollout_ref.actor.use_dynamic_bsz=True \
     actor_rollout_ref.actor.optim.lr=1e-6 \
+    actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.actor.ppo_mini_batch_size=64 \
-    actor_rollout_ref.actor.ppo_micro_batch_size=8 \
-    actor_rollout_ref.rollout.log_prob_micro_batch_size=8 \
+    actor_rollout_ref.actor.ppo_micro_batch_size=4 \
+    actor_rollout_ref.actor.use_kl_loss=True \
+    actor_rollout_ref.actor.kl_loss_coef=0.001 \
+    actor_rollout_ref.actor.kl_loss_type=low_var_kl \
+    actor_rollout_ref.model.enable_gradient_checkpointing=True \
+    actor_rollout_ref.actor.fsdp_config.param_offload=False \
+    actor_rollout_ref.actor.fsdp_config.grad_offload=False \
+    actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
+    actor_rollout_ref.rollout.log_prob_micro_batch_size=4 \
     actor_rollout_ref.rollout.tensor_model_parallel_size={args.n_gpus} \
+    actor_rollout_ref.rollout.name=vllm \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.4 \
-    actor_rollout_ref.ref.log_prob_micro_batch_size=4 \
-    critic.optim.lr=1e-5 \
-    critic.model.path={model_name} \
-    critic.ppo_micro_batch_size=8 \
-    critic.model.enable_gradient_checkpointing=True \
+    actor_rollout_ref.rollout.n=5 \
+    actor_rollout_ref.ref.log_prob_micro_batch_size=2 \
+    actor_rollout_ref.ref.fsdp_config.param_offload=True \
     algorithm.kl_ctrl.kl_coef=0.001 \
+    trainer.critic_warmup=0 \
     trainer.logger=['wandb'] \
     +trainer.val_before_train=False \
     trainer.default_hdfs_dir=null \
     trainer.n_gpus_per_node={args.n_gpus} \
     trainer.nnodes=1 \
-    trainer.save_freq=100 \
-    trainer.test_freq=100 \
+    trainer.save_freq=10 \
+    trainer.test_freq=10 \
     trainer.project_name=TinyZero \
     trainer.experiment_name={get_model_name(dataset_name, model_name, shot, template_type, response_length)} \
-    trainer.total_epochs=15 2>&1 | tee verl_demo.log
+    trainer.total_epochs=15 2>&1 | tee verl_demo
     """
 
 def inference(
@@ -141,7 +148,7 @@ os.makedirs(f"{root_dir}/run_exps/auto", exist_ok=True)
 script_paths = []
 for dataset in dataset_list:
     for shot in shot_list:
-        prompt_length = ((24 * shot + 185) // 1000 + 1) * 1000
+        prompt_length = int((24 * shot + 185) * 1.1)
         for model in model_list:
             for mode in args.mode:
                 if mode == "reasoning":
