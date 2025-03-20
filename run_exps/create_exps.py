@@ -19,6 +19,7 @@ parser.add_argument("--train", action="store_true")
 parser.add_argument("--n_gpus", type=int, default=2)
 parser.add_argument("--response_length_thinking_factor", type=float, default=2.0)
 parser.add_argument("--load_train_step", type=int, default=None)
+parser.add_argument("--n_samples", type=int, default=10000)
 
 args = parser.parse_args()
 
@@ -29,6 +30,8 @@ if args.load_train_step is not None:
         raise ValueError("Only one dataset is supported when loading train step")
     if len(args.mode) > 1:
         raise ValueError("Only one mode is supported when loading train step")
+    if len(args.shot) > 1:
+        raise ValueError("Only one shot is supported when loading train step")
     
 
 dataset_list = args.dataset
@@ -43,7 +46,7 @@ def gen_dataset(
         return f"""
 python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --template_type={template_type} \
-    --num_samples=1000 \
+    --num_samples={args.n_samples} \
     --n_features=2 \
     --centers=3 \
     --cluster_std=1.0 \
@@ -54,7 +57,7 @@ python {root_dir}/examples/data_preprocess/{dataset_name}.py \
         return f"""
 python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --template_type={template_type} \
-    --num_samples=1000 \
+    --num_samples={args.n_samples} \
     --n_shot={shot}
     """
     else:
