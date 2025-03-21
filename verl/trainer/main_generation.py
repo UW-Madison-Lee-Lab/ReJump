@@ -109,7 +109,7 @@ def main(config):
         inputs = tokenize_and_postprocess_data(
             prompt=batch_chat_lst,
             tokenizer=tokenizer,
-            max_length=config.rollout.max_prompt_length,
+            max_length=config.rollout.prompt_length,
             pad_token_id=tokenizer.pad_token_id,
             left_pad=True,
             truncation="right")
