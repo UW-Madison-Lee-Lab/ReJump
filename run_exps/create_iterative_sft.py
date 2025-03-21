@@ -84,7 +84,7 @@ def generate_responses(
             rollout.tensor_model_parallel_size=1 \\
             rollout.gpu_memory_utilization=0.8 \\
             trainer.wandb=True \\
-            trainer.project_name={args.project_prefix}_{dataset_name}_{model.replace('/', '_')}_shot{shot}_epochs{total_epochs}_maxiter{max_iterations}_samples{num_samples}_responses{num_responses}-iterative-sft-train-generation
+            trainer.project_name={args.project_prefix}_{dataset_name}_{model.replace('/', '_')}-iterative-sft-train-generation
     """
 def generate_test_responses(
     dataset_name,
@@ -112,7 +112,7 @@ def generate_test_responses(
             rollout.tensor_model_parallel_size=1 \\
             rollout.gpu_memory_utilization=0.8 \\
             trainer.wandb=True \\
-            trainer.project_name={args.project_prefix}_{dataset_name}_{model.replace('/', '_')}_shot{shot}_epochs{total_epochs}_maxiter{max_iterations}_samples{num_samples}_responses{num_responses}-iterative-sft-test-generation
+            trainer.project_name={args.project_prefix}_{dataset_name}_{model.replace('/', '_')}-iterative-sft-train-generation
     """
 def evaluate_test_responses(
     dataset_name,
@@ -124,7 +124,7 @@ def evaluate_test_responses(
         python -m verl.trainer.main_eval \\
             data.path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_gen_test.parquet \\
             trainer.wandb=True \\
-            trainer.project_name={args.project_prefix}_{dataset_name}_{model.replace('/', '_')}_shot{shot}_epochs{total_epochs}_maxiter{max_iterations}_samples{num_samples}_responses{num_responses}-iterative-sft-test-evaluation
+            trainer.project_name={args.project_prefix}_{dataset_name}_{model.replace('/', '_')}-iterative-sft-train-generation
     """
 
 def evaluate_responses(
@@ -137,7 +137,7 @@ def evaluate_responses(
         python -m verl.trainer.main_eval \\
             data.path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_gen_train.parquet \\
             trainer.wandb=True \\
-            trainer.project_name={args.project_prefix}_{dataset_name}_{model.replace('/', '_')}_shot{shot}_epochs{total_epochs}_maxiter{max_iterations}_samples{num_samples}_responses{num_responses}-iterative-sft-train-evaluation
+            trainer.project_name={args.project_prefix}_{dataset_name}_{model.replace('/', '_')}-iterative-sft-train-generation
     """
 
 def train_on_correct_responses(
@@ -161,7 +161,7 @@ def train_on_correct_responses(
             data.micro_batch_size=8 \\
             model.partial_pretrain=${{current_model}} \\
             trainer.default_local_dir={local_dir} \\
-            trainer.project_name={args.project_prefix}_{dataset_name}_{model.replace('/', '_')}_shot{shot}_epochs{total_epochs}_maxiter{max_iterations}_samples{num_samples}_responses{num_responses}-iterative-sft \\
+            trainer.project_name={args.project_prefix}_{dataset_name}_{model.replace('/', '_')}-iterative-sft-train-generation \\
             trainer.experiment_name=${{experiment_name}} \\
             trainer.total_epochs={total_epochs} \\
             trainer.logger=['console','wandb'] \\

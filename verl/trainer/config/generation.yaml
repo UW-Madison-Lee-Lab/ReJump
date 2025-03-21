@@ -1,6 +1,6 @@
 trainer:
   nnodes: 1                  # Number of nodes (machines) in distributed training; 1 means single machine.
-  n_gpus_per_node: 8         # Number of GPUs per node; 8 means each node uses 8 GPUs.
+  n_gpus_per_node: 1         # Number of GPUs per node; 8 means each node uses 8 GPUs.
   wandb: False              # Whether to use Weights and Biases for logging; False means no logging.
   project_name: generation  # Project name for Weights and Biases; default is "generation".
 
