@@ -36,22 +36,43 @@ def get_configs_via_result_dir(result_dir):
 def get_dataset_dir(dataset_name, shot, template_type):
     return os.path.join(root_dir, 'datasets', dataset_name, f"{shot}_shot", template_type)
 def get_configs_via_dataset_dir(dataset_dir):
-    basename = os.path.basename(dataset_dir)
-    dirname = os.path.dirname(dataset_dir)
-    dataset_name = os.path.basename(dirname)
-
-    pattern = r"(.+)_(\d+)_shot_(.+)"
-    match = re.match(pattern, basename)
-    if match:
-        shot = int(match.group(2))
-        template_type = match.group(3)
-        return {
-            "dataset_name": dataset_name,
-            "shot": shot,
-            "template_type": template_type
-        }
+    """
+    Extract dataset name, shot, and template type from dataset directory path.
+    
+    Args:
+        dataset_dir (str): Path to dataset directory, expected format: 
+                          '{dataset_name}/{shot}_shot/{template_type}'
+    
+    Returns:
+        dict: Dictionary containing dataset_name, shot, and template_type
+    """
+    # Handle case where dataset_dir might be a full path or just the basename
+    if os.path.sep in dataset_dir:
+        parts = dataset_dir.split(os.path.sep)
+        # Extract the last three components which should be dataset_name/shot_shot/template_type
+        if len(parts) >= 3:
+            template_type = parts[-1]
+            shot_part = parts[-2]
+            shot = shot_part.replace('_shot', '')
+            dataset_name = parts[-3]
+        else:
+            return {}
     else:
-        return {}
+        # If it's just a basename, try to parse it directly
+        pattern = r"(.+)/(\d+)_shot/(.+)"
+        match = re.match(pattern, dataset_dir)
+        if match:
+            dataset_name = match.group(1)
+            shot = match.group(2)
+            template_type = match.group(3)
+        else:
+            return {}
+    
+    return {
+        "dataset_name": dataset_name,
+        "shot": shot,
+        "template_type": template_type
+    }
 
 
 supported_llms = {

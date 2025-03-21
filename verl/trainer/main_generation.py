@@ -106,7 +106,7 @@ def main(config):
         batch_start_time = time.time()
         batch_chat_lst = chat_lst[batch_idx * config_batch_size:(batch_idx + 1) * config_batch_size]
         inputs = tokenizer.apply_chat_template(batch_chat_lst,
-                                               add_generation_prompt=True,
+                                               add_generation_prompt=False,
                                                padding=True,
                                                truncation=True,
                                                max_length=config.rollout.prompt_length,
@@ -114,6 +114,7 @@ def main(config):
                                                return_dict=True,
                                                tokenize=True)
         input_ids = inputs['input_ids']
+        
         attention_mask = inputs['attention_mask']
         position_ids = compute_position_id_with_mask(attention_mask)
 
