@@ -140,7 +140,7 @@ def main():
     else:
         # Concatenate and drop duplicates based on prompt and answer
         already_trained = pd.concat([already_trained, correct_df], ignore_index=True)
-        already_trained = already_trained.drop_duplicates(subset=['prompt', 'answer'])
+        
     
     already_trained.to_parquet(args.already_trained_correct_path)
     
