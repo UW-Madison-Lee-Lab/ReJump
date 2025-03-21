@@ -1,11 +1,11 @@
 data:
-  train_batch_size: 256
-  micro_batch_size: 16  # this is also val batch size
+  train_batch_size: 128
+  micro_batch_size: 8  # this is also val batch size
   train_files: ~/data/gsm8k/train.parquet
   val_files: ~/data/gsm8k/test.parquet
   prompt_key: question
   response_key: answer
-  max_length: 1024
+  max_length: 3000
   truncation: error
   balance_dp_token: False
   chat_template: null
@@ -36,7 +36,8 @@ trainer:
   logger: ['console']
   seed: 1
   hub:
-    push_to_hub: false  
+    push_to_hub: false  # Set to true to enable pushing to Hugging Face Hub
     username: "Shuibai12138"  # Your Hugging Face username
     token: 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  # Your Hugging Face token (can be set via environment variable HUGGING_FACE_HUB_TOKEN)
 
+# 就这样设置下就行了吗？
