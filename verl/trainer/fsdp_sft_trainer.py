@@ -61,6 +61,8 @@ class FSDPSFTTrainer(object):
     def __init__(self, config, device_mesh: DeviceMesh):
         self.config = config
         self.device_mesh = device_mesh
+        
+        
         # build tokenizer first
         local_model_path = copy_local_path_from_hdfs(src=self.config.model.partial_pretrain, verbose=True)
         from verl.utils import hf_tokenizer
@@ -162,11 +164,12 @@ class FSDPSFTTrainer(object):
                                                                                config=config,
                                                                                torch_dtype=torch.float32,
                                                                                attn_implementation='flash_attention_2',
-                                                                               device_map='auto',
+                                                                               #device_map='auto', ####
+                                                                               device_map=None, ####
                                                                                trust_remote_code=trust_remote_code)
             #self.model = self.model.cuda()
             #self.model = self.model.to(torch.device(f"cuda:{self.device_mesh.get_rank()}"))
-
+            self.model.to(torch.cuda.current_device()) #####
         if self.config.model.enable_gradient_checkpointing:
             self.model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={'use_reentrant': False})
 
@@ -367,6 +370,7 @@ from verl.utils.distributed import initialize_global_process_group
 @hydra.main(config_path='config', config_name='sft_trainer', version_base=None)
 def main(config):
     local_rank, rank, world_size = initialize_global_process_group()
+    torch.cuda.set_device(local_rank) ###
     device_mesh = init_device_mesh(device_type='cuda', mesh_shape=(world_size,), mesh_dim_names=('dp',))
     trainer = FSDPSFTTrainer(config=config, device_mesh=device_mesh)
     trainer.fit()

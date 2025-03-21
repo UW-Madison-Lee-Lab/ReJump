@@ -1,4 +1,4 @@
-N_GPUS=1
+N_GPUS=2
 BASE_MODEL=Qwen/Qwen2.5-3B-Instruct
 DATA_DIR=datasets/blobs/50_shot/no_reasoning
 PROJECT_NAME=LIFTR
@@ -22,5 +22,6 @@ trainer.logger=['wandb'] \
 trainer.default_hdfs_dir=null \
 trainer.project_name=$PROJECT_NAME \
 trainer.experiment_name=$EXPERIMENT_NAME \
-trainer.total_epochs=15 2>&1 | tee verl_demo.log \
-trainer.default_local_dir=checkpoints/$PROJECT_NAME/$EXPERIMENT_NAME
+trainer.default_local_dir=checkpoints/$PROJECT_NAME/$EXPERIMENT_NAME \
+trainer.total_epochs=15 2>&1 | tee verl_demo.log
+
