@@ -82,7 +82,7 @@ def generate_responses(
             rollout.prompt_length=2048 \\
             rollout.response_length=1024 \\
             rollout.tensor_model_parallel_size=1 \\
-            rollout.gpu_memory_utilization=0.8 \\
+            rollout.gpu_memory_utilization=0.6 \\
             trainer.wandb=True \\
             trainer.project_name={args.project_prefix}-train-generation_{dataset_name}_{model.replace('/', '_')}-iterative-sft
     """
@@ -110,7 +110,7 @@ def generate_test_responses(
             rollout.prompt_length=2048 \\
             rollout.response_length=1024 \\
             rollout.tensor_model_parallel_size=1 \\
-            rollout.gpu_memory_utilization=0.8 \\
+            rollout.gpu_memory_utilization=0.6 \\
             trainer.wandb=True \\
             trainer.project_name={args.project_prefix}-test-generation_{dataset_name}_{model.replace('/', '_')}-iterative-sft
     """
