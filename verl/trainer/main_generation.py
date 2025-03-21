@@ -16,6 +16,7 @@ Generate responses given a dataset of prompts
 """
 import ray
 import numpy as np
+import pdb
 import hydra
 import os
 import time
@@ -25,7 +26,7 @@ os.environ['TOKENIZERS_PARALLELISM'] = 'true'
 # os.environ['TORCH_COMPILE_DISABLE'] = '1'
 
 from verl.utils.model import compute_position_id_with_mask
-
+from verl.utils.torch_functional import tokenize_and_postprocess_data
 import pandas as pd
 
 from transformers import AutoTokenizer
@@ -105,15 +106,17 @@ def main(config):
         print(f'[{batch_idx+1}/{num_batch}] Start to process.')
         batch_start_time = time.time()
         batch_chat_lst = chat_lst[batch_idx * config_batch_size:(batch_idx + 1) * config_batch_size]
-        inputs = tokenizer.apply_chat_template(batch_chat_lst,
-                                               add_generation_prompt=False,
-                                               padding=True,
-                                               truncation=True,
-                                               max_length=config.rollout.prompt_length,
-                                               return_tensors='pt',
-                                               return_dict=True,
-                                               tokenize=True)
+        inputs = tokenize_and_postprocess_data(
+            prompt=batch_chat_lst,
+            tokenizer=tokenizer,
+            max_length=config.rollout.max_prompt_length,
+            pad_token_id=tokenizer.pad_token_id,
+            left_pad=True,
+            truncation="right")
+        
         input_ids = inputs['input_ids']
+        inputs_back = tokenizer.decode(input_ids[0])
+        pdb.set_trace()
         
         attention_mask = inputs['attention_mask']
         position_ids = compute_position_id_with_mask(attention_mask)
