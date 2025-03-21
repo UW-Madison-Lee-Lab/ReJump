@@ -11,10 +11,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--dataset", type=str, nargs="+", default=["blobs"], choices=["blobs", "moons", "linear"])
 parser.add_argument("--model", type=str, nargs="+", default=supported_model_list, choices=supported_model_list)
 parser.add_argument("--max_iterations", type=int, default=10)
-parser.add_argument("--num_responses", type=int, default=5)
-parser.add_argument("--shot", type=int, default=10, help="Number of examples in few-shot learning")
-parser.add_argument("--num_samples", type=int, default=1000, help="Number of samples in the dataset")
-parser.add_argument("--total_epochs", type=int, default=4, help="Number of training epochs")
+parser.add_argument("--num_responses", type=int, default=1)
+parser.add_argument("--shot", type=int, default=50, help="Number of examples in few-shot learning")
+parser.add_argument("--num_samples", type=int, default=10000, help="Number of samples in the dataset")
+parser.add_argument("--total_epochs", type=int, default=1, help="Number of training epochs")
 parser.add_argument("--nproc_per_node", type=int, default=1, help="Number of processes per node for distributed training")
 parser.add_argument("--n_gpus_per_node", type=int, default=1, help="Number of GPUs per node")
 parser.add_argument("--push_to_hub", type=bool, default=False, help="Whether to push the model to the hub")
@@ -78,8 +78,8 @@ def generate_responses(
             rollout.temperature={temperature} \\
             rollout.top_k=10 \\
             rollout.top_p=0.9 \\
-            rollout.prompt_length=1000 \\
-            rollout.response_length=500 \\
+            rollout.prompt_length=2048 \\
+            rollout.response_length=1024 \\
             rollout.tensor_model_parallel_size=1 \\
             rollout.gpu_memory_utilization=0.8 \\
             trainer.wandb=True \\
@@ -106,8 +106,8 @@ def generate_test_responses(
             rollout.temperature={temperature} \\
             rollout.top_k=10 \\
             rollout.top_p=0.9 \\
-            rollout.prompt_length=1000 \\
-            rollout.response_length=500 \\
+            rollout.prompt_length=2048 \\
+            rollout.response_length=1024 \\
             rollout.tensor_model_parallel_size=1 \\
             rollout.gpu_memory_utilization=0.8 \\
             trainer.wandb=True \\
