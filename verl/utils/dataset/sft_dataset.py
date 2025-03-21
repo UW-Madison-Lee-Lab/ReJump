@@ -113,9 +113,9 @@ class SFTDataset(Dataset):
     def __getitem__(self, item):
         tokenizer = self.tokenizer
 
-        print("--------------------------------")
-        print(self.prompts[item])
-        print("++++++++++++++++++++++++++++++++")
+        # print("--------------------------------")
+        # print(self.prompts[item])
+        # print("++++++++++++++++++++++++++++++++")
         prompt = self.prompts[item][0]['content']
         response = self.responses[item]
 

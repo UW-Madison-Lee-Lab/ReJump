@@ -158,7 +158,7 @@ def train_on_correct_responses(
             data.val_files={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_correct_train.parquet \\
             data.prompt_key=prompt \\
             data.response_key=answer \\
-            data.micro_batch_size=8 \\
+            data.micro_batch_size=4 \\
             model.partial_pretrain=${{current_model}} \\
             trainer.default_local_dir={local_dir} \\
             trainer.project_name={args.project_prefix}_{dataset_name}_{model.replace('/', '_')}-iterative-sft-train-generation \\
