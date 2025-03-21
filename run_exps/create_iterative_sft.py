@@ -72,7 +72,7 @@ def generate_responses(
             data.path={root_dir}/datasets/{dataset_name}/{shot}_shot/train.parquet \\
             data.prompt_key=prompt \\
             data.n_samples={num_responses} \\
-            data.batch_size=100 \\
+            data.batch_size=128 \\
             data.output_path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{args.project_prefix}_iter${{iteration}}_gen_train.parquet \\
             model.path=${{current_model}} \\
             +model.trust_remote_code=True \\
@@ -82,7 +82,7 @@ def generate_responses(
             rollout.prompt_length=2048 \\
             rollout.response_length=1024 \\
             rollout.tensor_model_parallel_size=1 \\
-            rollout.gpu_memory_utilization=0.8 \\
+            rollout.gpu_memory_utilization=0.6 \\
             trainer.wandb=True \\
             trainer.project_name={args.project_prefix}-train-generation_{dataset_name}_{model.replace('/', '_')}-iterative-sft
     """
@@ -100,7 +100,7 @@ def generate_test_responses(
             data.path={root_dir}/datasets/{dataset_name}/{shot}_shot/test.parquet \\
             data.prompt_key=prompt \\
             data.n_samples={num_responses} \\
-            data.batch_size=100 \\
+            data.batch_size=128 \\
             data.output_path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{args.project_prefix}_iter${{iteration}}_gen_test.parquet \\
             model.path=${{current_model}} \\
             +model.trust_remote_code=True \\
@@ -110,7 +110,7 @@ def generate_test_responses(
             rollout.prompt_length=2048 \\
             rollout.response_length=1024 \\
             rollout.tensor_model_parallel_size=1 \\
-            rollout.gpu_memory_utilization=0.8 \\
+            rollout.gpu_memory_utilization=0.6 \\
             trainer.wandb=True \\
             trainer.project_name={args.project_prefix}-test-generation_{dataset_name}_{model.replace('/', '_')}-iterative-sft
     """
