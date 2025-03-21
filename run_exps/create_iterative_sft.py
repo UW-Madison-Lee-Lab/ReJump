@@ -73,7 +73,7 @@ def generate_responses(
             data.prompt_key=prompt \\
             data.n_samples={num_responses} \\
             data.batch_size=128 \\
-            data.output_path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_gen_train.parquet \\
+            data.output_path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{args.project_prefix}_iter${{iteration}}_gen_train.parquet \\
             model.path=${{current_model}} \\
             +model.trust_remote_code=True \\
             rollout.temperature={temperature} \\
@@ -101,7 +101,7 @@ def generate_test_responses(
             data.prompt_key=prompt \\
             data.n_samples={num_responses} \\
             data.batch_size=128 \\
-            data.output_path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_gen_test.parquet \\
+            data.output_path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{args.project_prefix}_iter${{iteration}}_gen_test.parquet \\
             model.path=${{current_model}} \\
             +model.trust_remote_code=True \\
             rollout.temperature={temperature} \\
@@ -122,7 +122,7 @@ def evaluate_test_responses(
 ):
     return f"""
         python -m verl.trainer.main_eval \\
-            data.path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_gen_test.parquet \\
+            data.path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{args.project_prefix}_iter${{iteration}}_gen_test.parquet \\
             trainer.wandb=True \\
             trainer.project_name={args.project_prefix}-test-evaluation_{dataset_name}_{model.replace('/', '_')}-iterative-sft
     """
@@ -135,7 +135,7 @@ def evaluate_responses(
 ):
     return f"""
         python -m verl.trainer.main_eval \\
-            data.path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_gen_train.parquet \\
+            data.path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{args.project_prefix}_iter${{iteration}}_gen_train.parquet \\
             trainer.wandb=True \\
             trainer.project_name={args.project_prefix}-train-evaluation_{dataset_name}_{model.replace('/', '_')}-iterative-sft
     """
@@ -154,8 +154,8 @@ def train_on_correct_responses(
 
         torchrun --standalone --nnodes=1 --nproc_per_node={nproc_per_node} \\
             -m verl.trainer.fsdp_sft_trainer \\
-            data.train_files={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_correct_train.parquet \\
-            data.val_files={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_correct_train.parquet \\
+            data.train_files={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{args.project_prefix}_iter${{iteration}}_correct_train.parquet \\
+            data.val_files={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{args.project_prefix}_iter${{iteration}}_correct_train.parquet \\
             data.prompt_key=prompt \\
             data.response_key=answer \\
             data.micro_batch_size=1 \\
@@ -176,8 +176,8 @@ def filter_correct_responses(
 ):
     return f"""
         python {root_dir}/scripts/filter_correct_responses.py \\
-            --input_path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_gen_train.parquet \\
-            --output_path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_correct_train.parquet \\
+            --input_path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{args.project_prefix}_iter${{iteration}}_gen_train.parquet \\
+            --output_path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{args.project_prefix}_iter${{iteration}}_correct_train.parquet \\
             --already_trained_correct_path=${{already_trained_correct_path}} \\
             --wandb_project={args.project_prefix}-filtering_{dataset_name}_{model.replace('/', '_')}-iterative-sft \\
             --wandb_run_name=${{experiment_name}}
@@ -191,7 +191,7 @@ def check_accuracy(
 ):
     return f"""
         python {root_dir}/scripts/check_perfect_accuracy.py \\
-            --eval_path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{shot}_shot_iter${{iteration}}_gen_train.parquet ;
+            --eval_path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{args.project_prefix}_iter${{iteration}}_gen_train.parquet ;
     """
 
 os.makedirs(f"{root_dir}/run_exps/auto_iterative_sft", exist_ok=True)
@@ -217,7 +217,7 @@ for dataset in dataset_list:
         commands.append(f"""
 # Initialize variables
 current_model="{model}"  # Start with base model
-already_trained_correct_path="{root_dir}/results/{dataset}/$(basename ${{current_model}})_{shot}_shot_correct_train.parquet"
+already_trained_correct_path="{root_dir}/results/{dataset}/$(basename ${{current_model}})_{args.project_prefix}_correct_train.parquet"
 # Delete the file if it exists
 rm -f "$already_trained_correct_path"
 
