@@ -38,6 +38,4 @@ trainer:
   hub:
     push_to_hub: False  # Set to true to enable pushing to Hugging Face Hub
     username: "Shuibai12138"  # Your Hugging Face username
-    token: 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  # Your Hugging Face token (can be set via environment variable HUGGING_FACE_HUB_TOKEN)
-
-# 就这样设置下就行了吗？
+    token: null  # Hugging Face token (优先级: 1.环境变量HUGGING_FACE_HUB_TOKEN 2.~/.huggingface文件 3.此配置值)
