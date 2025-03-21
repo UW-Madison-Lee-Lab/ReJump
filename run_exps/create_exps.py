@@ -20,6 +20,7 @@ parser.add_argument("--n_gpus", type=int, default=2)
 parser.add_argument("--response_length_thinking_factor", type=float, default=2.0)
 parser.add_argument("--load_train_step", type=int, default=None)
 parser.add_argument("--n_samples", type=int, default=10000)
+parser.add_argument("--noise_level", type=float, default=None)
 
 args = parser.parse_args()
 
@@ -43,22 +44,25 @@ def gen_dataset(
     template_type="qwen-instruct"
 ):
     if dataset_name == "blobs":
+        noise_level = 1.0 if args.noise_level is None else args.noise_level
         return f"""
 python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --template_type={template_type} \
     --num_samples={args.n_samples} \
     --n_features=2 \
     --centers=3 \
-    --cluster_std=1.0 \
+    --cluster_std={noise_level} \
     --test_ratio=0.2 \
     --n_shot={shot}
     """
     elif dataset_name in ["moons", "linear"]:
+        noise_level = 0.1 if args.noise_level is None else args.noise_level
         return f"""
 python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --template_type={template_type} \
     --num_samples={args.n_samples} \
-    --n_shot={shot}
+    --n_shot={shot} \
+    --noise={noise_level}
     """
     else:
         raise ValueError(f"Dataset {dataset_name} not supported")
