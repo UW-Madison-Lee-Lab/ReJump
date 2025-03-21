@@ -49,6 +49,35 @@ logger = logging.getLogger(__file__)
 logger.setLevel(os.getenv('VERL_SFT_LOGGING_LEVEL', 'WARN'))
 
 
+def get_huggingface_token():
+    """
+    Get Hugging Face token from various sources with priority:
+    1. Environment variable HUGGING_FACE_HUB_TOKEN
+    2. ~/.huggingface file
+    3. Return None if not found
+    """
+    # First check environment variable
+    env_token = os.environ.get("HUGGING_FACE_HUB_TOKEN")
+    if env_token:
+        return env_token
+    
+    # Then check ~/.huggingface file
+    hf_config_path = os.path.expanduser("~/.huggingface")
+    if os.path.exists(hf_config_path):
+        try:
+            with open(hf_config_path, 'r') as f:
+                for line in f:
+                    if line.strip().startswith("HUGGING_FACE_HUB_TOKEN="):
+                        token = line.strip().split("=", 1)[1]
+                        # Remove quotes if present
+                        token = token.strip('"\'')
+                        return token
+        except Exception as e:
+            logger.warning(f"Error reading ~/.huggingface file: {e}")
+    
+    return None
+
+
 def extract_step(path):
     match = re.search(r'global_step_(\d+)', path)
     if match:
@@ -386,10 +415,13 @@ class FSDPSFTTrainer(object):
                     username = hub_config.get('username', 'default-user')
                     repo_id = f"{username}/{processed_name}"
                     
+                    # Get token with priority: env var > ~/.huggingface file > config file
+                    hf_token = get_huggingface_token() or hub_config.get('token')
+                    
                     # Create repo if it doesn't exist
                     api = HfApi()
                     try:
-                        create_repo(repo_id, exist_ok=True, token=hub_config.get('token'))
+                        create_repo(repo_id, exist_ok=True, token=hf_token)
                     except Exception as e:
                         logger.warning(f"Failed to create repo {repo_id}: {e}")
                     
@@ -398,12 +430,12 @@ class FSDPSFTTrainer(object):
                         self.model.push_to_hub(
                             repo_id,
                             commit_message=f"Checkpoint at step {step}",
-                            token=hub_config.get('token')
+                            token=hf_token
                         )
                         self.tokenizer.push_to_hub(
                             repo_id,
                             commit_message=f"Tokenizer at step {step}",
-                            token=hub_config.get('token')
+                            token=hf_token
                         )
                         logger.info(f"Successfully pushed checkpoint to {repo_id}")
                     except Exception as e:
