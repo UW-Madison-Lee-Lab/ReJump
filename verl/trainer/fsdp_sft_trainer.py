@@ -20,7 +20,8 @@ TODO(zhangchi.usc1992)
 
 import os
 
-os.environ['NCCL_DEBUG'] = 'WARN'
+os.environ['NCCL_DEBUG'] = 'INFO'
+#os.environ['PYTHONWARNINGS'] = 'ignore'
 os.environ['TOKENIZERS_PARALLELISM'] = 'true'
 
 import logging
@@ -161,7 +162,10 @@ class FSDPSFTTrainer(object):
                                                                                config=config,
                                                                                torch_dtype=torch.float32,
                                                                                attn_implementation='flash_attention_2',
+                                                                               device_map='auto',
                                                                                trust_remote_code=trust_remote_code)
+            #self.model = self.model.cuda()
+            #self.model = self.model.to(torch.device(f"cuda:{self.device_mesh.get_rank()}"))
 
         if self.config.model.enable_gradient_checkpointing:
             self.model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={'use_reentrant': False})
@@ -172,6 +176,7 @@ class FSDPSFTTrainer(object):
                                          reduce_dtype=torch.float32,
                                          buffer_dtype=torch.float32)
 
+        
         auto_wrap_policy = get_fsdp_wrap_policy(self.model, config=self.config.model.fsdp_config.wrap_policy)
         if self.device_mesh.get_rank() == 0:
             print(auto_wrap_policy)
@@ -180,7 +185,8 @@ class FSDPSFTTrainer(object):
             cpu_offload = None
         else:
             cpu_offload = CPUOffload(offload_params=self.config.model.fsdp_config.offload_params)
-
+        # print('\nrank={} device={} 1111111111111111111111111111111111\n'.format(self.device_mesh.get_rank(), torch.cuda.current_device()))
+        # print(self.device_mesh)
         self.fsdp_model = FSDP(module=self.model,
                                auto_wrap_policy=auto_wrap_policy,
                                param_init_fn=init_fn,
@@ -193,7 +199,6 @@ class FSDPSFTTrainer(object):
                                use_orig_params=False)
 
         log_gpu_memory_usage('After FSDP wrapping', logger=logger)
-
         self.optimizer = optim.AdamW(self.fsdp_model.parameters(),
                                      lr=self.config.optim.lr,
                                      betas=self.config.optim.betas,
@@ -324,9 +329,12 @@ class FSDPSFTTrainer(object):
         # TODO (zhangchi.usc1992) add back checkpoint manager. Currently, it blocks when uploading to hdfs. So very slow.
 
         for epoch in range(self.config.trainer.total_epochs):
+            print(f"Rank {rank}: Starting training loop")
             self.train_sampler.set_epoch(epoch=epoch)
             for data in self.train_dataloader:
                 data = TensorDict(data, batch_size=self.config.data.train_batch_size).cuda()
+                print(data)
+                print(f"Rank {rank}: Processing batch")
                 metric = self.training_step(data)
                 if rank == 0:
                     tracking.log(data=metric, step=global_step)
@@ -359,7 +367,6 @@ from verl.utils.distributed import initialize_global_process_group
 @hydra.main(config_path='config', config_name='sft_trainer', version_base=None)
 def main(config):
     local_rank, rank, world_size = initialize_global_process_group()
-
     device_mesh = init_device_mesh(device_type='cuda', mesh_shape=(world_size,), mesh_dim_names=('dp',))
     trainer = FSDPSFTTrainer(config=config, device_mesh=device_mesh)
     trainer.fit()

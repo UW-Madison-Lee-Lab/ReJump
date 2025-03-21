@@ -1,18 +1,17 @@
 N_GPUS=1
 BASE_MODEL=Qwen/Qwen2.5-3B-Instruct
 DATA_DIR=datasets/blobs/50_shot/no_reasoning
-ROLLOUT_TP_SIZE=1
 PROJECT_NAME=LIFTR
-EXPERIMENT_NAME=blobs-qwen2.5-3b-instruct-sft-no-reasoning
+EXPERIMENT_NAME=blobs-50shot-qwen2.5-3b-instruct-sft-no-reasoning
 VLLM_ATTENTION_BACKEND=XFORMERS
 
 mkdir -p checkpoints/$PROJECT_NAME/$EXPERIMENT_NAME
 
-torchrun --nnodes=1 --nproc_per_node=1 verl/trainer/fsdp_sft_trainer.py \
+CUDA_VISIBLE_DEVICE=0,1 torchrun --nproc_per_node=2 verl/trainer/fsdp_sft_trainer.py \
 data.train_files=$DATA_DIR/train.parquet \
 data.val_files=$DATA_DIR/test.parquet \
-data.train_batch_size=16 \
-data.micro_batch_size=2 \
+data.train_batch_size=64 \
+data.micro_batch_size=8 \
 data.max_length=2048 \
 data.prompt_key=prompt \
 +data.prompt_dict_keys=["content"] \
