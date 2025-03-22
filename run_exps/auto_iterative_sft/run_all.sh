@@ -1,1 +1,0 @@
-bash /home/szhang967/liftr/run_exps/auto_iterative_sft/moons_Qwen_Qwen2.5-1.5B-Instruct_iterative_sft.sh

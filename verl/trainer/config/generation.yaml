@@ -29,7 +29,7 @@ rollout:
   top_p: 0.7                 # Top-P (nucleus) sampling; 0.7 means sample from tokens with 70% cumulative probability.
   prompt_length: 2048        # Maximum length of input prompts; 1536 tokens.
   response_length: 1024       # Maximum length of generated responses; 512 tokens.
-  n: 2                       # Number of sequences to generate per prompt; 2 outputs.
+  n: 1                       # Number of sequences to generate per prompt; 2 outputs.
   # For vLLM rollout
   dtype: bfloat16            # Data type for inference; bfloat16, should match FSDP dtype.
   gpu_memory_utilization: 0.5  # GPU memory usage ratio; 0.5 means 50% of GPU memory.
