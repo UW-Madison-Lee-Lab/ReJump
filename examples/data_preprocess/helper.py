@@ -5,6 +5,7 @@ import numpy as np
 import re
 from constants import get_dataset_dir
 import pandas as pd
+from ray.util import pdb
 def format_features(features):
     return ", ".join([f"{x:.3f}" for x in features])
 
@@ -131,8 +132,6 @@ def save_data(
         copy(src=local_dir, dst=hdfs_dir)
 
 def classification_reward_fn(solution_str, ground_truth):
-    
-
     all_matches = list(re.finditer(r'<answer>(.*?)</answer>', solution_str, re.DOTALL))
     if all_matches:
         response_extract = None

@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pprint import pprint
 from typing import Type, Dict
+from ray.util import pdb
 
 import numpy as np
 from codetiming import Timer
@@ -364,7 +365,7 @@ class RayPPOTrainer(object):
                                        return_raw_chat=self.config.data.get('return_raw_chat', False),
                                        truncation='error')
         self.val_dataloader = DataLoader(dataset=self.val_dataset,
-                                         batch_size=len(self.val_dataset),
+                                         batch_size=self.config.data.val_batch_size,
                                          shuffle=True,
                                          drop_last=True,
                                          collate_fn=collate_fn)
@@ -409,7 +410,7 @@ class RayPPOTrainer(object):
                 'validate': True,
             }
 
-            # pad to be divisible by dp_size
+            pdb.remote_pdb() 
             test_gen_batch_padded, pad_size = pad_dataproto_to_divisor(test_gen_batch, self.actor_rollout_wg.world_size)
             test_output_gen_batch_padded = self.actor_rollout_wg.generate_sequences(test_gen_batch_padded)
             # unpad
@@ -586,8 +587,9 @@ class RayPPOTrainer(object):
                 with _timer('step', timing_raw):
                     # generate a batch
                     with _timer('gen', timing_raw):
+                        print(gen_batch)
                         gen_batch_output = self.actor_rollout_wg.generate_sequences(gen_batch)
-
+                        print(gen_batch_output)
                     batch.non_tensor_batch['uid'] = np.array([str(uuid.uuid4()) for _ in range(len(batch.batch))],
                                                              dtype=object)
                     # repeat to align with repeated responses in rollout
