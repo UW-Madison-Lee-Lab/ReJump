@@ -12,12 +12,18 @@ parser.add_argument("--dataset", type=str, nargs="+", default=["blobs"], choices
 parser.add_argument("--model", type=str, nargs="+", default=supported_model_list, choices=supported_model_list)
 parser.add_argument("--max_iterations", type=int, default=10)
 parser.add_argument("--num_responses", type=int, default=1)
+parser.add_argument("--train_set_temperature", type=float, default=0, help="Temperature for generating training responses")
+parser.add_argument("--test_set_temperature", type=float, default=0, help="Temperature for generating test responses")
+parser.add_argument("--train_set_top_k", type=int, default=-1, help="Top-k sampling parameter for training data")
+parser.add_argument("--test_set_top_k", type=int, default=-1, help="Top-k sampling parameter for test data")
+parser.add_argument("--train_set_top_p", type=float, default=1.0, help="Top-p sampling parameter for training data")
+parser.add_argument("--test_set_top_p", type=float, default=1.0, help="Top-p sampling parameter for test data")
 parser.add_argument("--shot", type=int, default=50, help="Number of examples in few-shot learning")
 parser.add_argument("--num_samples", type=int, default=10000, help="Number of samples in the dataset")
 parser.add_argument("--total_epochs", type=int, default=1, help="Number of training epochs")
 parser.add_argument("--nproc_per_node", type=int, default=1, help="Number of processes per node for distributed training")
 parser.add_argument("--n_gpus_per_node", type=int, default=1, help="Number of GPUs per node")
-parser.add_argument("--push_to_hub", type=bool, default=False, help="Whether to push the model to the hub")
+parser.add_argument("--push_to_hub", action="store_true", help="Whether to push the model to the hub")
 parser.add_argument("--project_prefix", type=str, default="", help="Prefix of the project name")
 args = parser.parse_args()
 
@@ -30,6 +36,12 @@ num_samples = args.num_samples
 total_epochs = args.total_epochs
 nproc_per_node = args.nproc_per_node
 n_gpus_per_node = args.n_gpus_per_node
+train_set_temperature = args.train_set_temperature
+test_set_temperature = args.test_set_temperature
+train_set_top_k = args.train_set_top_k
+test_set_top_k = args.test_set_top_k
+train_set_top_p = args.train_set_top_p
+test_set_top_p = args.test_set_top_p
 
 def gen_dataset(
     dataset_name, 
@@ -57,12 +69,14 @@ def gen_dataset(
     else:
         raise ValueError(f"Dataset {dataset_name} not supported")
 
-def generate_responses(
+def generate_train_responses(
     dataset_name,
     shot,
     model_name,
     iteration,
-    temperature=0.3,
+    temperature,
+    top_k,
+    top_p
 ):
     # 注意：使用 model_name.split('/')[-1] 可能在模型名为变量时出错，所以移到Bash中处理
     return f"""
@@ -77,8 +91,8 @@ def generate_responses(
             model.path=${{current_model}} \\
             +model.trust_remote_code=True \\
             rollout.temperature={temperature} \\
-            rollout.top_k=10 \\
-            rollout.top_p=0.9 \\
+            rollout.top_k={top_k} \\
+            rollout.top_p={top_p} \\
             rollout.prompt_length=2048 \\
             rollout.response_length=1024 \\
             rollout.tensor_model_parallel_size=1 \\
@@ -91,7 +105,9 @@ def generate_test_responses(
     shot,
     model_name,
     iteration,
-    temperature=0.3,
+    temperature,
+    top_k,
+    top_p
 ):
     return f"""
         python -m verl.trainer.main_generation \\
@@ -105,8 +121,8 @@ def generate_test_responses(
             model.path=${{current_model}} \\
             +model.trust_remote_code=True \\
             rollout.temperature={temperature} \\
-            rollout.top_k=10 \\
-            rollout.top_p=0.9 \\
+            rollout.top_k={top_k} \\
+            rollout.top_p={top_p} \\
             rollout.prompt_length=2048 \\
             rollout.response_length=1024 \\
             rollout.tensor_model_parallel_size=1 \\
@@ -127,7 +143,7 @@ def evaluate_test_responses(
             trainer.project_name={args.project_prefix}-test-evaluation_{dataset_name}_{model.replace('/', '_')}-iterative-sft
     """
 
-def evaluate_responses(
+def evaluate_train_responses(
     dataset_name,
     shot,
     model_name,
@@ -165,7 +181,7 @@ def train_on_correct_responses(
             trainer.experiment_name=${{experiment_name}} \\
             trainer.total_epochs={total_epochs} \\
             trainer.logger=['console','wandb'] \\
-            trainer.hub.push_to_hub={args.push_to_hub} \\
+            trainer.hub.push_to_hub={"true" if args.push_to_hub else "false"} \\
     """
 
 def filter_correct_responses(
@@ -229,15 +245,15 @@ while [ $iteration -lt {max_iterations} ]; do
     # Generate responses using current model
     echo "Generating responses with model: $current_model"
 
-    {generate_test_responses(dataset, shot=shot, model_name="", iteration="")}
+    {generate_test_responses(dataset, shot=shot, model_name="", iteration="", temperature=test_set_temperature, top_k=test_set_top_k, top_p=test_set_top_p)}
 
     {evaluate_test_responses(dataset, shot=shot, model_name="", iteration="")}
 
-    {generate_responses(dataset, shot=shot, model_name="", iteration="")}
+    {generate_train_responses(dataset, shot=shot, model_name="", iteration="", temperature=train_set_temperature, top_k=train_set_top_k, top_p=train_set_top_p)}
     
     # Evaluate the generated responses
     echo "Evaluating responses"
-    {evaluate_responses(dataset, shot=shot, model_name="", iteration="")}
+    {evaluate_train_responses(dataset, shot=shot, model_name="", iteration="")}
     
     # Check if we've achieved perfect accuracy
     echo "Checking accuracy"
