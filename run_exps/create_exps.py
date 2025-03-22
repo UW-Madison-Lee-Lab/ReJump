@@ -123,7 +123,7 @@ def inference(
     dataset_name,
     shot,
     model_name,
-    temperature=0.3,
+    temperature=0,
     template_type="qwen-instruct",
     prompt_length=256,
     response_length=1024
@@ -140,27 +140,28 @@ python -m verl.trainer.main_generation \
     model.path={model_name} \
     +model.trust_remote_code=True \
     rollout.temperature={temperature} \
-    rollout.top_k=10 \
-    rollout.top_p=0.9 \
+    rollout.top_k=-1 \
+    rollout.top_p=1 \
     rollout.prompt_length={prompt_length} \
     rollout.response_length={response_length} \
     rollout.tensor_model_parallel_size={args.n_gpus} \
     rollout.gpu_memory_utilization=0.8 \
-    trainer.wandb=True
+    trainer.wandb=True \
+    rollout.n=1
     """
     
-def eval(
-    dataset_name,
-    shot,
-    model_name,
-    template_type="qwen-instruct",
-    response_length=1024
-):
-    return f"""
-python -m verl.trainer.main_eval \
-    data.path={get_result_dir(dataset_name, model_name, shot, template_type, response_length)}/test.parquet \
-    trainer.wandb=True
-    """
+# def eval(
+#     dataset_name,
+#     shot,
+#     model_name,
+#     template_type="qwen-instruct",
+#     response_length=1024
+# ):
+#     return f"""
+# python -m verl.trainer.main_eval \
+#     data.path={get_result_dir(dataset_name, model_name, shot, template_type, response_length)}/test.parquet \
+#     trainer.wandb=True
+#     """
 
 os.makedirs(f"{root_dir}/run_exps/auto", exist_ok=True)
  
@@ -212,14 +213,14 @@ for dataset in dataset_list:
                         response_length=response_length
                     )
                     command_list.append(inference_command)
-                    eval_command = eval(
-                        dataset_name=dataset,
-                        shot=shot,
-                        model_name=model_path,
-                        template_type=template_type,
-                        response_length=response_length
-                    )
-                    command_list.append(eval_command)
+                    # eval_command = eval(
+                    #     dataset_name=dataset,
+                    #     shot=shot,
+                    #     model_name=model_path,
+                    #     template_type=template_type,
+                    #     response_length=response_length
+                    # )
+                    # command_list.append(eval_command)
                     
                 bash_script = "\n".join(command_list)
                 script_path = f"{root_dir}/run_exps/auto/{dataset}_{shot}_{model.replace('/', '_')}_{mode}_train_{args.train}.sh"
