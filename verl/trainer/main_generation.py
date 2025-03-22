@@ -44,7 +44,7 @@ from utils import flatten_dict, print_configs
 from constants import get_configs_via_result_dir
 import wandb   
 try:
-    from environment import WANDB_INFO, HUGGINGFACE_API_KEY, DEEPSEEK_API_KEY
+    from environment import WANDB_INFO, HUGGINGFACE_API_KEY, DEEPSEEK_API_KEY, GPT_API_KEY, GEMINI_API_KEY
 except ImportError:
     raise ImportError("""
 Please create environment.py file in the project root directory.
@@ -53,6 +53,8 @@ Here is the expected format of WANDB_INFO, HUGGINGFACE_API_KEY, and DEEPSEEK_API
 WANDB_INFO = {"project": "your-project-id", "entity": "your-entity-name"}
 HUGGINGFACE_API_KEY = "your-huggingface-api-key"
 DEEPSEEK_API_KEY = "your-deepseek-api-key"
+GPT_API_KEY = "your-gpt-key"
+GEMINI_API_KEY = "your-gemini-api-key"
 """)
 
 from huggingface_hub import login
@@ -84,6 +86,30 @@ class DeepseekAPI:
             print(f"Error in Deepseek API call: {str(e)}")
             raise
 
+class ChatGPTAPI:
+    def __init__(self, api_key: str):
+        self.client = OpenAI(
+            api_key=api_key
+        )
+
+    def generate(self, messages: List[Dict[str, str]], max_tokens: int = 1000, temperature: float = 0.7) -> str:
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                top_p=0.9,
+                frequency_penalty=0.0,
+                presence_penalty=0.0,
+                stream=False
+            )
+            # print(response)
+            return response.choices[0].message.content
+
+        except Exception as e:
+            print(f"Error in GPT API call: {str(e)}")
+            raise
 @hydra.main(config_path='config', config_name='generation', version_base=None)
 def main(config):
     
@@ -104,15 +130,28 @@ def main(config):
     pprint(OmegaConf.to_container(config, resolve=True))  # resolve=True will eval symbol values
     OmegaConf.resolve(config)
 
+    use_deepseek = False
+    use_gemini = False
+    use_gpt = False
+    use_api = True
     if config.model.path == "deepseek-chat":
-        use_api = True
+        use_deepseek = True
+    elif config.model.path == "gpt":
+        use_gpt = True
+    elif config.model.path == "gemini":
+        use_gemini = True
     else:
         use_api = False
 
     # Initialize model based on config
-    if use_api:
+    if use_deepseek:
         model = DeepseekAPI(DEEPSEEK_API_KEY)
         tokenizer = None  # Deepseek API handles tokenization
+    elif use_gpt:
+        # TODO GPT
+        model = ChatGPTAPI(GPT_API_KEY)
+        tokenizer = None # CPT API also handles tokenization
+        # TODO Gemini
     else:
         local_path = copy_local_path_from_hdfs(config.model.path)
         from verl.utils import hf_tokenizer
@@ -127,7 +166,7 @@ def main(config):
     chat_lst = dataset[config.data.prompt_key].tolist()
 
     # Convert chat list to proper format for Deepseek API
-    if use_api:
+    if use_api: #TODO Check this works past deepseek
         def convert_to_string(chat):
             if isinstance(chat, np.ndarray):
                 chat = chat.tolist()
@@ -156,7 +195,7 @@ def main(config):
     
     if not use_api:
         dp_size = wg.world_size // config.rollout.tensor_model_parallel_size
-    else:
+    else: #TODO: Check this holds for added APIs
         dp_size = 1  # When using API, we don't need distributed processing
     
     num_batch = (total_samples // config_batch_size) + 1
