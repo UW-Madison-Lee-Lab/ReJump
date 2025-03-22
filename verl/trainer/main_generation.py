@@ -20,6 +20,7 @@ import hydra
 import os
 import time
 import torch
+import json
 import pdb
 os.environ['NCCL_DEBUG'] = 'WARN'
 os.environ['TOKENIZERS_PARALLELISM'] = 'true'
@@ -179,6 +180,9 @@ def main(config):
     output_dir = os.path.dirname(config.data.output_path)
     makedirs(output_dir, exist_ok=True)
     dataset.to_parquet(config.data.output_path)
+    # save a json copy
+    dataset.to_json(config.data.output_path.replace(".parquet", ".json"), orient="records", lines=True)
+        
     
     # eval
     passes = 0
