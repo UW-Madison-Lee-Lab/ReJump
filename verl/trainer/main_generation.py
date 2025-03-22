@@ -124,8 +124,8 @@ def main(config):
         num_examine=0, 
         return_dict=True,
     )
-    
-    for test_data in dataloader:
+    for batch_idx, test_data in enumerate(dataloader):
+        print(f"Start batch [{batch_idx}/{len(dataloader)}]")
         test_batch = DataProto.from_single_dict(test_data)
         test_gen_batch = test_batch.pop(['input_ids', 'attention_mask', 'position_ids'])
         
