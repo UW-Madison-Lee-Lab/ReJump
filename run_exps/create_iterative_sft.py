@@ -300,6 +300,7 @@ set -e  # Exit immediately if a command exits with non-zero status
 print("-----------Run following scripts:-----------")
 for script_path in script_paths:
     print(f"bash {script_path}")
+    
 # run_all_scripts = "\n".join([f"bash {script_path}" for script_path in script_paths])
 
 # with open(f"{root_dir}/run_exps/auto_iterative_sft/run_all.sh", "w") as f:
