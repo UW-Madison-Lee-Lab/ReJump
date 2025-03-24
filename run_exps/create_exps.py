@@ -250,7 +250,7 @@ for dataset in dataset_list:
                             # command_list.append(eval_command)
                             
                         bash_script = "\n".join(command_list)
-                        script_path = f"{root_dir}/run_exps/auto/{dataset}_{shot}_{model.replace('/', '_')}_{mode}_train_{args.train}.sh"
+                        script_path = f"{root_dir}/run_exps/auto/{get_model_name(dataset, model, shot, template_type, response_length, n_samples, noise_level)}_train_{args.train}.sh"
                         script_paths.append(script_path)
                         with open(script_path, "w") as f:
                             f.write(bash_script)
