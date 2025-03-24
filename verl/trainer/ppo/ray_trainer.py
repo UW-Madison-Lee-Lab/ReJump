@@ -410,7 +410,6 @@ class RayPPOTrainer(object):
                 'validate': True,
             }
 
-            pdb.remote_pdb() 
             test_gen_batch_padded, pad_size = pad_dataproto_to_divisor(test_gen_batch, self.actor_rollout_wg.world_size)
             test_output_gen_batch_padded = self.actor_rollout_wg.generate_sequences(test_gen_batch_padded)
             # unpad
