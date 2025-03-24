@@ -124,7 +124,7 @@ python -m verl.trainer.main_ppo \
     trainer.test_freq=10 \
     trainer.project_name=TinyZero \
     trainer.experiment_name={get_model_name(dataset, model, shot, template_type, response_length, n_samples, noise_level)} \
-    trainer.total_epochs=15 2>&1 | tee verl_demo
+    trainer.total_epochs=15
     """
 
 def inference(
