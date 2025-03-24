@@ -3,75 +3,104 @@ root_dir = os.path.dirname(os.path.abspath(__file__))
 
 data_dir = os.path.join(root_dir, 'datasets')
 
-def get_model_name(dataset_name, model_name, shot, template_type, response_length):
-    return f"{model_name.replace('/', '_')}_{dataset_name}_{shot}_shot_{template_type}_reslen_{response_length}"
-def get_model_dir(dataset_name, model_name, shot, template_type, response_length):
-    return os.path.join(root_dir, 'checkpoints', 'TinyZero', get_model_name(dataset_name, model_name, shot, template_type, response_length))
-
-def get_result_dir(dataset_name, model_name, shot, template_type, response_length):
-    return os.path.join(root_dir, 'results', dataset_name, f"{model_name.replace('/', '_')}_{shot}_shot_{template_type}_reslen_{response_length}")
-def get_configs_via_result_dir(result_dir):
-    basename = os.path.basename(result_dir)
-    dirname = os.path.dirname(result_dir)
-    dataset_name = os.path.basename(dirname)
-    
-    pattern = r"(.+)_(\d+)_shot_(.+)_reslen_(.+)"
-    match = re.match(pattern, basename)
-    
+def get_model_name(
+    dataset_name, 
+    model_name, 
+    shot, 
+    template_type, 
+    response_length,
+    num_samples,
+    noise_level
+):
+    return f"{model_name.replace('/', '-')}_{dataset_name}_{shot}_shot_{template_type}_reslen_{response_length}_nsamples_{num_samples}_noise_{noise_level}"
+def get_configs_via_model_name(model_name):
+    pattern = r"(.+?)_(.+?)_(\d+)_shot_(.+)_reslen_(.+)_nsamples_(.+)_noise_(.+)"
+    match = re.match(pattern, model_name)
     if match:
-        model_name = match.group(1)
-        shot = int(match.group(2))
-        template_type = match.group(3)
-        response_length = int(match.group(4))
         return {
-            "dataset_name": dataset_name,
-            "model_name": model_name,
-            "shot": shot,
-            "template_type": template_type,
-            "response_length": response_length
+            "dataset_name": match.group(1),
+            "model_name": match.group(2),
+            "shot": int(match.group(3)),
+            "template_type": match.group(4),
+            "response_length": int(match.group(5)),
+            "num_samples": int(match.group(6)),
+            "noise_level": float(match.group(7)),
         }
     else:
-        return {}
+        raise ValueError(f"Invalid model name: {model_name}")
     
-def get_dataset_dir(dataset_name, shot, template_type):
-    return os.path.join(root_dir, 'datasets', dataset_name, f"{shot}_shot", template_type)
-def get_configs_via_dataset_dir(dataset_dir):
-    """
-    Extract dataset name, shot, and template type from dataset directory path.
-    
-    Args:
-        dataset_dir (str): Path to dataset directory, expected format: 
-                          '{dataset_name}/{shot}_shot/{template_type}'
-    
-    Returns:
-        dict: Dictionary containing dataset_name, shot, and template_type
-    """
-    # Handle case where dataset_dir might be a full path or just the basename
-    if os.path.sep in dataset_dir:
-        parts = dataset_dir.split(os.path.sep)
-        # Extract the last three components which should be dataset_name/shot_shot/template_type
-        if len(parts) >= 3:
-            template_type = parts[-1]
-            shot_part = parts[-2]
-            shot = shot_part.replace('_shot', '')
-            dataset_name = parts[-3]
-        else:
-            return {}
+def get_model_dir(
+    dataset_name, 
+    model_name, 
+    shot, 
+    template_type, 
+    response_length, 
+    num_samples, 
+    noise_level,
+    train_step = 0,
+):
+    return os.path.join(root_dir, 'checkpoints', 'TinyZero', get_model_name(dataset_name, model_name, shot, template_type, response_length, num_samples, noise_level), "actor", f"global_step_{train_step}")
+def get_configs_via_model_dir(model_dir):
+    # Extract model name and train step from the model directory path using regex
+    pattern = r".*TinyZero[/\\](.+)[/\\]actor[/\\]global_step_(\d+)$"
+    match = re.match(pattern, model_dir)
+    if match:
+        model_name = match.group(1)  # The full model name with all parameters
+        train_step = match.group(2)    # The training step number
     else:
-        # If it's just a basename, try to parse it directly
-        pattern = r"(.+)/(\d+)_shot/(.+)"
-        match = re.match(pattern, dataset_dir)
-        if match:
-            dataset_name = match.group(1)
-            shot = match.group(2)
-            template_type = match.group(3)
-        else:
-            return {}
+        raise ValueError(f"Invalid model directory structure: {model_dir}")
+    configs = get_configs_via_model_name(model_name)
+    configs["train_step"] = int(train_step)
+    return configs
+
+
+def get_result_dir(
+    dataset_name, 
+    model_name, 
+    shot, 
+    template_type, 
+    response_length,
+    num_samples, 
+    noise_level,
+    train_step = 0,
+):
+    return os.path.join(root_dir, 'results', get_model_name(dataset_name, model_name, shot, template_type, response_length, num_samples, noise_level), f"global_step_{train_step}")
+def get_configs_via_result_dir(result_dir):
+    steps = os.path.basename(result_dir).split("_")[-1]
+    dirname = os.path.dirname(result_dir)
+    model_name = os.path.basename(dirname)
+    configs = get_configs_via_model_name(model_name)
+    configs["train_step"] = int(steps)
+    return configs
+    
+    
+def get_dataset_dir(
+    dataset_name, 
+    shot, 
+    template_type, 
+    num_samples, 
+    noise_level = 0
+):
+    return os.path.join(root_dir, 'datasets', dataset_name, f"{shot}_shot", template_type, f"{num_samples}_samples_{noise_level}_noise")
+def get_configs_via_dataset_dir(dataset_dir):
+    basename = dataset_dir.replace(f"{root_dir}/datasets/", "")
+    pattern = r"(.+)/(\d+)_shot/(.+)/(.+)_samples_(.+)_noise"
+    match = re.match(pattern, basename)
+    if match:
+        dataset_name = match.group(1)
+        shot = match.group(2)
+        template_type = match.group(3)
+        num_samples = match.group(4)
+        noise_level = match.group(5)
+    else:
+        return {}
     
     return {
         "dataset_name": dataset_name,
         "shot": shot,
-        "template_type": template_type
+        "template_type": template_type,
+        "num_samples": num_samples,
+        "noise_level": noise_level
     }
 
 

@@ -19,8 +19,8 @@ parser.add_argument("--train", action="store_true")
 parser.add_argument("--n_gpus", type=int, default=2)
 parser.add_argument("--response_length_thinking_factor", type=float, default=2.0)
 parser.add_argument("--load_train_step", type=int, default=None)
-parser.add_argument("--n_samples", type=int, default=10000)
-parser.add_argument("--noise_level", type=float, default=None)
+parser.add_argument("--n_samples", type=int, nargs="+", default=[10000])
+parser.add_argument("--noise_level", type=float, nargs="+", default=[None])
 
 args = parser.parse_args()
 
@@ -37,18 +37,24 @@ if args.load_train_step is not None:
 
 dataset_list = args.dataset
 model_list = args.model
+mode_list = args.mode
+shot_list = args.shot
+n_samples_list = args.n_samples
+noise_level_list = args.noise_level
 
 def gen_dataset(
     dataset_name, 
     shot,
-    template_type="qwen-instruct"
+    template_type="qwen-instruct",
+    num_samples=10000,
+    noise_level=None
 ):
     if dataset_name == "blobs":
-        noise_level = 1.0 if args.noise_level is None else args.noise_level
+        noise_level = 1.0 if noise_level is None else noise_level
         return f"""
 python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --template_type={template_type} \
-    --num_samples={args.n_samples} \
+    --num_samples={num_samples} \
     --n_features=2 \
     --centers=3 \
     --cluster_std={noise_level} \
@@ -56,11 +62,11 @@ python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --n_shot={shot}
     """
     elif dataset_name in ["moons", "linear"]:
-        noise_level = 0.1 if args.noise_level is None else args.noise_level
+        noise_level = 0.1 if noise_level is None else noise_level
         return f"""
 python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --template_type={template_type} \
-    --num_samples={args.n_samples} \
+    --num_samples={num_samples} \
     --n_shot={shot} \
     --noise={noise_level}
     """
@@ -73,15 +79,17 @@ def train(
     model_name,
     template_type="qwen-instruct",
     prompt_length=256,
-    response_length=1024
+    response_length=1024,
+    num_samples=10000,
+    noise_level=None,
 ):
     return f"""
 export VLLM_ATTENTION_BACKEND=XFORMERS
 
 python -m verl.trainer.main_ppo \
     algorithm.adv_estimator=grpo \
-    data.train_files={get_dataset_dir(dataset_name, shot, template_type)}/train.parquet \
-    data.val_files={get_dataset_dir(dataset_name, shot, template_type)}/test.parquet \
+    data.train_files={get_dataset_dir(dataset_name, shot, template_type, num_samples, noise_level)}/train.parquet \
+    data.val_files={get_dataset_dir(dataset_name, shot, template_type, num_samples, noise_level)}/test.parquet \
     data.train_batch_size=128 \
     data.val_batch_size=640 \
     data.max_prompt_length={prompt_length} \
@@ -115,7 +123,7 @@ python -m verl.trainer.main_ppo \
     trainer.save_freq=10 \
     trainer.test_freq=10 \
     trainer.project_name=TinyZero \
-    trainer.experiment_name={get_model_name(dataset_name, model_name, shot, template_type, response_length)} \
+    trainer.experiment_name={get_model_name(dataset, model, shot, template_type, response_length, n_samples, noise_level)} \
     trainer.total_epochs=15 2>&1 | tee verl_demo
     """
 
@@ -126,17 +134,19 @@ def inference(
     temperature=0,
     template_type="qwen-instruct",
     prompt_length=256,
-    response_length=1024
+    response_length=1024,
+    num_samples=10000,
+    noise_level=None
 ):
     return f"""
 python -m verl.trainer.main_generation \
     trainer.nnodes=1 \
     trainer.n_gpus_per_node={args.n_gpus} \
-    data.path={get_dataset_dir(dataset_name, shot, template_type)}/test.parquet \
+    data.path={get_dataset_dir(dataset_name, shot, template_type, num_samples, noise_level)}/test.parquet \
     data.prompt_key=prompt \
     data.n_samples=1 \
     data.batch_size=128 \
-    data.output_path={get_result_dir(dataset_name, model_name, shot, template_type, response_length)}/test.parquet \
+    data.output_path={get_result_dir(dataset_name, model_name, shot, template_type, response_length, num_samples, noise_level)}/test.parquet \
     model.path={model_name} \
     +model.trust_remote_code=True \
     rollout.temperature={temperature} \
@@ -167,66 +177,83 @@ os.makedirs(f"{root_dir}/run_exps/auto", exist_ok=True)
  
 script_paths = []
 for dataset in dataset_list:
-    for shot in args.shot:
+    for shot in shot_list:
         prompt_length = int((24 * shot + 185) * 1.1)
         for model in model_list:
-            for mode in args.mode:
-                if mode == "reasoning":
-                    template_type = supported_llms[model]["template_type"]
-                    response_length = int(prompt_length * args.response_length_thinking_factor)
-                elif mode == "no_reasoning":
-                    template_type = "no_reasoning"
-                    response_length = 100
-                else:
-                    raise ValueError(f"Mode {mode} not supported, should be in [reasoning, no_reasoning]")
-                
-                command_list = []
-                
-                gen_command = gen_dataset(
-                    dataset_name=dataset,
-                    shot=shot,
-                    template_type=template_type,
-                )
-                command_list.append(gen_command)
-                if args.train:
-                    train_command = train(
-                        dataset_name=dataset,
-                        shot=shot,
-                        model_name=model,
-                        template_type=template_type,
-                        prompt_length=prompt_length,
-                        response_length=response_length
-                    )
-                    command_list.append(train_command)
-                else:
-                    if args.load_train_step is not None:
-                        model_path = f"{get_model_dir(dataset, model, shot, template_type, response_length)}/actor/global_step_{args.load_train_step}"
-                    else:
-                        model_path = model
-                
-                    inference_command = inference(
-                        dataset_name=dataset,
-                        shot=shot,
-                        model_name=model_path,
-                        template_type=template_type,
-                        prompt_length=prompt_length,
-                        response_length=response_length
-                    )
-                    command_list.append(inference_command)
-                    # eval_command = eval(
-                    #     dataset_name=dataset,
-                    #     shot=shot,
-                    #     model_name=model_path,
-                    #     template_type=template_type,
-                    #     response_length=response_length
-                    # )
-                    # command_list.append(eval_command)
-                    
-                bash_script = "\n".join(command_list)
-                script_path = f"{root_dir}/run_exps/auto/{dataset}_{shot}_{model.replace('/', '_')}_{mode}_train_{args.train}.sh"
-                script_paths.append(script_path)
-                with open(script_path, "w") as f:
-                    f.write(bash_script)
+            for mode in mode_list:
+                for n_samples in n_samples_list:
+                    for noise_level in noise_level_list:
+                        if mode == "reasoning":
+                            template_type = supported_llms[model]["template_type"]
+                            response_length = int(prompt_length * args.response_length_thinking_factor)
+                        elif mode == "no_reasoning":
+                            template_type = "no_reasoning"
+                            response_length = 100
+                        else:
+                            raise ValueError(f"Mode {mode} not supported, should be in [reasoning, no_reasoning]")
+                        
+                        if noise_level is None:
+                            if dataset == "blobs":
+                                noise_level = 1.0
+                            elif dataset in ["moons", "linear"]:
+                                noise_level = 0.1
+                            else:
+                                noise_level = 0
+                        
+                        
+                        command_list = []
+                        
+                        gen_command = gen_dataset(
+                            dataset_name=dataset,
+                            shot=shot,
+                            template_type=template_type,
+                            num_samples=n_samples,
+                            noise_level=noise_level
+                        )
+                        command_list.append(gen_command)
+                        if args.train:
+                            train_command = train(
+                                dataset_name=dataset,
+                                shot=shot,
+                                model_name=model,
+                                template_type=template_type,
+                                prompt_length=prompt_length,
+                                response_length=response_length,
+                                num_samples=n_samples,
+                                noise_level=noise_level,
+                            )
+                            command_list.append(train_command)
+                        else:
+                            if args.load_train_step is not None:
+                                model_path = get_model_dir(dataset, model, shot, template_type, response_length, n_samples, noise_level, args.load_train_step)
+                            else:
+                                model_path = model
+                        
+                            inference_command = inference(
+                                dataset_name=dataset,
+                                shot=shot,
+                                model_name=model_path,
+                                template_type=template_type,
+                                prompt_length=prompt_length,
+                                response_length=response_length,
+                                num_samples=n_samples,
+                                noise_level=noise_level
+                            )
+                            command_list.append(inference_command)
+                            # eval_command = eval(
+                            #     dataset_name=dataset,
+                            #     shot=shot,
+                            #     model_name=model_path,
+                            #     template_type=template_type,
+                            #     response_length=response_length
+                            # )
+                            # command_list.append(eval_command)
+                            
+                        bash_script = "\n".join(command_list)
+                        script_path = f"{root_dir}/run_exps/auto/{dataset}_{shot}_{model.replace('/', '_')}_{mode}_train_{args.train}.sh"
+                        script_paths.append(script_path)
+                        with open(script_path, "w") as f:
+                            f.write(bash_script)
 
 run_all_scripts = "\n".join([f"bash {script_path}" for script_path in script_paths])
 
