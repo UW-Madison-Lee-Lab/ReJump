@@ -48,7 +48,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--hdfs_dir', default=None)
     parser.add_argument('--num_samples', type=int, default=100000)
-    parser.add_argument('--noise', type=float, default=0.1)
+    parser.add_argument('--noise_level', type=float, default=0.1)
     parser.add_argument('--test_ratio', type=float, default=0.2)
     parser.add_argument('--n_shot', type=int, default=0)
     parser.add_argument('--template_type', type=str, default='base')
@@ -63,13 +63,13 @@ if __name__ == '__main__':
     # Generate synthetic dataset
     samples = gen_dataset(
         num_samples=args.num_samples,
-        noise=args.noise,
+        noise=args.noise_level,
         seed_value=42
     )
     
     in_context_samples = gen_dataset(
         num_samples=args.num_samples,
-        noise=args.noise,
+        noise=args.noise_level,
         seed_value=42
     )
     

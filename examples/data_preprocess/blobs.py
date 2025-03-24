@@ -58,7 +58,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_samples', type=int, default=100000)
     parser.add_argument('--n_features', type=int, default=2)
     parser.add_argument('--centers', type=int, default=3)
-    parser.add_argument('--cluster_std', type=float, default=1.0)
+    parser.add_argument('--noise_level', type=float, default=1.0)
     parser.add_argument('--test_ratio', type=float, default=0.2)
     parser.add_argument('--n_shot', type=int, default=0)
     parser.add_argument('--template_type', type=str, default='base')
@@ -75,7 +75,7 @@ if __name__ == '__main__':
         num_samples=args.num_samples,
         n_features=args.n_features,
         centers=args.centers,
-        cluster_std=args.cluster_std,
+        cluster_std=args.noise_level,
         seed_value=42
     )
     
@@ -83,7 +83,7 @@ if __name__ == '__main__':
         num_samples=args.num_samples,
         n_features=args.n_features,
         centers=args.centers,
-        cluster_std=args.cluster_std,
+        cluster_std=args.noise_level,
         seed_value=42
     )
     
@@ -104,7 +104,7 @@ if __name__ == '__main__':
         args,
         args.centers,
         TRAIN_SIZE,
-        TEST_SIZE
+        TEST_SIZE,
     )
     
 

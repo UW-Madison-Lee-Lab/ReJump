@@ -21,7 +21,6 @@ parser.add_argument("--response_length_thinking_factor", type=float, default=2.0
 parser.add_argument("--load_train_step", type=int, default=None)
 parser.add_argument("--n_samples", type=int, nargs="+", default=[10000])
 parser.add_argument("--noise_level", type=float, nargs="+", default=[None])
-
 args = parser.parse_args()
 
 if args.load_train_step is not None:
@@ -57,7 +56,7 @@ python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --num_samples={num_samples} \
     --n_features=2 \
     --centers=3 \
-    --cluster_std={noise_level} \
+    --noise_level={noise_level} \
     --test_ratio=0.2 \
     --n_shot={shot}
     """
@@ -68,7 +67,8 @@ python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --template_type={template_type} \
     --num_samples={num_samples} \
     --n_shot={shot} \
-    --noise={noise_level}
+    --noise_level={noise_level}
+    --test_ratio=0.2
     """
     else:
         raise ValueError(f"Dataset {dataset_name} not supported")

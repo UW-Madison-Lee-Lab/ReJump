@@ -63,7 +63,7 @@ def main(config):
     
     if config.trainer.wandb:
         wandb_configs = flatten_dict(config)
-        wandb_configs.update(get_configs_via_result_dir(config.data.output_path))
+        wandb_configs.update(get_configs_via_result_dir(os.path.dirname(config.data.output_path)))
         wandb.init(
             project=f"{WANDB_INFO['project']}-generation",
             entity=WANDB_INFO['entity'],

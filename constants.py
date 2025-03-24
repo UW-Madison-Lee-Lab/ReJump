@@ -1,4 +1,5 @@
 import os, re
+import pdb
 root_dir = os.path.dirname(os.path.abspath(__file__))
 
 data_dir = os.path.join(root_dir, 'datasets')
@@ -69,6 +70,7 @@ def get_configs_via_result_dir(result_dir):
     steps = os.path.basename(result_dir).split("_")[-1]
     dirname = os.path.dirname(result_dir)
     model_name = os.path.basename(dirname)
+    pdb.set_trace()
     configs = get_configs_via_model_name(model_name)
     configs["train_step"] = int(steps)
     return configs

@@ -365,7 +365,7 @@ class RayPPOTrainer(object):
                                        return_raw_chat=self.config.data.get('return_raw_chat', False),
                                        truncation='error')
         self.val_dataloader = DataLoader(dataset=self.val_dataset,
-                                         batch_size=self.config.data.val_batch_size,
+                                         batch_size=len(self.val_dataset),
                                          shuffle=True,
                                          drop_last=True,
                                          collate_fn=collate_fn)

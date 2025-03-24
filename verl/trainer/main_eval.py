@@ -20,6 +20,7 @@ The input is a parquet file that contains N generated sequences and (optional) t
 import hydra
 from verl.utils.fs import copy_local_path_from_hdfs
 from verl.utils.reward_score import math, gsm8k
+import os
 import pandas as pd
 import numpy as np
 import pdb, wandb
@@ -47,7 +48,7 @@ def select_reward_fn(data_source):
 def main(config):
     if config.trainer.wandb:
         wandb_configs = flatten_dict(config)
-        wandb_configs.update(get_configs_via_result_dir(config.data.path))
+        wandb_configs.update(get_configs_via_result_dir(os.path.dirname(config.data.path)))
         wandb.init(
             project=f"{WANDB_INFO['project']}-evaluation",
             entity=WANDB_INFO['entity'],

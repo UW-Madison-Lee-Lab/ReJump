@@ -118,7 +118,13 @@ def save_data(
     train_dataset = train_dataset.map(function=make_map_fn('train'), with_indices=True)
     test_dataset = test_dataset.map(function=make_map_fn('test'), with_indices=True)
 
-    local_dir = get_dataset_dir(data_source, args.shot, args.template_type, args.n_samples, args.noise_level)
+    local_dir = get_dataset_dir(
+        dataset_name=data_source,
+        shot=args.n_shot,
+        template_type=args.template_type,
+        num_samples=args.num_samples,
+        noise_level=args.noise_level
+    )
     hdfs_dir = args.hdfs_dir
 
     # Create directory if it doesn't exist
