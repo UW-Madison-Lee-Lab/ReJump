@@ -12,8 +12,6 @@ def gen_dataset(
     num_samples: int,
     noise: float = 0.1,
     seed_value: int = 42,
-    coefficients: List[float] = [3.55, -0.3],
-    intercept: float = 2.0,
     label_flip_rate: float = 0.0,
 ) -> List[Tuple]:
     """Generate synthetic linear binary classification dataset.
@@ -22,8 +20,6 @@ def gen_dataset(
         num_samples: Number of samples to generate
         noise: Standard deviation of Gaussian noise added to the data
         seed_value: Random seed for reproducibility
-        coefficients: Coefficients for the linear boundary
-        intercept: Intercept for the linear boundary
         
     Returns:
         List of tuples containing (features, label)
@@ -32,6 +28,9 @@ def gen_dataset(
     
     # To ensure a balanced dataset, we'll generate samples for each class separately
     samples_per_class = num_samples // 2
+    
+    coefficients = [0.55, -0.3]
+    intercept = 0.2
     
     X, y = [], []
     
