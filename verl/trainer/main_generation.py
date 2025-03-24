@@ -22,6 +22,8 @@ import time
 import torch
 import json
 import pdb
+from datetime import datetime
+
 os.environ['NCCL_DEBUG'] = 'WARN'
 os.environ['TOKENIZERS_PARALLELISM'] = 'true'
 # os.environ['TORCH_COMPILE_DISABLE'] = '1'
@@ -60,14 +62,20 @@ login(token=HUGGINGFACE_API_KEY)
 
 @hydra.main(config_path='config', config_name='generation', version_base=None)
 def main(config):
+    if not os.path.exists(config.data.output_path):
+        from verl.trainer.fsdp_sft_trainer import extract_model_name
+        config.model.path = extract_model_name(config.model.path)
+    
     
     if config.trainer.wandb:
         wandb_configs = flatten_dict(config)
         wandb_configs.update(get_configs_via_result_dir(os.path.dirname(config.data.output_path)))
+        run_name = f"run-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
         wandb.init(
-            project=f"{WANDB_INFO['project']}-generation",
+            project=f"{WANDB_INFO['project']}-{config.trainer.project_name}",
             entity=WANDB_INFO['entity'],
-            config=wandb_configs
+            config=wandb_configs,
+            name=run_name
         )
         
     

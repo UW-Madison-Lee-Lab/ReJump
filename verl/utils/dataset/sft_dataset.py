@@ -41,7 +41,7 @@ class SFTDataset(Dataset):
                  tokenizer,
                  prompt_key='prompt',
                  prompt_dict_keys=None,
-                 response_key='response',
+                 response_key='answer',
                  response_dict_keys=None,
                  max_length=1024,
                  truncation='error'):
@@ -55,9 +55,12 @@ class SFTDataset(Dataset):
         if isinstance(tokenizer, str):
             tokenizer = hf_tokenizer(tokenizer)
         self.tokenizer: PreTrainedTokenizer = tokenizer
-
-        self.prompt_key = prompt_key if isinstance(prompt_key, (tuple, list)) else [prompt_key]
-        self.response_key = response_key if isinstance(response_key, (tuple, list)) else [response_key]
+        ####
+        # self.prompt_key = prompt_key if isinstance(prompt_key, (tuple, list)) else [prompt_key]
+        # self.response_key = response_key if isinstance(response_key, (tuple, list)) else [response_key]
+        self.prompt_key = prompt_key
+        self.response_key = response_key
+        ###
         self.prompt_dict_keys = [] if not prompt_dict_keys else prompt_dict_keys
         self.response_dict_keys = [] if not response_dict_keys else response_dict_keys
 
@@ -110,7 +113,10 @@ class SFTDataset(Dataset):
     def __getitem__(self, item):
         tokenizer = self.tokenizer
 
-        prompt = self.prompts[item]
+        # print("--------------------------------")
+        # print(self.prompts[item])
+        # print("++++++++++++++++++++++++++++++++")
+        prompt = self.prompts[item][0]['content']
         response = self.responses[item]
 
         # apply chat template

@@ -1,7 +1,8 @@
 trainer:
   nnodes: 1                  # Number of nodes (machines) in distributed training; 1 means single machine.
-  n_gpus_per_node: 8         # Number of GPUs per node; 8 means each node uses 8 GPUs.
+  n_gpus_per_node: 1         # Number of GPUs per node; 8 means each node uses 8 GPUs.
   wandb: False              # Whether to use Weights and Biases for logging; False means no logging.
+  project_name: generation  # Project name for Weights and Biases; default is "generation".
 
 data:
   path: ~/data/rlhf/math/test.parquet  # Path to the dataset, a Parquet file for RLHF math data.
@@ -23,12 +24,12 @@ actor:
 
 rollout:
   name: vllm                 # Generation engine type; vLLM for efficient inference.
-  temperature: 1.0           # Sampling temperature; 1.0 controls text randomness (higher = more random).
+  temperature: 0.3           # Sampling temperature; 1.0 controls text randomness (higher = more random).
   top_k: 50                  # Top-K sampling; 50 means sample from top 50 probable tokens.
   top_p: 0.7                 # Top-P (nucleus) sampling; 0.7 means sample from tokens with 70% cumulative probability.
-  prompt_length: 1536        # Maximum length of input prompts; 1536 tokens.
-  response_length: 512       # Maximum length of generated responses; 512 tokens.
-  n: 2                       # Number of sequences to generate per prompt; 2 outputs.
+  prompt_length: 2048        # Maximum length of input prompts; 1536 tokens.
+  response_length: 1024       # Maximum length of generated responses; 512 tokens.
+  n: 1                       # Number of sequences to generate per prompt; 2 outputs.
   # For vLLM rollout
   dtype: bfloat16            # Data type for inference; bfloat16, should match FSDP dtype.
   gpu_memory_utilization: 0.5  # GPU memory usage ratio; 0.5 means 50% of GPU memory.

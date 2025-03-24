@@ -27,6 +27,8 @@ import pdb, wandb
 from utils import flatten_dict, print_configs
 from environment import WANDB_INFO
 from constants import get_configs_via_result_dir
+from datetime import datetime
+
 
 def select_reward_fn(data_source):
     if data_source == 'lighteval/MATH':
@@ -50,7 +52,7 @@ def main(config):
         wandb_configs = flatten_dict(config)
         wandb_configs.update(get_configs_via_result_dir(os.path.dirname(config.data.path)))
         wandb.init(
-            project=f"{WANDB_INFO['project']}-evaluation",
+            project=f"{WANDB_INFO['project']}-{config.trainer.project_name}",
             entity=WANDB_INFO['entity'],
             config=wandb_configs
         )
