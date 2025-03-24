@@ -106,6 +106,7 @@ for dataset in dataset_list:
                                 response_length=response_length,
                                 num_samples=n_samples,
                                 noise_level=noise_level,
+                                label_flip_rate=args.label_flip_rate,
                                 n_gpus=args.n_gpus
                             )
                             command_list.append(train_command)
@@ -134,6 +135,7 @@ for dataset in dataset_list:
                                 response_length=response_length,
                                 num_samples=n_samples,
                                 noise_level=noise_level,
+                                label_flip_rate=args.label_flip_rate,
                                 n_gpus=args.n_gpus
                             )
                             command_list.append(inference_command)
