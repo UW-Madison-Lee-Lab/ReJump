@@ -9,6 +9,16 @@ from ray.util import pdb
 def format_features(features):
     return ", ".join([f"{x:.3f}" for x in features])
 
+def flip_label(y, label_flip_rate, n_classes):
+    if label_flip_rate > 0:
+        num_flips = int(label_flip_rate * len(y))
+        flip_indices = np.random.choice(len(y), num_flips, replace=False)
+        for i in flip_indices:
+            possible_labels = list(range(n_classes))
+            possible_labels.remove(y[i])
+            y[i] = np.random.choice(possible_labels)
+    return y
+
 def make_prefix(dp, template_type, n_classes, n_shot=0, in_context_dataset=None):
     features = dp['features']
     label = dp['label']
@@ -123,8 +133,24 @@ def save_data(
         shot=args.n_shot,
         template_type=args.template_type,
         num_samples=args.num_samples,
-        noise_level=args.noise_level
+        noise_level=args.noise_level,
+        label_flip_rate=args.label_flip_rate
     )
+
+    store_data(
+        local_dir=local_dir,
+        train_dataset=train_dataset,
+        test_dataset=test_dataset,
+        args=args,
+    )
+        
+def store_data(
+    local_dir,
+    train_dataset,
+    test_dataset,
+    args,
+):
+
     hdfs_dir = args.hdfs_dir
 
     # Create directory if it doesn't exist

@@ -6,7 +6,7 @@ import numpy as np
 from typing import List, Tuple
 import argparse
 from utils import set_seed
-from examples.data_preprocess.helper import save_data, classification_reward_fn
+from examples.data_preprocess.helper import save_data, classification_reward_fn, flip_label
 
 def gen_dataset(
     num_samples: int,
@@ -14,6 +14,7 @@ def gen_dataset(
     seed_value: int = 42,
     coefficients: List[float] = [3.55, -0.3],
     intercept: float = 2.0,
+    label_flip_rate: float = 0.0,
 ) -> List[Tuple]:
     """Generate synthetic linear binary classification dataset.
     
@@ -32,7 +33,7 @@ def gen_dataset(
     # To ensure a balanced dataset, we'll generate samples for each class separately
     samples_per_class = num_samples // 2
     
-    samples = []
+    X, y = [], []
     
     # Generate positive class samples (y > 0)
     count_positive = 0
@@ -48,7 +49,8 @@ def gen_dataset(
         
         # Check if it belongs to the positive class
         if noisy_value > 0:
-            samples.append((feature_vector.tolist(), 1))
+            X.append(feature_vector.tolist())
+            y.append(1)
             count_positive += 1
     
     # Generate negative class samples (y ≤ 0)
@@ -65,12 +67,13 @@ def gen_dataset(
         
         # Check if it belongs to the negative class
         if noisy_value <= 0:
-            samples.append((feature_vector.tolist(), 0))
+            X.append(feature_vector.tolist())
+            y.append(0)
             count_negative += 1
     
-    # Shuffle the samples
-    np.random.shuffle(samples)
+    y = flip_label(y, label_flip_rate, 2)
     
+    samples = list(zip(X, y))
     return samples
 
 if __name__ == '__main__':
@@ -81,7 +84,7 @@ if __name__ == '__main__':
     parser.add_argument('--test_ratio', type=float, default=0.2)
     parser.add_argument('--n_shot', type=int, default=0)
     parser.add_argument('--template_type', type=str, default='base')
-
+    parser.add_argument('--label_flip_rate', type=float, default=0.0)
     args = parser.parse_args()
     set_seed(42)
 
@@ -94,13 +97,14 @@ if __name__ == '__main__':
     samples = gen_dataset(
         num_samples=args.num_samples,
         noise=args.noise_level,
-        seed_value=42
+        seed_value=12
     )
     
     in_context_samples = gen_dataset(
         num_samples=args.num_samples,
         noise=args.noise_level,
-        seed_value=42
+        label_flip_rate=args.label_flip_rate,
+        seed_value=34
     )
     
     dataset_dict = {

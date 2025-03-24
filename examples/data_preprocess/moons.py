@@ -8,12 +8,13 @@ from typing import List, Tuple
 from tqdm import tqdm
 import argparse
 from utils import set_seed
-from examples.data_preprocess.helper import save_data, classification_reward_fn
+from examples.data_preprocess.helper import save_data, classification_reward_fn, flip_label
 
 def gen_dataset(
     num_samples: int,
     noise: float = 0.1,
     seed_value: int = 42,
+    label_flip_rate: float = 0.0,
 ) -> List[Tuple]:
     """Generate synthetic moons dataset for classification task.
     
@@ -21,7 +22,7 @@ def gen_dataset(
         num_samples: Number of samples to generate
         noise: Standard deviation of Gaussian noise added to the data
         seed_value: Random seed for reproducibility
-        
+
     Returns:
         List of tuples containing (features, label)
     """
@@ -33,6 +34,7 @@ def gen_dataset(
         noise=noise,
         random_state=seed_value
     )
+    y = flip_label(y, label_flip_rate, 2)
     
     samples = []
     for i in tqdm(range(num_samples)):
@@ -52,7 +54,7 @@ if __name__ == '__main__':
     parser.add_argument('--test_ratio', type=float, default=0.2)
     parser.add_argument('--n_shot', type=int, default=0)
     parser.add_argument('--template_type', type=str, default='base')
-
+    parser.add_argument('--label_flip_rate', type=float, default=0.0)
     args = parser.parse_args()
     set_seed(42)
     data_source = 'moons'
@@ -64,13 +66,14 @@ if __name__ == '__main__':
     samples = gen_dataset(
         num_samples=args.num_samples,
         noise=args.noise_level,
-        seed_value=42
+        seed_value=12
     )
     
     in_context_samples = gen_dataset(
         num_samples=args.num_samples,
         noise=args.noise_level,
-        seed_value=42
+        label_flip_rate=args.label_flip_rate,
+        seed_value=34
     )
     
     dataset_dict = {
