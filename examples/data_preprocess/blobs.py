@@ -51,7 +51,6 @@ def gen_dataset(
         label = int(y[i])
         samples.append((features, label))
     
-    pdb.set_trace()
     return samples
 
 
