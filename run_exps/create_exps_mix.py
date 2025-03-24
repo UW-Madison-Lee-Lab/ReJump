@@ -91,7 +91,8 @@ for model in model_list:
                     shot=shot,
                     template_type=template_type,
                     num_samples=n_samples,
-                    noise_level=noise_level
+                    noise_level=noise_level,
+                    label_flip_rate=label_flip_rate
                 )
                 dataset_path = get_dataset_dir(
                     dataset_name=dataset,
@@ -127,6 +128,7 @@ for model in model_list:
                     response_length=response_length,
                     num_samples=n_samples,
                     noise_level=noise_level,
+                    label_flip_rate=label_flip_rate,
                     n_gpus=args.n_gpus
                 )
                 command_list.append(train_command)
@@ -154,6 +156,7 @@ for model in model_list:
                     response_length=response_length,
                     num_samples=n_samples,
                     noise_level=noise_level,
+                    label_flip_rate=label_flip_rate,
                     n_gpus=args.n_gpus
                 )
                 command_list.append(inference_command)
