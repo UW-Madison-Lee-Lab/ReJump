@@ -75,6 +75,7 @@ def save_data(
     n_classes,
     TRAIN_SIZE,
     TEST_SIZE,
+    plot = False,
 ): 
     raw_dataset = Dataset.from_dict(dataset_dict)
     raw_in_context_dataset = Dataset.from_dict(in_context_dataset_dict)
@@ -89,10 +90,16 @@ def save_data(
     
     train_dataset = raw_dataset.select(train_indices)
     test_dataset = raw_dataset.select(test_indices)
-    in_context_dataset = {
-        "train": raw_in_context_dataset.select(train_indices),
-        "test": raw_in_context_dataset.select(test_indices)
-    }
+    if not plot:
+        in_context_dataset = {
+            "train": raw_in_context_dataset.select(train_indices),
+            "test": raw_in_context_dataset.select(test_indices)
+        }
+    else:
+        in_context_dataset = {
+            "train": raw_in_context_dataset.select(train_indices),
+            "test": raw_in_context_dataset
+        }
 
     def make_map_fn(split):
         def process_fn(example, idx):
@@ -144,6 +151,7 @@ def save_data(
         train_dataset=train_dataset,
         test_dataset=test_dataset,
         args=args,
+        plot=plot
     )
         
 def store_data(
@@ -151,19 +159,22 @@ def store_data(
     train_dataset,
     test_dataset,
     args,
+    plot
 ):
+    if plot:
+        test_dataset.to_parquet(os.path.join(local_dir, 'grid.parquet'))
+    else:
+        hdfs_dir = args.hdfs_dir
 
-    hdfs_dir = args.hdfs_dir
+        # Create directory if it doesn't exist
+        os.makedirs(local_dir, exist_ok=True)
+        
+        train_dataset.to_parquet(os.path.join(local_dir, 'train.parquet'))
+        test_dataset.to_parquet(os.path.join(local_dir, 'test.parquet'))
 
-    # Create directory if it doesn't exist
-    os.makedirs(local_dir, exist_ok=True)
-    
-    train_dataset.to_parquet(os.path.join(local_dir, 'train.parquet'))
-    test_dataset.to_parquet(os.path.join(local_dir, 'test.parquet'))
-
-    if hdfs_dir is not None:
-        makedirs(hdfs_dir)
-        copy(src=local_dir, dst=hdfs_dir)
+        if hdfs_dir is not None:
+            makedirs(hdfs_dir)
+            copy(src=local_dir, dst=hdfs_dir)
 
 def classification_reward_fn(solution_str, ground_truth):
     all_matches = list(re.finditer(r'<answer>(.*?)</answer>', solution_str, re.DOTALL))

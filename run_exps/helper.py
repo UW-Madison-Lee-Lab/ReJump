@@ -8,7 +8,8 @@ def gen_dataset(
     template_type="qwen-instruct",
     num_samples=10000,
     noise_level=None,
-    label_flip_rate=0.0
+    label_flip_rate=0.0,
+    plot=False
 ):
     if dataset_name == "blobs":
         noise_level = 1.0 if noise_level is None else noise_level
@@ -23,8 +24,9 @@ python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --n_shot={shot} \
     --noise_level={noise_level} \
     --test_ratio=0.2 \
-    --label_flip_rate={label_flip_rate}
-    """
+    --label_flip_rate={label_flip_rate} \
+    --plot={plot}
+    """ 
 
 
 def mix_dataset(
