@@ -42,6 +42,7 @@ from verl.utils.hdfs_io import makedirs
 from verl.single_controller.ray import RayClassWithInitArgs, RayResourcePool, RayWorkerGroup
 from utils import flatten_dict, print_configs
 from constants import get_configs_via_result_dir
+from google import genai
 import wandb   
 try:
     from environment import WANDB_INFO, HUGGINGFACE_API_KEY, DEEPSEEK_API_KEY, GPT_API_KEY, GEMINI_API_KEY
@@ -86,6 +87,7 @@ class DeepseekAPI:
             print(f"Error in Deepseek API call: {str(e)}")
             raise
 
+
 class ChatGPTAPI:
     def __init__(self, api_key: str):
         self.client = OpenAI(
@@ -95,7 +97,7 @@ class ChatGPTAPI:
     def generate(self, messages: List[Dict[str, str]], max_tokens: int = 1000, temperature: float = 0.7) -> str:
         try:
             response = self.client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4o-mini",
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
@@ -104,12 +106,38 @@ class ChatGPTAPI:
                 presence_penalty=0.0,
                 stream=False
             )
-            # print(response)
+            #print(response)
             return response.choices[0].message.content
 
         except Exception as e:
             print(f"Error in GPT API call: {str(e)}")
             raise
+
+class GeminiAPI:
+    def __init__(self, api_key: str):
+        self.client= genai.Client(api_key=api_key)
+
+    def generate(self, messages: str, max_tokens: int = 1000, temperature: float = 0.7) -> str:
+        try:
+            response = self.client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents = [
+                     genai.types.Content(
+                        role="user",
+                        parts=[genai.types.Part.from_text(text=messages)])],
+                config=genai.types.GenerateContentConfig(
+                    temperature = temperature,
+                    top_p =  0.9,
+                    max_output_tokens = max_tokens,
+                 )
+            )
+            print("The response text is:",response.text)
+            return response.text
+
+        except Exception as e:
+            print(f"Error in Gemini API call: {str(e)}")
+            raise 
+
 @hydra.main(config_path='config', config_name='generation', version_base=None)
 def main(config):
     
@@ -147,16 +175,25 @@ def main(config):
     if use_deepseek:
         model = DeepseekAPI(DEEPSEEK_API_KEY)
         tokenizer = None  # Deepseek API handles tokenization
+        rate_limit = None # Deepseek API doesn't have rate limiting
     elif use_gpt:
         # TODO GPT
         model = ChatGPTAPI(GPT_API_KEY)
-        tokenizer = None # CPT API also handles tokenization
+        tokenizer = None # CPT API handles tokenization
+        rate_limit = 60 / 500 # GPT-40-mini base tier has rate limit of 500 requests per minute.
+        #Note this does not consinder daily rate limiting
+    elif use_gemini:
         # TODO Gemini
+        model = GeminiAPI(GEMINI_API_KEY)
+        tokenizer = None # Gemini API Handles tokenization
+        rate_limit = 60 / 15 # Gemini 1.5 Flash free tier has a rate limit of 15 per minute
+        #Note Free tier has a very low daily limit of 1,500
     else:
         local_path = copy_local_path_from_hdfs(config.model.path)
         from verl.utils import hf_tokenizer
         tokenizer = hf_tokenizer(local_path)
         model = None
+        rate_limit = None #No need to rate limit if you aren't using api's
 
     if config.rollout.temperature == 0.:
         assert config.data.n_samples == 1, 'When temperature=0, n_samples must be 1.'
@@ -165,16 +202,18 @@ def main(config):
     dataset = pd.read_parquet(config.data.path)
     chat_lst = dataset[config.data.prompt_key].tolist()
 
-    # Convert chat list to proper format for Deepseek API
-    if use_api: #TODO Check this works past deepseek
-        def convert_to_string(chat):
-            if isinstance(chat, np.ndarray):
-                chat = chat.tolist()
-            if isinstance(chat, list):
-                chat = " ".join(str(x) for x in chat)
-            return str(chat)
-            
+    def convert_to_string(chat):
+        if isinstance(chat, np.ndarray):
+            chat = chat.tolist()
+        if isinstance(chat, list):
+            chat = " ".join(str(x) for x in chat)
+        return str(chat)
+    # Convert chat list to proper format for OpenAi API
+    if use_gpt or use_deepseek:            
         chat_lst = [{"role": "user", "content": convert_to_string(chat)} for chat in chat_lst]
+    # Convert chat list to proper format for Gemini API`
+    elif use_gemini:#TODO: clean up text for gemini. Test how cleaner prompts impact output format
+        chat_lst = [convert_to_string(chat) for chat in chat_lst]
     else:
         chat_lst = [chat.tolist() for chat in chat_lst]
 
@@ -183,7 +222,6 @@ def main(config):
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
 
-    if not use_api:
         ray_cls_with_init = RayClassWithInitArgs(cls=ray.remote(ActorRolloutRefWorker), config=config, role='rollout')
         resource_pool = RayResourcePool(process_on_nodes=[config.trainer.n_gpus_per_node] * config.trainer.nnodes)
         wg = RayWorkerGroup(resource_pool=resource_pool, ray_cls_with_init=ray_cls_with_init)
@@ -195,7 +233,7 @@ def main(config):
     
     if not use_api:
         dp_size = wg.world_size // config.rollout.tensor_model_parallel_size
-    else: #TODO: Check this holds for added APIs
+    else: 
         dp_size = 1  # When using API, we don't need distributed processing
     
     num_batch = (total_samples // config_batch_size) + 1
@@ -210,11 +248,18 @@ def main(config):
             # Process with Deepseek API in parallel
             def process_single_chat(chat, sample_idx):
                 gen_start_time = time.time()
-                response = model.generate(
-                    messages=[chat],  # chat is already in the correct format
-                    max_tokens=config.rollout.response_length,
-                    temperature=config.rollout.temperature
-                )
+                if use_gemini:
+                    response = model.generate(
+                        messages=chat,  # chat is already in the correct format
+                        max_tokens=config.rollout.response_length,
+                        temperature=config.rollout.temperature
+                    )
+                else:
+                    response = model.generate(
+                        messages=[chat],  # chat is already in the correct format
+                        max_tokens=config.rollout.response_length,
+                        temperature=config.rollout.temperature
+                    )
                 response_length = len(response.split())
                 generation_time = time.time() - gen_start_time
                 
@@ -229,13 +274,21 @@ def main(config):
 
             # Create a thread pool for parallel processing
             max_workers = min(config_batch_size, len(batch_chat_lst) * config.data.n_samples)  # Limit max workers
+            if rate_limit != None:
+                #No need to parallel processing as we are limited by the rate limiting of the api's
+                max_workers = 1
+
+
             with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
                 # Create all tasks
                 futures = []
                 for chat in batch_chat_lst:
                     for i in range(config.data.n_samples):
                         futures.append(executor.submit(process_single_chat, chat, i))
-                
+                        #Rate limit calls
+                        #TODO: Rate limit based off of HTTPS headers
+                        if rate_limit != None:
+                            time.sleep(rate_limit)
                 # Process results as they complete
                 for future in concurrent.futures.as_completed(futures):
                     response, metrics = future.result()
