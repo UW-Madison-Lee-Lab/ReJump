@@ -161,6 +161,7 @@ for dataset in dataset_list:
                         )
                         script_path = f"{root_dir}/run_exps/auto/{model_name}_train_{args.train}.sh"
                         script_paths.append(script_path)
+                        os.makedirs(os.path.dirname(script_path), exist_ok=True)
                         with open(script_path, "w") as f:
                             f.write(bash_script)
 
