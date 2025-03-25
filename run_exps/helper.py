@@ -25,7 +25,7 @@ python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --noise_level={noise_level} \
     --test_ratio=0.2 \
     --label_flip_rate={label_flip_rate} \
-    --plot={plot}
+    --plot={int(plot)}
     """ 
 
 

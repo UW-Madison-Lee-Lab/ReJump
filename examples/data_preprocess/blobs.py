@@ -89,7 +89,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_shot', type=int, default=0)
     parser.add_argument('--template_type', type=str, default='base')
     parser.add_argument('--label_flip_rate', type=float, default=0.0)
-    parser.add_argument('--plot', type=bool, default=False)
+    parser.add_argument('--plot', type=int, default=0, choices=[0, 1])
     args = parser.parse_args()
     set_seed(42)
     
