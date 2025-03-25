@@ -11,18 +11,11 @@ def gen_dataset(
 ):
     if dataset_name == "blobs":
         noise_level = 1.0 if noise_level is None else noise_level
-        return f"""
-python {root_dir}/examples/data_preprocess/{dataset_name}.py \
-    --template_type={template_type} \
-    --num_samples={num_samples} \
-    --noise_level={noise_level} \
-    --test_ratio=0.2 \
-    --n_shot={shot} \
-    --label_flip_rate={label_flip_rate}
-    """
     elif dataset_name in ["moons", "linear"]:
         noise_level = 0.1 if noise_level is None else noise_level
-        return f"""
+    elif dataset_name == "circles":
+        noise_level = 0.0 if noise_level is None else noise_level
+    return f"""
 python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --template_type={template_type} \
     --num_samples={num_samples} \
@@ -31,8 +24,7 @@ python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --test_ratio=0.2 \
     --label_flip_rate={label_flip_rate}
     """
-    else:
-        raise ValueError(f"Dataset {dataset_name} not supported")
+
 
 def mix_dataset(
     dataset_path,

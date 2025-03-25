@@ -12,7 +12,7 @@ supported_model_list = [model for model in supported_llms.keys() if supported_ll
 shot_list = [10, 50, 100, 200]
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--dataset", type=str, nargs="+", default=["blobs", "moons", "linear"], choices=["blobs", "moons", "linear"])
+parser.add_argument("--dataset", type=str, nargs="+", default=["blobs", "moons", "linear", "circles"], choices=["blobs", "moons", "linear", "circles"])
 parser.add_argument("--model", type=str, nargs="+", default=supported_model_list, choices=supported_model_list)
 parser.add_argument("--mode", type=str, nargs="+", default=["reasoning", "no_reasoning"], choices=["reasoning", "no_reasoning"])
 parser.add_argument("--shot", type=int, nargs="+", default=shot_list)
