@@ -138,7 +138,8 @@ for dataset in dataset_list:
                                 num_samples=n_samples,
                                 noise_level=noise_level,
                                 label_flip_rate=args.label_flip_rate,
-                                n_gpus=args.n_gpus
+                                n_gpus=args.n_gpus,
+                                plot=args.plot
                             )
                             command_list.append(inference_command)
                             # eval_command = eval(
