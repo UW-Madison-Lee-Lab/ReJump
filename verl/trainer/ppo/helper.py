@@ -20,6 +20,9 @@ def _select_rm_score_fn(data_source):
     elif "moons" in data_source:
         from examples.data_preprocess.moons import moons_reward_fn
         return moons_reward_fn
+    elif "circles" in data_source:
+        from examples.data_preprocess.circles import circles_reward_fn
+        return circles_reward_fn
     else:
         raise NotImplementedError
 
