@@ -147,16 +147,16 @@ def inference(
         noise_level=noise_level,
         label_flip_rate=label_flip_rate
     )
-    output_path = f"{result_dir}/test.parquet" if plot else f"{result_dir}/grid.parquet"
+    output_file = "grid.parquet" if plot else "test.parquet"
     return f"""
 python -m verl.trainer.main_generation \
     trainer.nnodes=1 \
     trainer.n_gpus_per_node={n_gpus} \
-    data.path={dataset_dir}/test.parquet \
+    data.path={dataset_dir}/{output_file} \
     data.prompt_key=prompt \
     data.n_samples=1 \
     data.batch_size=128 \
-    data.output_path={output_path} \
+    data.output_path={result_dir}/{output_file} \
     model.path={model_name} \
     +model.trust_remote_code=True \
     rollout.temperature={temperature} \
