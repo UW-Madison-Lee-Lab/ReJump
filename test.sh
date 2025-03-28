@@ -1,0 +1,6 @@
+
+python /pvc/home-mjlee/workspace/wjkang/neurips/liftr/examples/data_preprocess/blobs.py     --template_type=base     --num_samples=500     --n_shot=50     --noise_level=1.0     --test_ratio=0.2     --label_flip_rate=0.0     --plot=0
+    
+
+python -m verl.trainer.main_generation     trainer.nnodes=1     trainer.n_gpus_per_node=1     data.path=/pvc/home-mjlee/workspace/wjkang/neurips/liftr/datasets/blobs/50_shot/base/500_samples_1.0_noise_0.0_flip_rate/test.parquet     data.prompt_key=prompt     data.n_samples=1     data.batch_size=32     data.output_path=/pvc/home-mjlee/workspace/wjkang/neurips/liftr/results/deepseek-ai-deepseek-reasoner/blobs_50_shot_base_reslen_3046_nsamples_500_noise_1.0_flip_rate_0.0/global_step_0/test.parquet     model.path=deepseek-ai/deepseek-reasoner     +model.trust_remote_code=True     rollout.temperature=0     rollout.top_k=-1     rollout.top_p=1     rollout.prompt_length=1523     rollout.response_length=3046     rollout.tensor_model_parallel_size=1     rollout.gpu_memory_utilization=0.8     trainer.wandb=True     rollout.n=1
+    
