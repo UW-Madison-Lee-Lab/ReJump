@@ -10,6 +10,15 @@ import random
 import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend
+from transformers import AutoTokenizer
+
+# Load Qwen tokenizer
+try:
+    qwen_tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B-Instruct", trust_remote_code=True)
+except Exception as e:
+    print(f"Warning: Failed to load Qwen tokenizer: {e}")
+    print("Will use approximate token count if tokenizer is unavailable.")
+    qwen_tokenizer = None
 
 # Add a custom JSON encoder to handle numpy types
 class NumpyEncoder(json.JSONEncoder):
@@ -93,6 +102,113 @@ def format_example_for_human(prompt, response, is_correct, ground_truth):
     
     return formatted
 
+def get_token_count(text):
+    """
+    Count the number of tokens in the text using Qwen tokenizer
+    If tokenizer is unavailable, use a simple approximation
+    """
+    if qwen_tokenizer is not None:
+        return len(qwen_tokenizer.encode(text))
+    else:
+        # Approximate token count (rough estimation)
+        return len(text.split())
+
+def analyze_token_lengths(examples):
+    """
+    Analyze the token lengths of responses in the examples
+    Returns statistics and token length distribution
+    """
+    token_lengths = [get_token_count(ex["response"]) for ex in examples]
+    
+    # Calculate statistics
+    stats = {
+        "median": np.median(token_lengths),
+        "mean": np.mean(token_lengths),
+        "min": np.min(token_lengths),
+        "max": np.max(token_lengths),
+        "std": np.std(token_lengths),
+        "counts": token_lengths
+    }
+    
+    return stats
+
+def plot_token_distribution(token_stats, output_path):
+    """Create and save token length distribution histogram as PDF"""
+    plt.figure(figsize=(8, 5))
+    plt.hist(token_stats["counts"], bins=20, alpha=0.7, color='skyblue', edgecolor='black')
+    plt.axvline(token_stats["median"], color='red', linestyle='dashed', linewidth=1, label=f'Median: {token_stats["median"]:.1f}')
+    plt.axvline(token_stats["mean"], color='green', linestyle='dashed', linewidth=1, label=f'Mean: {token_stats["mean"]:.1f}')
+    
+    plt.xlabel('Token Count', fontsize=12)
+    plt.ylabel('Frequency', fontsize=12)
+    plt.title('Response Token Length Distribution', fontsize=14)
+    plt.grid(True, linestyle='--', alpha=0.3)
+    plt.legend()
+    
+    # Make plot tight and clean for publication
+    plt.tight_layout()
+    
+    # Save as PDF
+    plt.savefig(output_path, format='pdf', dpi=300, bbox_inches='tight')
+    plt.close()
+
+def plot_token_stats_across_iterations(iterations, token_stats_by_iter, output_path):
+    """Create and save token length statistics across iterations as PDF"""
+    plt.figure(figsize=(10, 6))
+    
+    # Extract data for plotting
+    medians = [token_stats_by_iter[iter_num]["median"] for iter_num in iterations]
+    means = [token_stats_by_iter[iter_num]["mean"] for iter_num in iterations]
+    mins = [token_stats_by_iter[iter_num]["min"] for iter_num in iterations]
+    maxes = [token_stats_by_iter[iter_num]["max"] for iter_num in iterations]
+    
+    plt.plot(iterations, medians, 'o-', color='red', linewidth=2, label='Median')
+    plt.plot(iterations, means, 's-', color='green', linewidth=2, label='Mean')
+    plt.plot(iterations, mins, '^--', color='blue', linewidth=1.5, label='Min', alpha=0.7)
+    plt.plot(iterations, maxes, 'v--', color='purple', linewidth=1.5, label='Max', alpha=0.7)
+    
+    plt.xlabel('Iteration', fontsize=12)
+    plt.ylabel('Token Count', fontsize=12)
+    plt.title('Response Token Length Statistics Across Iterations', fontsize=14)
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.legend()
+    
+    # Add iteration numbers on x-axis
+    plt.xticks(iterations)
+    
+    # Make plot tight and clean for publication
+    plt.tight_layout()
+    
+    # Save as PDF
+    plt.savefig(output_path, format='pdf', dpi=300, bbox_inches='tight')
+    plt.close()
+
+def plot_token_boxplot(iterations, token_stats_by_iter, output_path):
+    """Create and save box plot of token length distributions across iterations"""
+    plt.figure(figsize=(10, 6))
+    
+    # Prepare data for boxplot
+    data = [token_stats_by_iter[iter_num]["counts"] for iter_num in iterations]
+    
+    # Create boxplot
+    bp = plt.boxplot(data, patch_artist=True, labels=[f"Iter {i}" for i in iterations])
+    
+    # Customize boxplot colors
+    for box in bp['boxes']:
+        box.set(facecolor='skyblue', alpha=0.7)
+    
+    plt.xlabel('Iteration', fontsize=12)
+    plt.ylabel('Token Count', fontsize=12)
+    plt.title('Response Token Length Distribution Comparison', fontsize=14)
+    plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+    
+    # Make plot tight and clean for publication
+    plt.tight_layout()
+    
+    # Save as PDF
+    plt.savefig(output_path, format='pdf', dpi=300, bbox_inches='tight')
+    plt.close()
+
 def analyze_file(file_path):
     """
     Analyze a parquet file and return the accuracy, all examples with correctness info
@@ -111,12 +227,16 @@ def analyze_file(file_path):
         if is_correct:
             correct_count += 1
         
-        # Save all examples with correctness info
+        # Calculate token length
+        token_count = get_token_count(response)
+        
+        # Save all examples with correctness info and token count
         all_examples.append({
             "prompt": prompt,
             "response": response,
             "ground_truth": ground_truth,
-            "is_correct": bool(is_correct)
+            "is_correct": bool(is_correct),
+            "token_count": token_count
         })
     
     accuracy = correct_count / total if total > 0 else 0
@@ -145,7 +265,7 @@ def plot_accuracies(iterations, accuracies, output_path):
     plt.savefig(output_path, format='pdf', dpi=300, bbox_inches='tight')
     plt.close()
 
-def sample_examples(examples, n_correct=3, n_incorrect=3, seed=0):
+def sample_examples(examples, n_correct=100, n_incorrect=3, seed=0):
     """Sample n_correct correct examples and n_incorrect incorrect examples"""
     random.seed(seed)
     
@@ -179,6 +299,179 @@ def get_prompt_key(prompt):
         return str(prompt)
     return str(prompt)
 
+def save_token_stats_csv(iterations, token_stats_by_iter, accuracy_by_iter, output_path):
+    """Save token length statistics to CSV file"""
+    # Prepare data for CSV
+    data = {
+        "iteration": iterations,
+        "accuracy": [accuracy_by_iter[iter_num] for iter_num in iterations],
+        "median_tokens": [token_stats_by_iter[iter_num]["median"] for iter_num in iterations],
+        "mean_tokens": [token_stats_by_iter[iter_num]["mean"] for iter_num in iterations],
+        "min_tokens": [token_stats_by_iter[iter_num]["min"] for iter_num in iterations],
+        "max_tokens": [token_stats_by_iter[iter_num]["max"] for iter_num in iterations],
+        "std_tokens": [token_stats_by_iter[iter_num]["std"] for iter_num in iterations]
+    }
+    
+    # Create DataFrame and save to CSV
+    df = pd.DataFrame(data)
+    df.to_csv(output_path, index=False)
+
+def track_same_prompts_across_iterations(iteration_results, num_samples=10, seed=42):
+    """
+    Track the same prompts across iterations by finding prompts in iter0 that were incorrectly answered
+    and tracking their responses in all subsequent iterations.
+    
+    Returns a dictionary mapping prompt keys to a list of responses from each iteration.
+    """
+    iterations = sorted(iteration_results.keys())
+    if not iterations or 0 not in iterations:
+        print("Warning: Iteration 0 not found, cannot track prompts")
+        return {}
+    
+    # Get incorrect examples from iter0
+    iter0_incorrect = [ex for ex in iteration_results[0]["examples"] if not ex["is_correct"]]
+    
+    # If there are fewer incorrect examples than requested, take all of them
+    if len(iter0_incorrect) <= num_samples:
+        tracked_examples = iter0_incorrect
+        print(f"Only found {len(iter0_incorrect)} incorrect examples in iteration 0, tracking all of them")
+    else:
+        # Randomly sample the specified number of incorrect examples
+        random.seed(seed)
+        tracked_examples = random.sample(iter0_incorrect, num_samples)
+        print(f"Randomly sampled {num_samples} incorrect examples from iteration 0 to track")
+    
+    # Create a dictionary of prompt keys to track
+    prompt_keys_to_track = {get_prompt_key(ex["prompt"]): ex["prompt"] for ex in tracked_examples}
+    
+    # Initialize the tracking dictionary
+    tracked_prompts = {
+        prompt_key: {
+            "prompt": prompt,
+            "iterations": {}
+        } for prompt_key, prompt in prompt_keys_to_track.items()
+    }
+    
+    # Track these prompts across all iterations
+    for iter_num in iterations:
+        for ex in iteration_results[iter_num]["examples"]:
+            prompt_key = get_prompt_key(ex["prompt"])
+            if prompt_key in prompt_keys_to_track:
+                tracked_prompts[prompt_key]["iterations"][iter_num] = {
+                    "response": ex["response"],
+                    "is_correct": ex["is_correct"],
+                    "ground_truth": ex["ground_truth"],
+                    "token_count": ex.get("token_count", None)
+                }
+    
+    return tracked_prompts
+
+def format_tracked_examples_for_human(tracked_prompts):
+    """Format tracked examples in a human-readable way"""
+    result = ""
+    
+    for prompt_key, data in tracked_prompts.items():
+        result += "=" * 50 + "\n"
+        
+        # Handle prompt which could be a dictionary or a string
+        if isinstance(data["prompt"], dict):
+            result += "PROMPT:\n" + json.dumps(data["prompt"], indent=2, cls=NumpyEncoder) + "\n\n"
+        else:
+            result += "PROMPT:\n" + str(data["prompt"]) + "\n\n"
+        
+        # Sort iterations
+        iterations = sorted(data["iterations"].keys())
+        
+        for iter_num in iterations:
+            iter_data = data["iterations"][iter_num]
+            result += f"--- ITERATION {iter_num} ---\n"
+            result += "RESPONSE:\n" + iter_data["response"] + "\n\n"
+            
+            # Extract predicted answer
+            response_extract = re.search(r'<answer>(.*?)</answer>', iter_data["response"], re.DOTALL)
+            predicted = response_extract.group(1).strip() if response_extract else "No valid answer"
+            
+            result += f"PREDICTED: {predicted}\n"
+            
+            # Handle ground_truth which could be a dictionary
+            if isinstance(iter_data["ground_truth"], dict):
+                label = iter_data["ground_truth"].get('label', 'Unknown')
+                result += f"CORRECT ANSWER: {label}\n"
+            else:
+                result += f"CORRECT ANSWER: {iter_data['ground_truth']}\n"
+            
+            result += f"IS CORRECT: {iter_data['is_correct']}\n"
+            
+            if iter_data["token_count"] is not None:
+                result += f"TOKEN COUNT: {iter_data['token_count']}\n"
+            
+            result += "\n"
+        
+        result += "=" * 50 + "\n\n"
+    
+    return result
+
+def format_tracked_examples_by_iteration(tracked_prompts):
+    """Format tracked examples organized by iteration"""
+    result = ""
+    
+    # Get all iterations from all prompts
+    all_iterations = set()
+    for prompt_data in tracked_prompts.values():
+        all_iterations.update(prompt_data["iterations"].keys())
+    
+    # Sort iterations
+    sorted_iterations = sorted(all_iterations)
+    
+    for iter_num in sorted_iterations:
+        result += "=" * 50 + "\n"
+        result += f"ITERATION {iter_num}\n"
+        result += "=" * 50 + "\n\n"
+        
+        # Count for example numbering
+        example_count = 1
+        
+        # Process each prompt for this iteration
+        for prompt_key, data in tracked_prompts.items():
+            if iter_num in data["iterations"]:
+                iter_data = data["iterations"][iter_num]
+                
+                result += f"Example {example_count}:\n"
+                result += "-" * 40 + "\n"
+                
+                # Handle prompt which could be a dictionary or a string
+                if isinstance(data["prompt"], dict):
+                    result += "PROMPT:\n" + json.dumps(data["prompt"], indent=2, cls=NumpyEncoder) + "\n\n"
+                else:
+                    result += "PROMPT:\n" + str(data["prompt"]) + "\n\n"
+                
+                result += "RESPONSE:\n" + iter_data["response"] + "\n\n"
+                
+                # Extract predicted answer
+                response_extract = re.search(r'<answer>(.*?)</answer>', iter_data["response"], re.DOTALL)
+                predicted = response_extract.group(1).strip() if response_extract else "No valid answer"
+                
+                result += f"PREDICTED: {predicted}\n"
+                
+                # Handle ground_truth which could be a dictionary
+                if isinstance(iter_data["ground_truth"], dict):
+                    label = iter_data["ground_truth"].get('label', 'Unknown')
+                    result += f"CORRECT ANSWER: {label}\n"
+                else:
+                    result += f"CORRECT ANSWER: {iter_data['ground_truth']}\n"
+                
+                result += f"IS CORRECT: {iter_data['is_correct']}\n"
+                
+                if iter_data["token_count"] is not None:
+                    result += f"TOKEN COUNT: {iter_data['token_count']}\n"
+                
+                result += "\n"
+                example_count += 1
+        
+        result += "\n\n"
+    
+    return result
+
 def write_results(output_dir, project_name, iteration_results):
     """Write results to output directory with new format"""
     # Create the complete output directory path
@@ -192,6 +485,29 @@ def write_results(output_dir, project_name, iteration_results):
     iter_numbers = []
     accuracies = []
     
+    # Prepare data for token length analysis
+    token_stats_by_iter = {}
+    accuracy_by_iter = {}
+    
+    # Track the same prompts across iterations
+    tracked_prompts = track_same_prompts_across_iterations(iteration_results, num_samples=10)
+    
+    # Create directory for tracking the same prompts
+    same_prompt_dir = os.path.join(full_output_dir, "same_prompt")
+    os.makedirs(same_prompt_dir, exist_ok=True)
+    
+    # Save tracked prompts as JSON
+    with open(os.path.join(same_prompt_dir, "tracked_prompts.json"), "w") as f:
+        json.dump(tracked_prompts, f, indent=2, cls=NumpyEncoder)
+    
+    # Save tracked prompts as human-readable text (organized by prompt)
+    with open(os.path.join(same_prompt_dir, "tracked_prompts_by_prompt.txt"), "w") as f:
+        f.write(format_tracked_examples_for_human(tracked_prompts))
+    
+    # Save tracked prompts as human-readable text (organized by iteration)
+    with open(os.path.join(same_prompt_dir, "tracked_prompts_by_iteration.txt"), "w") as f:
+        f.write(format_tracked_examples_by_iteration(tracked_prompts))
+    
     # Process results for each iteration
     for iter_num in iterations:
         iter_data = iteration_results[iter_num]
@@ -201,6 +517,7 @@ def write_results(output_dir, project_name, iteration_results):
         # Add to plot data
         iter_numbers.append(iter_num)
         accuracies.append(accuracy)
+        accuracy_by_iter[iter_num] = accuracy
         
         # Create directory for this iteration
         iter_dir = os.path.join(full_output_dir, f"iter{iter_num}")
@@ -212,7 +529,7 @@ def write_results(output_dir, project_name, iteration_results):
         
         # Sample some correct and incorrect examples
         sampled_correct, sampled_incorrect, correct_explanation, incorrect_explanation = sample_examples(
-            examples, n_correct=3, n_incorrect=3
+            examples, n_correct=100, n_incorrect=3
         )
         
         # Save sampled examples in human-readable format (text files)
@@ -236,9 +553,41 @@ def write_results(output_dir, project_name, iteration_results):
         
         with open(os.path.join(iter_dir, "sample_incorrect_examples.json"), "w") as f:
             json.dump(sampled_incorrect, f, indent=2, cls=NumpyEncoder)
+            
+        # Analyze token lengths for this iteration
+        token_stats = analyze_token_lengths(examples)
+        token_stats_by_iter[iter_num] = token_stats
+        
+        # Save token length statistics
+        with open(os.path.join(iter_dir, "token_stats.json"), "w") as f:
+            # Remove the 'counts' field which can be large
+            stats_to_save = {k: v for k, v in token_stats.items() if k != 'counts'}
+            json.dump(stats_to_save, f, indent=2, cls=NumpyEncoder)
+            
+        # Plot token distribution for this iteration
+        plot_token_distribution(token_stats, os.path.join(iter_dir, "token_distribution.pdf"))
     
     # Generate and save accuracy plot
     plot_accuracies(iter_numbers, accuracies, os.path.join(full_output_dir, "accuracy_plot.pdf"))
+    
+    # Generate and save token stats across iterations plot
+    plot_token_stats_across_iterations(iter_numbers, token_stats_by_iter, 
+                                     os.path.join(full_output_dir, "token_stats_plot.pdf"))
+    
+    # Generate and save token boxplot comparison
+    plot_token_boxplot(iter_numbers, token_stats_by_iter, 
+                     os.path.join(full_output_dir, "token_boxplot.pdf"))
+    
+    # Save token stats to CSV for easier analysis
+    save_token_stats_csv(iter_numbers, token_stats_by_iter, accuracy_by_iter,
+                        os.path.join(full_output_dir, "token_stats_summary.csv"))
+    
+    # Save all token stats
+    with open(os.path.join(full_output_dir, "all_token_stats.json"), "w") as f:
+        # Remove the 'counts' field which can be large
+        stats_to_save = {f"iter{iter_num}": {k: v for k, v in stats.items() if k != 'counts'} 
+                         for iter_num, stats in token_stats_by_iter.items()}
+        json.dump(stats_to_save, f, indent=2, cls=NumpyEncoder)
     
     # Save accuracies as JSON
     with open(os.path.join(full_output_dir, "accuracies.json"), "w") as f:
@@ -292,6 +641,11 @@ def write_results(output_dir, project_name, iteration_results):
     for iter_num in iterations:
         print(f"  Iteration {iter_num}: {iteration_results[iter_num]['accuracy']:.4f}")
     
+    print("\nToken Length Statistics:")
+    for iter_num in iterations:
+        stats = token_stats_by_iter[iter_num]
+        print(f"  Iteration {iter_num}: median={stats['median']:.1f}, mean={stats['mean']:.1f}, min={stats['min']}, max={stats['max']}")
+    
     print("\nOverlap with Previous Iteration:")
     for key, value in overlaps_with_prev.items():
         print(f"  {key}: {value:.4f}")
@@ -301,6 +655,9 @@ def write_results(output_dir, project_name, iteration_results):
         print(f"  {key}: {value:.4f}")
     
     print(f"\nPlot saved to: {os.path.join(full_output_dir, 'accuracy_plot.pdf')}")
+    print(f"Token stats plot saved to: {os.path.join(full_output_dir, 'token_stats_plot.pdf')}")
+    print(f"Token distribution boxplot saved to: {os.path.join(full_output_dir, 'token_boxplot.pdf')}")
+    print(f"Token stats summary CSV saved to: {os.path.join(full_output_dir, 'token_stats_summary.csv')}")
     print(f"Detailed results and examples saved to: {full_output_dir}")
 
 def main():
