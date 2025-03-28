@@ -95,7 +95,6 @@ def generate_responses(dataset_name, dataset_local_dir, model_path, iteration, i
     cmd = f"python -m verl.trainer.main_generation " \
           f"trainer.nnodes=1 " \
           f"trainer.n_gpus_per_node={args.n_gpus_per_node} " \
-          f"trainer.tensor_model_parallel_size={args.n_gpus_per_node} " \
           f"data.path={dataset_local_dir}/{data_type}.parquet " \
           f"data.prompt_key=prompt " \
           f"data.n_samples={args.num_responses} " \
@@ -110,6 +109,7 @@ def generate_responses(dataset_name, dataset_local_dir, model_path, iteration, i
           f"rollout.response_length={args.response_length} " \
           f"rollout.gpu_memory_utilization=0.8 " \
           f"rollout.n={args.n} " \
+          f"rollout.tensor_model_parallel_size={args.n_gpus_per_node} " \
           f"trainer.wandb=True " \
           f"trainer.project_name={args.project_prefix}-{data_type}-generation_{dataset_name}_{model_path.replace('/', '_')}-iterative-sft"
     
