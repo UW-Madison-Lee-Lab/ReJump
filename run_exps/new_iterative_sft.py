@@ -36,6 +36,12 @@ def parse_args():
     parser.add_argument("--n_gpus_per_node", type=int, default=1)
     parser.add_argument("--push_to_hub", action="store_true")
     parser.add_argument("--project_prefix", type=str, default="")
+    parser.add_argument("--response_length", type=int, default=3046)
+    parser.add_argument("--prompt_length", type=int, default=1523)
+    parser.add_argument("--n", type=int, default=1)
+
+    
+
     # Add debug parameter to skip to train_on_correct_responses
     parser.add_argument("--debug_from_train_on_correct_responses", action="store_true",
                        help="Skip generation and evaluation steps and start from training")
@@ -88,20 +94,21 @@ def generate_responses(dataset_name, dataset_local_dir, model_path, iteration, i
     cmd = f"python -m verl.trainer.main_generation " \
           f"trainer.nnodes=1 " \
           f"trainer.n_gpus_per_node={args.n_gpus_per_node} " \
+          f"trainer.tensor_model_parallel_size={args.n_gpus_per_node} " \
           f"data.path={dataset_local_dir}/{data_type}.parquet " \
           f"data.prompt_key=prompt " \
           f"data.n_samples={args.num_responses} " \
-          f"data.batch_size=128 " \
+          f"data.batch_size={args.generation_batch_size} " \
           f"data.output_path={output_path} " \
           f"model.path={model_path} " \
           f"+model.trust_remote_code=True " \
           f"rollout.temperature={temperature} " \
           f"rollout.top_k={top_k} " \
           f"rollout.top_p={top_p} " \
-          f"rollout.prompt_length=2048 " \
-          f"rollout.response_length=1024 " \
-          f"rollout.tensor_model_parallel_size=1 " \
+          f"rollout.prompt_length={args.prompt_length} " \
+          f"rollout.response_length={args.response_length} " \
           f"rollout.gpu_memory_utilization=0.8 " \
+          f"rollout.n={args.n}" \
           f"trainer.wandb=True " \
           f"trainer.project_name={args.project_prefix}-{data_type}-generation_{dataset_name}_{model_path.replace('/', '_')}-iterative-sft"
     
