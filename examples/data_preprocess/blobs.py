@@ -10,6 +10,7 @@ import argparse
 from utils import set_seed
 from examples.data_preprocess.helper import save_data, classification_reward_fn, flip_label
 import pdb
+import json
 def gen_dataset(
     num_samples: int,
     cluster_std: float = 1.0,
