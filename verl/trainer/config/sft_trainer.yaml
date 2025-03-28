@@ -5,7 +5,7 @@ data:
   val_files: ~/data/gsm8k/test.parquet
   prompt_key: question
   response_key: answer
-  max_length: 3000
+  max_length: 4096
   truncation: error
   balance_dp_token: False
   chat_template: null

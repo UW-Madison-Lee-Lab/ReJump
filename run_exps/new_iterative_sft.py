@@ -6,6 +6,7 @@ import sys
 from constants import supported_llms, get_dataset_dir
 from environment import root_dir
 from datetime import datetime
+
 def parse_args():
     """Parse command line arguments"""
     model_size_upper_limit = 10_000_000_000
@@ -35,6 +36,9 @@ def parse_args():
     parser.add_argument("--n_gpus_per_node", type=int, default=1)
     parser.add_argument("--push_to_hub", action="store_true")
     parser.add_argument("--project_prefix", type=str, default="")
+    # Add debug parameter to skip to train_on_correct_responses
+    parser.add_argument("--debug_from_train_on_correct_responses", action="store_true",
+                       help="Skip generation and evaluation steps and start from training")
     
     return parser.parse_args()
 
@@ -181,32 +185,58 @@ def main():
             # Start iterative training
             current_model = model
 
+            # Create path for tracking already trained examples
             already_trained_correct_path = f"{root_dir}/results/{dataset}/{args.project_prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_already_trained_correct.parquet"
-            #delete the file if it exists
-            if os.path.exists(already_trained_correct_path):
+            
+            # Only delete the file if not in debug mode
+            if os.path.exists(already_trained_correct_path) and not args.debug_from_train_on_correct_responses:
                 os.remove(already_trained_correct_path)
             
             for iteration in range(args.max_iterations):
                 print(f"\n--- Starting iteration {iteration} ---\n")
                 print(f"Current model: {current_model}")
                 
-                # Generate test responses
-                test_output_path = generate_responses(dataset, dataset_local_dir, current_model, iteration, False, args, model_basename)
-                
-                # Evaluate test responses
-                evaluate_responses(test_output_path, current_model, "test", dataset, args)
-                
-                # Generate training responses
-                train_output_path = generate_responses(dataset, dataset_local_dir, current_model, iteration, True, args, model_basename)
-                
-                # Evaluate training responses
-                evaluate_responses(train_output_path, current_model, "train", dataset, args)
+                # Skip generation and evaluation steps if in debug mode
+                if args.debug_from_train_on_correct_responses:
+                    print("Debug mode: Skipping generation and evaluation steps")
                     
-                correct_responses_path = filter_correct_responses(
-                    dataset, current_model, iteration, args, model_basename, already_trained_correct_path, train_output_path
-                )
+                    # Directly set paths to existing files
+                    train_output_path = f"{root_dir}/results/{dataset}/{model_basename}_{args.project_prefix}_iter{iteration}_gen_train.parquet"
+                    correct_responses_path = f"{root_dir}/results/{dataset}/{model_basename}_{args.project_prefix}_iter{iteration}_correct_train.parquet"
+                    
+                    print(f"Using existing train output: {train_output_path}")
+                    print(f"Using existing correct responses: {correct_responses_path}")
+                    
+                    # Check if files exist
+                    if not os.path.exists(train_output_path):
+                        print(f"ERROR: File not found: {train_output_path}")
+                        print("Debug mode requires existing generation files to be present")
+                        sys.exit(1)
+                    
+                    if not os.path.exists(correct_responses_path):
+                        print(f"ERROR: File not found: {correct_responses_path}")
+                        print("Debug mode requires existing correct responses files to be present")
+                        sys.exit(1)
+                else:
+                    # Normal flow - generate and evaluate responses
+                    # Generate test responses
+                    test_output_path = generate_responses(dataset, dataset_local_dir, current_model, iteration, False, args, model_basename)
+                    
+                    # Evaluate test responses
+                    evaluate_responses(test_output_path, current_model, "test", dataset, args)
+                    
+                    # Generate training responses
+                    train_output_path = generate_responses(dataset, dataset_local_dir, current_model, iteration, True, args, model_basename)
+                    
+                    # Evaluate training responses
+                    evaluate_responses(train_output_path, current_model, "train", dataset, args)
+                        
+                    # Filter correct responses
+                    correct_responses_path = filter_correct_responses(
+                        dataset, current_model, iteration, args, model_basename, already_trained_correct_path, train_output_path
+                    )
                 
-                # Train new model
+                # Train new model (this runs in both normal and debug mode)
                 new_model_path = train_on_correct_responses(
                     dataset, current_model, iteration, args, model_basename, correct_responses_path
                 )
@@ -214,6 +244,11 @@ def main():
                 # Update current model
                 current_model = new_model_path
                 print(f"Updated model to: {current_model}")
+                
+                # In debug mode, exit after first iteration
+                if args.debug_from_train_on_correct_responses:
+                    print("Debug mode: Exiting after first successful training iteration")
+                    sys.exit(0)
             
             print(f"\n=== Completed experiment with dataset: {dataset}, model: {model} ===\n")
 
