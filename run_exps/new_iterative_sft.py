@@ -39,6 +39,7 @@ def parse_args():
     parser.add_argument("--response_length", type=int, default=3046)
     parser.add_argument("--prompt_length", type=int, default=1523)
     parser.add_argument("--n", type=int, default=1)
+    parser.add_argument("--generation_batch_size", type=int, default=128)
 
     
 
