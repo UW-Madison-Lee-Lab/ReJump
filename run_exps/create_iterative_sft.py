@@ -98,8 +98,9 @@ def generate_train_responses(
             rollout.tensor_model_parallel_size=1 \\
             rollout.gpu_memory_utilization=0.8 \\
             trainer.wandb=True \\
-            trainer.project_name={args.project_prefix}-train-generation_{dataset_name}_{model.replace('/', '_')}-iterative-sft
     """
+ #           trainer.project_name={args.project_prefix}-train-generation_{dataset_name}_{model.replace('/', '_')}-iterative-sft
+#
 def generate_test_responses(
     dataset_name,
     shot,
@@ -128,8 +129,9 @@ def generate_test_responses(
             rollout.tensor_model_parallel_size=1 \\
             rollout.gpu_memory_utilization=0.8 \\
             trainer.wandb=True \\
-            trainer.project_name={args.project_prefix}-test-generation_{dataset_name}_{model.replace('/', '_')}-iterative-sft
     """
+#           trainer.project_name={args.project_prefix}-test-generation_{dataset_name}_{model.replace('/', '_')}-iterative-sft
+#
 def evaluate_test_responses(
     dataset_name,
     shot,
@@ -140,8 +142,10 @@ def evaluate_test_responses(
         python -m verl.trainer.main_eval \\
             data.path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{args.project_prefix}_iter${{iteration}}_gen_test.parquet \\
             trainer.wandb=True \\
-            trainer.project_name={args.project_prefix}-test-evaluation_{dataset_name}_{model.replace('/', '_')}-iterative-sft
+            
     """
+ #           trainer.project_name={args.project_prefix}-test-evaluation_{dataset_name}_{model.replace('/', '_')}-iterative-sft
+
 
 def evaluate_train_responses(
     dataset_name,
@@ -153,8 +157,9 @@ def evaluate_train_responses(
         python -m verl.trainer.main_eval \\
             data.path={root_dir}/results/{dataset_name}/$(basename ${{current_model}})_{args.project_prefix}_iter${{iteration}}_gen_train.parquet \\
             trainer.wandb=True \\
-            trainer.project_name={args.project_prefix}-train-evaluation_{dataset_name}_{model.replace('/', '_')}-iterative-sft
     """
+ #           trainer.project_name={args.project_prefix}-train-evaluation_{dataset_name}_{model.replace('/', '_')}-iterative-sft
+
 
 def train_on_correct_responses(
     dataset_name,

@@ -27,7 +27,8 @@ import pdb, wandb
 from utils import flatten_dict, print_configs
 from environment import WANDB_INFO
 
-from constants import get_configs_via_result_dir
+from datetime import datetime
+
 
 
 def select_reward_fn(data_source):
@@ -49,15 +50,14 @@ def select_reward_fn(data_source):
 @hydra.main(config_path='config', config_name='evaluation', version_base=None)
 def main(config):
     if config.trainer.wandb:
+        run_name = f"run-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
 
-
-        wandb_configs = flatten_dict(config)
-        wandb_configs.update(get_configs_via_result_dir(os.path.dirname(config.data.path)))
         wandb.init(
             project=f"{WANDB_INFO['project']}-{config.trainer.project_name}",
             entity=WANDB_INFO['entity'],
 
-            config=wandb_configs
+            name=run_name,
+            config=flatten_dict(config)
 
         )
     

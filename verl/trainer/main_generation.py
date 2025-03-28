@@ -20,9 +20,8 @@ import hydra
 import os
 import time
 
-import torch
-import json
-import pdb
+from datetime import datetime
+
 
 os.environ['NCCL_DEBUG'] = 'WARN'
 os.environ['TOKENIZERS_PARALLELISM'] = 'true'
@@ -44,23 +43,9 @@ from verl.utils.hdfs_io import makedirs
 from verl.single_controller.ray import RayClassWithInitArgs, RayResourcePool, RayWorkerGroup
 from utils import flatten_dict, print_configs
 
-from constants import get_configs_via_result_dir
-import wandb   
-try:
-    from environment import WANDB_INFO, HUGGINGFACE_API_KEY
-except ImportError:
-    raise ImportError("""
-Please create environment.py file in the project root directory.
-Here is the expectede format of WANDB_INFO and HUGGINGFACE_API_KEY:
-
-WANDB_INFO = {"project": "your-project-id", "entity": "your-entity-name"}
-HUGGINGFACE_API_KEY = "your-huggingface-api-key"
-
-""")
-
-from huggingface_hub import login
-login(token=HUGGINGFACE_API_KEY)
-
+from verl.trainer.fsdp_sft_trainer import extract_model_name
+from environment import WANDB_INFO
+import wandb
 
 @hydra.main(config_path='config', config_name='generation', version_base=None)
 def main(config):
@@ -68,16 +53,14 @@ def main(config):
     
     if config.trainer.wandb:
 
-        wandb_configs = flatten_dict(config)
-        wandb_configs.update(get_configs_via_result_dir(os.path.dirname(config.data.output_path)))
-
+        run_name = f"run-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
         wandb.init(
             project=f"{WANDB_INFO['project']}-{config.trainer.project_name}",
             entity=WANDB_INFO['entity'],
 
-            config=wandb_configs
-
-        )
+            name=run_name,
+            config=flatten_dict(config)
+ )
         
     
     print_configs(flatten_dict(config))
