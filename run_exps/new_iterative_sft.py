@@ -102,14 +102,14 @@ def generate_responses(dataset_name, dataset_local_dir, model_path, iteration, i
           f"data.batch_size={args.generation_batch_size} " \
           f"data.output_path={output_path} " \
           f"model.path={model_path} " \
-          f"model.trust_remote_code=True " \
+          f"+model.trust_remote_code=True " \
           f"rollout.temperature={temperature} " \
           f"rollout.top_k={top_k} " \
           f"rollout.top_p={top_p} " \
           f"rollout.prompt_length={args.prompt_length} " \
           f"rollout.response_length={args.response_length} " \
           f"rollout.gpu_memory_utilization=0.8 " \
-          f"rollout.n={args.n}" \
+          f"rollout.n={args.n} " \
           f"trainer.wandb=True " \
           f"trainer.project_name={args.project_prefix}-{data_type}-generation_{dataset_name}_{model_path.replace('/', '_')}-iterative-sft"
     
