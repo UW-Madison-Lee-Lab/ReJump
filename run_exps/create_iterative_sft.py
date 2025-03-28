@@ -63,11 +63,13 @@ def gen_dataset(
             --test_ratio=0.2 \\
             --n_shot={shot}
         """
-    elif dataset_name in ["moons", "linear"]:
+    elif dataset_name in ["moons", "linear", "circles"]:
         return f"""
         python {root_dir}/examples/data_preprocess/{dataset_name}.py \\
             --template_type={template_type} \\
             --num_samples={num_samples} \\
+            --label_flip_rate={label_flip_rate} \\
+            --noise_level={noise_level} \\
             --n_shot={shot}
         """
     else:
