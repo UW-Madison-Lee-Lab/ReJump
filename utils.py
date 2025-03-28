@@ -3,6 +3,8 @@ import json, pdb
 import torch
 import numpy as np
 import random
+import pandas as pd
+from constants import get_result_dir
 from omegaconf import DictConfig
 
 def set_seed(seed):
@@ -35,3 +37,34 @@ def print_configs(args_dict):
         print(f"| {key}: {value}")
     print("########"*3)
     
+def check_results(
+    dataset_name,
+    shot,
+    model_name,
+    template_type,
+    response_length,
+    num_samples,
+    noise_level,
+    label_flip_rate
+):
+    local_dir = get_result_dir(
+        dataset_name=dataset_name,
+        model_name=model_name,
+        shot=shot,
+        template_type=template_type,
+        response_length=response_length,
+        num_samples=num_samples,
+        noise_level=noise_level,
+        label_flip_rate=label_flip_rate
+    )
+    test_dataset = pd.read_parquet(os.path.join(local_dir, 'test.parquet'))
+    while True:
+        idx = input("Enter the index of the example to check: ")
+        if idx == 'q':
+            break
+        idx = int(idx)
+        print(f"prompt: {test_dataset.iloc[idx]['prompt'][0]['content']}")
+        print(f"label: {test_dataset.iloc[idx]['label']}")
+        print(f"response: {test_dataset.iloc[idx]['responses'][0]}")
+        print('-'*100)
+        

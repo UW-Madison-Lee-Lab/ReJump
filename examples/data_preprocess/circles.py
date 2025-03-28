@@ -1,9 +1,10 @@
 """
-Preprocess dataset for moons task - a synthetic classification task with two interleaving half circles
+Preprocess dataset for circles task - a synthetic classification task with concentric circles
+where KNN classifiers typically fail due to non-linear decision boundaries
 """
 
 import numpy as np
-from sklearn.datasets import make_moons
+from sklearn.datasets import make_circles
 from typing import List, Tuple
 from tqdm import tqdm
 import argparse
@@ -12,28 +13,35 @@ from examples.data_preprocess.helper import save_data, classification_reward_fn,
 
 def gen_dataset(
     num_samples: int,
-    noise: float = 0.1,
+    noise: float = 0.0,
     seed_value: int = 42,
     label_flip_rate: float = 0.0,
 ) -> List[Tuple]:
-    """Generate synthetic moons dataset for classification task.
+    """Generate synthetic circles dataset for binary classification task.
     
     Args:
         num_samples: Number of samples to generate
         noise: Standard deviation of Gaussian noise added to the data
+        factor: Scale factor between inner and outer circle
         seed_value: Random seed for reproducibility
-
+        label_flip_rate: Label flip rate
+        
     Returns:
         List of tuples containing (features, label)
     """
     np.random.seed(seed_value)
+    factor = 0.9
     
-    # Generate synthetic moons data
-    X, y = make_moons(
+    # Generate synthetic data with concentric circles
+    # The smaller the factor, the more difficult for KNN to classify
+    X, y = make_circles(
         n_samples=num_samples,
         noise=noise,
+        factor=factor,  # Makes circles closer, harder for KNN
         random_state=seed_value
     )
+    
+    # Optionally flip some labels to make it even harder
     y = flip_label(y, label_flip_rate, 2)
     
     samples = []
@@ -45,22 +53,21 @@ def gen_dataset(
     return samples
 
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--hdfs_dir', default=None)
     parser.add_argument('--num_samples', type=int, default=100000)
-    parser.add_argument('--noise_level', type=float, default=0.1)
+    parser.add_argument('--noise_level', type=float, default=0.05)
     parser.add_argument('--test_ratio', type=float, default=0.2)
     parser.add_argument('--n_shot', type=int, default=0)
     parser.add_argument('--template_type', type=str, default='base')
     parser.add_argument('--label_flip_rate', type=float, default=0.0)
     args = parser.parse_args()
     set_seed(42)
-    data_source = 'moons'
+    
+    data_source = 'circles'
     TEST_SIZE = int(args.num_samples * args.test_ratio)
     TRAIN_SIZE = args.num_samples - TEST_SIZE
-    n_classes = 2  # Moons dataset always has 2 classes
     
     # Generate synthetic dataset
     samples = gen_dataset(
@@ -91,10 +98,11 @@ if __name__ == '__main__':
         in_context_dataset_dict,
         data_source,
         args,
-        n_classes,
+        2,  # Number of classes for circles dataset is 2
         TRAIN_SIZE,
-        TEST_SIZE
+        TEST_SIZE,
     )
     
-def moons_reward_fn(solution_str, ground_truth):
+
+def circles_reward_fn(solution_str, ground_truth):
     return classification_reward_fn(solution_str, ground_truth)
