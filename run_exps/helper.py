@@ -8,7 +8,8 @@ def gen_dataset(
     template_type="qwen-instruct",
     num_samples=10000,
     noise_level=None,
-    label_flip_rate=0.0
+    label_flip_rate=0.0,
+    plot=False
 ):
     if dataset_name == "blobs":
         noise_level = 1.0 if noise_level is None else noise_level
@@ -23,8 +24,9 @@ python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --n_shot={shot} \
     --noise_level={noise_level} \
     --test_ratio=0.2 \
-    --label_flip_rate={label_flip_rate}
-    """
+    --label_flip_rate={label_flip_rate} \
+    --plot={int(plot)}
+    """ 
 
 
 def mix_dataset(
@@ -124,7 +126,8 @@ def inference(
     num_samples=10000,
     noise_level=None,
     label_flip_rate=0.0,
-    n_gpus=2
+    n_gpus=2,
+    plot=False
 ):
     dataset_dir = get_dataset_dir(
         dataset_name=dataset_name,
@@ -144,15 +147,16 @@ def inference(
         noise_level=noise_level,
         label_flip_rate=label_flip_rate
     )
+    output_file = "grid.parquet" if plot else "test.parquet"
     return f"""
 python -m verl.trainer.main_generation \
     trainer.nnodes=1 \
     trainer.n_gpus_per_node={n_gpus} \
-    data.path={dataset_dir}/test.parquet \
+    data.path={dataset_dir}/{output_file} \
     data.prompt_key=prompt \
     data.n_samples=1 \
     data.batch_size=128 \
-    data.output_path={result_dir}/test.parquet \
+    data.output_path={result_dir}/{output_file} \
     model.path={model_name} \
     +model.trust_remote_code=True \
     rollout.temperature={temperature} \
