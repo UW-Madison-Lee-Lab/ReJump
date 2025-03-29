@@ -159,4 +159,12 @@ supported_llms = {
         "template_type": "base",
         #"model_size": None,
     },
+    "openai/o1-pro": {
+        "template_type": "base",
+        #"model_size": None,
+    },
+    "openai/o3-mini": {
+        "template_type": "base",
+        #"model_size": None,
+    },
 }

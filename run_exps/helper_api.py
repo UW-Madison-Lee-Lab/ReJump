@@ -25,7 +25,6 @@ python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --noise_level={noise_level} \
     --test_ratio=0.2 \
     --label_flip_rate={label_flip_rate} \
-    --plot={int(plot)}
     """ 
 
 
@@ -163,7 +162,7 @@ python -m verl.trainer.main_generation \
     rollout.top_k=-1 \
     rollout.top_p=1 \
     rollout.prompt_length={prompt_length} \
-    rollout.response_length={response_length} \
+    rollout.response_length=8000 \
     rollout.tensor_model_parallel_size={n_gpus} \
     rollout.gpu_memory_utilization=0.8 \
     trainer.wandb=True \

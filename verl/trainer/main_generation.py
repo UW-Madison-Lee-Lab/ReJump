@@ -81,7 +81,7 @@ def main(config):
     OmegaConf.resolve(config)
 
     # Initialize model based on config
-    use_api = config.model.path in ["deepseek-ai/deepseek-chat", "deepseek-ai/deepseek-reasoner", "openai/gpt-4o"]
+    use_api = config.model.path in ["deepseek-ai/deepseek-chat", "deepseek-ai/deepseek-reasoner", "openai/gpt-4o", "openai/o1-pro", "openai/o3-mini"]
     if use_api:
         api_key = DEEPSEEK_API_KEY if "deepseek-ai/deepseek" in config.model.path else OPENAI_API_KEY
         model = LLMAPI(api_key=api_key, model_name=config.model.path)
@@ -146,6 +146,10 @@ def main(config):
     
     reward_tensor_lst = [[] for _ in range(config.data.n_samples)]
     output_lst = [[] for _ in range(config.data.n_samples)]
+    input_prompts_lst = []
+    ground_truths_lst = []
+    data_sources_lst = []
+    reasonings_lst = [[] for _ in range(config.data.n_samples)]
     if not use_api:
         reward_fn = RewardManager(
             tokenizer=tokenizer, 
@@ -171,7 +175,7 @@ def main(config):
             batch_data_sources = test_batch.non_tensor_batch['data_source']
             
             # Process batch and get rewards
-            batch_output_lst, reward_dict = model.process_batch(
+            batch_output_lst, reward_dict, batch_reasoning_lst = model.process_batch(
                 batch_chat_lst=batch_chat_lst,
                 n_samples=config.data.n_samples,
                 config=config,
@@ -188,17 +192,24 @@ def main(config):
                 print("Input prompt:", batch_chat_lst[i])
                 print("Ground truth:", batch_ground_truths[i])
                 print("Data source:", batch_data_sources[i])
-                #breakpoint()
                 for j in range(config.data.n_samples):
                     print(f"Output {j}:", batch_output_lst[j][i])
-                    #print(f"Reward {j}:", reward_dict['reward_tensor'].item())
+                    if batch_reasoning_lst[j][i] is not None:
+                        print(f"Reasoning {j}:", batch_reasoning_lst[j][i])
                 print("-" * 50)
             print("=" * 50)
             
+            #breakpoint()
             # Add batch outputs and rewards to the main lists
             for i in range(config.data.n_samples):
                 output_lst[i].extend(batch_output_lst[i])
                 reward_tensor_lst[i].extend(reward_dict['reward_tensor'].tolist())
+                reasonings_lst[i].extend(batch_reasoning_lst[i])
+            
+            # Store input prompts, ground truths, and data sources
+            input_prompts_lst.extend([chat["content"] for chat in batch_chat_lst])
+            ground_truths_lst.extend(batch_ground_truths)
+            data_sources_lst.extend(batch_data_sources)
         else:
             # Process with HuggingFace model
             test_batch = DataProto.from_single_dict(test_data)
@@ -240,6 +251,14 @@ def main(config):
     output_lst = np.transpose(output_lst, axes=(1, 0)).tolist() 
     
     dataset["responses"] = output_lst
+    dataset["input_prompts"] = input_prompts_lst
+    dataset["ground_truths"] = ground_truths_lst
+    dataset["data_sources"] = data_sources_lst
+    
+    # convert reasonings_lst from (n_samples, n_data) to (n_data, n_samples)
+    reasonings_lst = np.array(reasonings_lst, dtype=object)
+    reasonings_lst = np.transpose(reasonings_lst, axes=(1, 0)).tolist()
+    dataset["reasonings"] = reasonings_lst
     
     # convert reward_tensor_lst from (n_samples, n_data) to (n_data, n_samples)
     reward_tensor_lst = np.array(reward_tensor_lst, dtype=object)

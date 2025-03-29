@@ -94,16 +94,16 @@ class LLMAPI:
                 api_key=api_key,
                 base_url="https://api.deepseek.com/v1"
             )
-            self.model = "deepseek-chat"
+            self.model = model_name.replace("deepseek-ai/", "")  # Remove the prefix to get the actual model name
         elif model_name.startswith("openai/"):
             self.client = OpenAI(
                 api_key=api_key
             )
-            self.model = "gpt-4o"
+            self.model = model_name.replace("openai/", "")  # Remove the prefix to get the actual model name
         else:
             raise ValueError(f"Unsupported model: {model_name}")
 
-    def generate(self, messages: List[Dict[str, str]], max_tokens: int = 4000, temperature: float = 0.7) -> str:
+    def generate(self, messages: List[Dict[str, str]], max_tokens: int = 8000, temperature: float = 0.7) -> str:
         max_retries = 3
         timeout = 60  # 60 seconds timeout
         
@@ -113,28 +113,53 @@ class LLMAPI:
         
         for attempt in range(max_retries):
             try:
+                
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=messages,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    top_p=0.9,
-                    frequency_penalty=0.0,
-                    presence_penalty=0.0,
-                    stream=False,
-                    timeout=timeout
+                    #max_tokens=max_tokens,######
+                    #temperature=temperature,
+                    #top_p=0.9,
+                    #frequency_penalty=0.0,
+                    #presence_penalty=0.0,
+                    #stream=False,
+                    #timeout=timeout
                 )
                 
                 content = response.choices[0].message.content
+                reasoning_content = getattr(response.choices[0].message, 'reasoning_content', None)
                 
-                # Check if response is complete (ends with proper tags or punctuation)
-                if not (content.endswith('</think>') or content.endswith('</answer>') or 
-                       content.endswith('.') or content.endswith('!') or content.endswith('?')):
-                    if attempt < max_retries - 1:
-                        time.sleep(5)
-                        continue
                 
-                return content
+                
+                """
+                response = self.client.responses.create(
+                    model=self.model,
+                    input=messages, 
+                    #generate_summary="detailed"
+                )
+
+
+                print(response.output) 
+                #print(response.summary)
+                
+                breakpoint()                
+                
+                """
+                
+                
+                
+
+                
+
+                
+                # # Check if response is complete (ends with proper tags or punctuation)
+                # if not (content.endswith('</think>') or content.endswith('</answer>') or 
+                #        content.endswith('.') or content.endswith('!') or content.endswith('?')):
+                #     if attempt < max_retries - 1:
+                #         time.sleep(5)
+                #         continue
+                
+                return content, reasoning_content
                 
             except Exception as e:
                 if attempt < max_retries - 1:
@@ -142,7 +167,7 @@ class LLMAPI:
                     continue
                     
                 if "maximum context length" in str(e).lower():
-                    return response.choices[0].message.content if 'response' in locals() else ""
+                    return (response.choices[0].message.content, getattr(response.choices[0].message, 'reasoning_content', None)) if 'response' in locals() else ("", None)
                 raise
 
     def process_batch(self, batch_chat_lst: List[Dict[str, str]], n_samples: int = 1, config=None, batch_idx: int = 0, wandb=None, ground_truths=None, data_sources=None) -> List[List[str]]:
@@ -153,9 +178,9 @@ class LLMAPI:
             try:
                 gen_start_time = time.time()
                 
-                response = self.generate(
+                response, reasoning_content = self.generate(
                     messages=chat,
-                    max_tokens=config.rollout.response_length if config else 4000,
+                    max_tokens=config.rollout.response_length if config else 8000,
                     temperature=config.rollout.temperature if config else 0.7
                 )
                 response_length = len(response.split())
@@ -168,10 +193,10 @@ class LLMAPI:
                     'batch': batch_idx,
                     'sample_idx': sample_idx
                 }
-                return response, metrics, None
+                return response, reasoning_content, metrics, None
             except Exception as e:
                 print(f"Error processing chat {sample_idx}: {str(e)}")
-                return None, None, e
+                return None, None, None, e
 
         # Create a thread pool for parallel processing
         max_workers = min(len(batch_chat_lst), 16)
@@ -182,15 +207,18 @@ class LLMAPI:
                     future = executor.submit(process_single_chat, chat, i)
                     futures.append((future, i, j))
 
+            batch_reasoning_lst = [[] for _ in range(n_samples)]
             for future, sample_idx, chat_idx in futures:
-                response, metrics, error = future.result()
+                response, reasoning_content, metrics, error = future.result()
                 if error is None:
                     batch_output_lst[sample_idx].append(response)
+                    batch_reasoning_lst[sample_idx].append(reasoning_content)
                     if wandb is not None:
                         wandb.log(metrics)
                 else:
                     print(f"Error in batch {batch_idx}, sample {sample_idx}, chat {chat_idx}: {str(error)}")
                     batch_output_lst[sample_idx].append("")  # Append empty string for failed generations
+                    batch_reasoning_lst[sample_idx].append(None)
 
         # If ground truths and data sources are provided, compute rewards
         if ground_truths is not None and data_sources is not None:
@@ -200,9 +228,9 @@ class LLMAPI:
                 ground_truths=ground_truths,
                 data_sources=data_sources
             )
-            return batch_output_lst, reward_dict
+            return batch_output_lst, reward_dict, batch_reasoning_lst
 
-        return batch_output_lst
+        return batch_output_lst, None, batch_reasoning_lst
 
     @staticmethod
     def convert_chat_list(chat_lst: List[Any]) -> List[Dict[str, str]]:
