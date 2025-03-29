@@ -89,7 +89,6 @@ class RewardManager():
             print("type of ground_truth: ", type(ground_truth))
             print(f"sequences_str: {sequences_str}")
             print("type of sequences_str: ", type(sequences_str))
-            input("Press Enter to continue...")
             print(f"sequences_str: {sequences_str}")
             print(f"score: {score}")
             print("shape of reward_tensor: ", reward_tensor.shape)
