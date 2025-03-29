@@ -150,7 +150,14 @@ def print_specific_rows(file_path, rows, columns=None):
         print("-" * 50)
         for row in rows:
             print(f"\nRow {row}:")
-            print(df.iloc[row])
+            for col in df.columns:
+                print(f"{col}:")
+                temp = df.iloc[row][col]
+                if isinstance(temp, dict):
+                    print(temp)
+                else:
+                    print(temp.item(0))
+                print("-" * 20)
             print("-" * 30)
         print("-" * 50)
         
@@ -159,7 +166,7 @@ def print_specific_rows(file_path, rows, columns=None):
 
 if __name__ == "__main__":
     # Example usage
-    file_path = "/pvc/home-mjlee/workspace/wjkang/neurips/liftr/results/openai-gpt-4o/circles_50_shot_base_reslen_3046_nsamples_500_noise_0.0_flip_rate_0.0/global_step_0/test.parquet"  # Replace with your parquet file path
+    file_path = "/pvc/home-mjlee/workspace/wjkang/neurips/liftr/results/deepseek-ai-deepseek-reasoner/circles_50_shot_base_reslen_3046_nsamples_500_noise_0.0_flip_rate_0.0/global_step_0/test.parquet"  # Replace with your parquet file path
     
     # Show all column names first
     show_columns(file_path)
@@ -171,14 +178,16 @@ if __name__ == "__main__":
     #first_value = get_first_value(file_path)
     
     # Print specific columns
-    columns_to_print = ["ground_truths", "responses"]  # Replace with your column names
+    #columns_to_print = ["ground_truths", "responses", "reasonings"]  # Replace with your column names
+    #columns_to_print = ["reasonings"]
+    columns_to_print = ["ground_truths", "responses"]
     #print_columns(file_path, columns_to_print)
     
     # Print full column
     #print_full_column(file_path, "ground_truths")  # Replace with your column name
     
     # Print specific rows
-    rows_to_print = [0, 1, 2]  # Replace with your desired row indices
+    rows_to_print = [16,17,18,19,20]  # Replace with your desired row indices
     #print_specific_rows(file_path, rows_to_print)
     
     # Print specific rows with specific columns

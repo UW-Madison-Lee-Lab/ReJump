@@ -100,11 +100,17 @@ class LLMAPI:
                 api_key=api_key
             )
             self.model = model_name.replace("openai/", "")  # Remove the prefix to get the actual model name
+        elif model_name.startswith("openrouter-"):
+            self.client = OpenAI(
+                api_key=api_key,
+                base_url="https://openrouter.ai/api/v1"
+            )
+            self.model = model_name.replace("openrouter-", "")  # Remove the prefix to get the actual model name
         else:
             raise ValueError(f"Unsupported model: {model_name}")
 
     def generate(self, messages: List[Dict[str, str]], max_tokens: int = 8000, temperature: float = 0.7) -> str:
-        max_retries = 3
+        max_retries = 1000  # Very large number of retries
         timeout = 60  # 60 seconds timeout
         
         # Ensure messages is a list
@@ -128,6 +134,8 @@ class LLMAPI:
                 
                 content = response.choices[0].message.content
                 reasoning_content = getattr(response.choices[0].message, 'reasoning_content', None)
+                if reasoning_content is None:
+                    reasoning_content = getattr(response.choices[0].message, 'reasoning', None)
                 
                 
                 
@@ -152,12 +160,11 @@ class LLMAPI:
                 
 
                 
-                # # Check if response is complete (ends with proper tags or punctuation)
-                # if not (content.endswith('</think>') or content.endswith('</answer>') or 
-                #        content.endswith('.') or content.endswith('!') or content.endswith('?')):
-                #     if attempt < max_retries - 1:
-                #         time.sleep(5)
-                #         continue
+                # Check if response is complete (ends with proper tags or punctuation)
+                if '</answer>' not in content:
+                    if attempt < max_retries - 1:
+                        time.sleep(5)
+                        continue
                 
                 return content, reasoning_content
                 

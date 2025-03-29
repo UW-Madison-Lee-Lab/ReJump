@@ -45,7 +45,7 @@ from utils import flatten_dict, print_configs
 from constants import get_configs_via_result_dir
 import wandb   
 try:
-    from environment import WANDB_INFO, HUGGINGFACE_API_KEY, DEEPSEEK_API_KEY, OPENAI_API_KEY
+    from environment import WANDB_INFO, HUGGINGFACE_API_KEY, DEEPSEEK_API_KEY, OPENAI_API_KEY, OPENROUTER_API_KEY
 except ImportError:
     raise ImportError("""
 Please create environment.py file in the project root directory.
@@ -81,9 +81,9 @@ def main(config):
     OmegaConf.resolve(config)
 
     # Initialize model based on config
-    use_api = config.model.path in ["deepseek-ai/deepseek-chat", "deepseek-ai/deepseek-reasoner", "openai/gpt-4o", "openai/o1-pro", "openai/o3-mini"]
+    use_api = config.model.path in ["deepseek-ai/deepseek-chat", "deepseek-ai/deepseek-reasoner", "openai/gpt-4o", "openai/o1-pro", "openai/o3-mini", "openrouter-deepseek/deepseek-r1"]
     if use_api:
-        api_key = DEEPSEEK_API_KEY if "deepseek-ai/deepseek" in config.model.path else OPENAI_API_KEY
+        api_key = DEEPSEEK_API_KEY if "deepseek-ai/deepseek" in config.model.path else OPENAI_API_KEY if "openai" in config.model.path else OPENROUTER_API_KEY
         model = LLMAPI(api_key=api_key, model_name=config.model.path)
         chat_lst_converter = LLMAPI.convert_chat_list
         # Use Qwen tokenizer for API mode

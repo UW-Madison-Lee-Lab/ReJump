@@ -167,4 +167,8 @@ supported_llms = {
         "template_type": "base",
         #"model_size": None,
     },
+    "openrouter-deepseek/deepseek-r1": {
+        "template_type": "base",
+        #"model_size": None,
+    },
 }
