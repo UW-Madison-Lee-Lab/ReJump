@@ -71,7 +71,8 @@ class RewardManager():
             ground_truth = data_item.non_tensor_batch['reward_model']['ground_truth']
             print(f"ground_truth: {ground_truth}")
             print("type of ground_truth: ", type(ground_truth))
-            print("shape of ground_truth: ", ground_truth.shape)
+            print(f"sequences_str: {sequences_str}")
+            print("type of sequences_str: ", type(sequences_str))
             input("Press Enter to continue...")
             # print(f"sequences_str: {sequences_str}")
 
