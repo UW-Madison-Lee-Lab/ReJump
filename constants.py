@@ -14,14 +14,14 @@ def get_model_name(
     noise_level,
     label_flip_rate
 ):
-    return f"{model_name.replace('/', '-')}_{dataset_name}_{shot}_shot_{template_type}_reslen_{response_length}_nsamples_{num_samples}_noise_{noise_level}_flip_rate_{label_flip_rate}"
+    return f"{model_name.replace('/', '-')}/{dataset_name}_{shot}_shot_{template_type}_reslen_{response_length}_nsamples_{num_samples}_noise_{noise_level}_flip_rate_{label_flip_rate}"
 def get_configs_via_model_name(model_name):
-    pattern = r"(.+?)_(.+?)_(\d+)_shot_(.+)_reslen_(.+)_nsamples_(.+)_noise_(.+)_flip_rate_(.+)"
+    pattern = r"(.+?)/(.+?)_(\d+)_shot_(.+)_reslen_(.+)_nsamples_(.+)_noise_(.+)_flip_rate_(.+)"
     match = re.match(pattern, model_name)
     if match:
-        return {
-            "dataset_name": match.group(1),
-            "model_name": match.group(2),
+        return {    
+            "dataset_name": match.group(2),
+            "model_name": match.group(1),
             "shot": int(match.group(3)),
             "template_type": match.group(4),
             "response_length": int(match.group(5)),
@@ -71,9 +71,14 @@ def get_result_dir(
 ):
     return os.path.join(root_dir, 'results', get_model_name(dataset_name, model_name, shot, template_type, response_length, num_samples, noise_level, label_flip_rate), f"global_step_{train_step}")
 def get_configs_via_result_dir(result_dir):
-    steps = os.path.basename(result_dir).split("_")[-1]
-    dirname = os.path.dirname(result_dir)
-    model_name = os.path.basename(dirname)
+    # Extract model name from the result directory path using regex
+    pattern = r".*results[/\\](.+)[/\\]global_step_(\d+)$"
+    match = re.match(pattern, result_dir)
+    if match:
+        model_name = match.group(1)  # The full model name with all parameters
+        steps = match.group(2)      # The training step number
+    else:
+        raise ValueError(f"Invalid result directory structure: {result_dir}")
     configs = get_configs_via_model_name(model_name)
     configs["train_step"] = int(steps)
     return configs

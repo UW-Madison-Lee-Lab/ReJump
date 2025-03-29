@@ -23,6 +23,7 @@ parser.add_argument("--load_train_step", type=int, default=None)
 parser.add_argument("--n_samples", type=int, nargs="+", default=[10000])
 parser.add_argument("--noise_level", type=float, nargs="+", default=[None])
 parser.add_argument("--label_flip_rate", type=float, default=0.0)
+parser.add_argument("--plot", action="store_true")
 args = parser.parse_args()
 
 if args.load_train_step is not None:
@@ -42,7 +43,7 @@ mode_list = args.mode
 shot_list = args.shot
 n_samples_list = args.n_samples
 noise_level_list = args.noise_level
-flip_rate_list = args.label_flip_rate
+
 
 # def eval(
 #     dataset_name,
@@ -94,6 +95,7 @@ for dataset in dataset_list:
                             num_samples=n_samples,
                             noise_level=noise_level,
                             label_flip_rate=args.label_flip_rate,
+                            plot=args.plot
                         )
                         command_list.append(gen_command)
                         if args.train:
@@ -136,7 +138,8 @@ for dataset in dataset_list:
                                 num_samples=n_samples,
                                 noise_level=noise_level,
                                 label_flip_rate=args.label_flip_rate,
-                                n_gpus=args.n_gpus
+                                n_gpus=args.n_gpus,
+                                plot=args.plot
                             )
                             command_list.append(inference_command)
                             # eval_command = eval(
@@ -161,6 +164,7 @@ for dataset in dataset_list:
                         )
                         script_path = f"{root_dir}/run_exps/auto/{model_name}_train_{args.train}.sh"
                         script_paths.append(script_path)
+                        os.makedirs(os.path.dirname(script_path), exist_ok=True)
                         with open(script_path, "w") as f:
                             f.write(bash_script)
 
