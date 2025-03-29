@@ -80,11 +80,14 @@ class RewardManager():
             # select rm_score
             data_source = data_item.non_tensor_batch['data_source']
             print(f"data_source: {data_source}")
-            input("Press Enter to continue...")
             compute_score_fn = _select_rm_score_fn(data_source)
 
             score = compute_score_fn(solution_str=sequences_str, ground_truth=ground_truth)
             reward_tensor[i, valid_response_length - 1] = score
+            print(f"score: {score}")
+            print("shape of reward_tensor: ", reward_tensor.shape)
+            print(f"reward_tensor: {reward_tensor}")
+            input("Press Enter to continue...")
 
             if data_source not in already_print_data_sources:
                 already_print_data_sources[data_source] = 0
