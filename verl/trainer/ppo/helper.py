@@ -69,6 +69,12 @@ class RewardManager():
             sequences_str = self.tokenizer.decode(sequences)
             sequences_lst.append(sequences_str)
             ground_truth = data_item.non_tensor_batch['reward_model']['ground_truth']
+            print(f"ground_truth: {ground_truth}")
+            print("type of ground_truth: ", type(ground_truth))
+            print("shape of ground_truth: ", ground_truth.shape)
+            input("Press Enter to continue...")
+            # print(f"sequences_str: {sequences_str}")
+
 
             # select rm_score
             data_source = data_item.non_tensor_batch['data_source']
