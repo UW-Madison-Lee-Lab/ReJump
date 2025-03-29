@@ -12,6 +12,9 @@ import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend
 from transformers import AutoTokenizer
 
+# Add import for select_reward_fn
+from verl.trainer.ppo.helper import _select_rm_score_fn as select_reward_fn
+
 # Load Qwen tokenizer
 try:
     qwen_tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-3B-Instruct", trust_remote_code=True)
@@ -64,6 +67,7 @@ def extract_iteration_number(filename):
 def blobs_reward_fn(response, ground_truth):
     """
     Evaluate if the model's response is correct based on the ground truth
+    This function is kept for backward compatibility
     """
     response_extract = re.search(r'<answer>(.*?)</answer>', response, re.DOTALL)
     if response_extract is not None and response_extract.group(1).strip().isdigit():
@@ -72,7 +76,7 @@ def blobs_reward_fn(response, ground_truth):
         return 0
     return response_class == ground_truth['label']
 
-def format_example_for_human(prompt, response, is_correct, ground_truth):
+def format_example_for_human(prompt, response, is_correct, ground_truth, score=None, data_source=None):
     """Format example in a human-readable way"""
     formatted = "=" * 50 + "\n"
     
@@ -81,6 +85,10 @@ def format_example_for_human(prompt, response, is_correct, ground_truth):
         formatted += "PROMPT:\n" + json.dumps(prompt, indent=2, cls=NumpyEncoder) + "\n\n"
     else:
         formatted += "PROMPT:\n" + str(prompt) + "\n\n"
+    
+    # Add data source if available
+    if data_source:
+        formatted += f"DATA SOURCE: {data_source}\n\n"
     
     formatted += "RESPONSE:\n" + response + "\n\n"
     
@@ -98,6 +106,11 @@ def format_example_for_human(prompt, response, is_correct, ground_truth):
         formatted += f"CORRECT ANSWER: {ground_truth}\n"
     
     formatted += f"IS CORRECT: {is_correct}\n"
+    
+    # Add score if available
+    if score is not None:
+        formatted += f"SCORE: {score}\n"
+    
     formatted += "=" * 50 + "\n\n"
     
     return formatted
@@ -212,6 +225,7 @@ def plot_token_boxplot(iterations, token_stats_by_iter, output_path):
 def analyze_file(file_path):
     """
     Analyze a parquet file and return the accuracy, all examples with correctness info
+    Using the scoring mechanism from main_eval.py
     """
     df = pd.read_parquet(file_path)
     total = len(df)
@@ -220,10 +234,46 @@ def analyze_file(file_path):
     
     for idx, row in df.iterrows():
         prompt = row['prompt']
-        response = row['responses'][0]  # Assuming first response is the one to evaluate
-        ground_truth = row['reward_model']['ground_truth']
+        responses = row['responses']  # Get all responses
+        if 'data_source' in row:
+            data_source = row['data_source']
+        else:
+            # Default to blobs if data_source not available
+            data_source = "blobs"
         
-        is_correct = blobs_reward_fn(response, ground_truth)
+        reward_model_data = row['reward_model']
+        ground_truth = reward_model_data['ground_truth']
+        
+        try:
+            # Use select_reward_fn to get the appropriate reward function
+            reward_fn = select_reward_fn(data_source)
+        except (ImportError, NotImplementedError):
+            # Fallback to blobs_reward_fn if data_source is not supported
+            reward_fn = blobs_reward_fn
+        
+        # Process all responses and find the best score
+        response = responses[0]  # Default to the first response
+        score_lst = []
+        
+        for r in responses:
+            try:
+                score = reward_fn(r, ground_truth)
+                score_lst.append(score)
+            except Exception as e:
+                print(f"Warning: Error calculating score: {e}")
+                score_lst.append(0)
+        
+        # Use max score to determine correctness
+        if score_lst:
+            max_score = np.max(score_lst)
+            is_correct = max_score == 1
+            # Use the response with the best score for analyzing
+            if len(score_lst) > 1:
+                response = responses[np.argmax(score_lst)]
+        else:
+            is_correct = False
+            max_score = 0
+        
         if is_correct:
             correct_count += 1
         
@@ -234,9 +284,12 @@ def analyze_file(file_path):
         all_examples.append({
             "prompt": prompt,
             "response": response,
+            "responses": responses,
             "ground_truth": ground_truth,
             "is_correct": bool(is_correct),
-            "token_count": token_count
+            "score": max_score,
+            "token_count": token_count,
+            "data_source": data_source
         })
     
     accuracy = correct_count / total if total > 0 else 0
@@ -357,12 +410,21 @@ def track_same_prompts_across_iterations(iteration_results, num_samples=10, seed
         for ex in iteration_results[iter_num]["examples"]:
             prompt_key = get_prompt_key(ex["prompt"])
             if prompt_key in prompt_keys_to_track:
-                tracked_prompts[prompt_key]["iterations"][iter_num] = {
+                tracked_data = {
                     "response": ex["response"],
                     "is_correct": ex["is_correct"],
                     "ground_truth": ex["ground_truth"],
                     "token_count": ex.get("token_count", None)
                 }
+                
+                # Add new fields if available
+                if "score" in ex:
+                    tracked_data["score"] = ex["score"]
+                    
+                if "data_source" in ex:
+                    tracked_data["data_source"] = ex["data_source"]
+                
+                tracked_prompts[prompt_key]["iterations"][iter_num] = tracked_data
     
     return tracked_prompts
 
@@ -385,6 +447,11 @@ def format_tracked_examples_for_human(tracked_prompts):
         for iter_num in iterations:
             iter_data = data["iterations"][iter_num]
             result += f"--- ITERATION {iter_num} ---\n"
+            
+            # Add data source if available
+            if "data_source" in iter_data:
+                result += f"DATA SOURCE: {iter_data['data_source']}\n"
+                
             result += "RESPONSE:\n" + iter_data["response"] + "\n\n"
             
             # Extract predicted answer
@@ -401,6 +468,10 @@ def format_tracked_examples_for_human(tracked_prompts):
                 result += f"CORRECT ANSWER: {iter_data['ground_truth']}\n"
             
             result += f"IS CORRECT: {iter_data['is_correct']}\n"
+            
+            # Add score if available
+            if "score" in iter_data:
+                result += f"SCORE: {iter_data['score']}\n"
             
             if iter_data["token_count"] is not None:
                 result += f"TOKEN COUNT: {iter_data['token_count']}\n"
@@ -445,6 +516,10 @@ def format_tracked_examples_by_iteration(tracked_prompts):
                 else:
                     result += "PROMPT:\n" + str(data["prompt"]) + "\n\n"
                 
+                # Add data source if available
+                if "data_source" in iter_data:
+                    result += f"DATA SOURCE: {iter_data['data_source']}\n\n"
+                
                 result += "RESPONSE:\n" + iter_data["response"] + "\n\n"
                 
                 # Extract predicted answer
@@ -461,6 +536,10 @@ def format_tracked_examples_by_iteration(tracked_prompts):
                     result += f"CORRECT ANSWER: {iter_data['ground_truth']}\n"
                 
                 result += f"IS CORRECT: {iter_data['is_correct']}\n"
+                
+                # Add score if available
+                if "score" in iter_data:
+                    result += f"SCORE: {iter_data['score']}\n"
                 
                 if iter_data["token_count"] is not None:
                     result += f"TOKEN COUNT: {iter_data['token_count']}\n"
@@ -536,15 +615,21 @@ def write_results(output_dir, project_name, iteration_results):
         with open(os.path.join(iter_dir, "sample_correct_examples.txt"), "w") as f:
             f.write(correct_explanation)
             for ex in sampled_correct:
+                score = ex.get("score", None)
+                data_source = ex.get("data_source", None)
                 f.write(format_example_for_human(
-                    ex["prompt"], ex["response"], ex["is_correct"], ex["ground_truth"]
+                    ex["prompt"], ex["response"], ex["is_correct"], ex["ground_truth"], 
+                    score, data_source
                 ))
         
         with open(os.path.join(iter_dir, "sample_incorrect_examples.txt"), "w") as f:
             f.write(incorrect_explanation)
             for ex in sampled_incorrect:
+                score = ex.get("score", None)
+                data_source = ex.get("data_source", None)
                 f.write(format_example_for_human(
-                    ex["prompt"], ex["response"], ex["is_correct"], ex["ground_truth"]
+                    ex["prompt"], ex["response"], ex["is_correct"], ex["ground_truth"],
+                    score, data_source
                 ))
         
         # Save sampled examples as JSON files
@@ -714,16 +799,21 @@ def main():
         if iter_num >= 0:
             print(f"\nAnalyzing file: {os.path.basename(file_path)}")
             print(f"Extracted iteration number: {iter_num}")
-            accuracy, examples = analyze_file(file_path)
             
-            correct_examples = sum(1 for ex in examples if ex["is_correct"])
-            print(f"Iteration {iter_num} accuracy: {accuracy:.4f}, correct examples: {correct_examples}")
-            
-            iteration_results[iter_num] = {
-                "accuracy": accuracy,
-                "examples": examples,
-                "file_path": file_path
-            }
+            try:
+                accuracy, examples = analyze_file(file_path)
+                
+                correct_examples = sum(1 for ex in examples if ex["is_correct"])
+                print(f"Iteration {iter_num} accuracy: {accuracy:.4f}, correct examples: {correct_examples}")
+                
+                iteration_results[iter_num] = {
+                    "accuracy": accuracy,
+                    "examples": examples,
+                    "file_path": file_path
+                }
+            except Exception as e:
+                print(f"ERROR analyzing file {os.path.basename(file_path)}: {e}")
+                continue
     
     if not iteration_results:
         print("No valid iteration data found. Check file patterns and naming.")
