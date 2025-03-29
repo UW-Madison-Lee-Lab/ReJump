@@ -86,10 +86,7 @@ class RewardManager():
             reward_tensor[i, valid_response_length - 1] = score
             print(f"score: {score}")
             print("shape of reward_tensor: ", reward_tensor.shape)
-            with torch.no_grad():
-                torch.set_printoptions(profile="full")
-                print(f"reward_tensor: {reward_tensor}")
-                torch.set_printoptions(profile="default") 
+            print(f"reward_tensor: {reward_tensor}")
             input("Press Enter to continue...")
 
             if data_source not in already_print_data_sources:
