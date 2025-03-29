@@ -6,7 +6,7 @@ data:
   prompt_key: question
   response_key: answer
   max_length: 4096
-  truncation: error
+  truncation: right
   balance_dp_token: False
   chat_template: null
 model:
