@@ -31,20 +31,22 @@ from datetime import datetime
 
 
 
-def select_reward_fn(data_source):
-    if data_source == 'lighteval/MATH':
-        return math.compute_score
-    elif data_source == "blobs":
-        from examples.data_preprocess.blobs import blobs_reward_fn
-        return blobs_reward_fn
-    elif data_source == "moons":
-        from examples.data_preprocess.moons import moons_reward_fn
-        return moons_reward_fn
-    elif data_source == "linear":
-        from examples.data_preprocess.linear import linear_reward_fn
-        return linear_reward_fn
-    else:
-        raise NotImplementedError
+# def select_reward_fn(data_source):
+#     if data_source == 'lighteval/MATH':
+#         return math.compute_score
+#     elif data_source == "blobs":
+#         from examples.data_preprocess.blobs import blobs_reward_fn
+#         return blobs_reward_fn
+#     elif data_source == "moons":
+#         from examples.data_preprocess.moons import moons_reward_fn
+#         return moons_reward_fn
+#     elif data_source == "linear":
+#         from examples.data_preprocess.linear import linear_reward_fn
+#         return linear_reward_fn
+#     else:
+#         raise NotImplementedError
+
+from verl.trainer.ppo.helper import _select_rm_score_fn as select_reward_fn
 
 
 @hydra.main(config_path='config', config_name='evaluation', version_base=None)
