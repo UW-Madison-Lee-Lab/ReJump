@@ -85,14 +85,14 @@ class RewardManager():
             score = compute_score_fn(solution_str=sequences_str, ground_truth=ground_truth)
             reward_tensor[i, valid_response_length - 1] = score
 
-            print(f"ground_truth: {ground_truth}")
-            print("type of ground_truth: ", type(ground_truth))
-            print(f"sequences_str: {sequences_str}")
-            print("type of sequences_str: ", type(sequences_str))
-            print(f"score: {score}")
-            print("shape of reward_tensor: ", reward_tensor.shape)
-            print(f"reward_tensor: {reward_tensor}")
-            input("Press Enter to continue...")
+            # print(f"ground_truth: {ground_truth}")
+            # print("type of ground_truth: ", type(ground_truth))
+            # print(f"sequences_str: {sequences_str}")
+            # print("type of sequences_str: ", type(sequences_str))
+            # print(f"score: {score}")
+            # print("shape of reward_tensor: ", reward_tensor.shape)
+            # print(f"reward_tensor: {reward_tensor}")
+            # input("Press Enter to continue...")
 
             if data_source not in already_print_data_sources:
                 already_print_data_sources[data_source] = 0
