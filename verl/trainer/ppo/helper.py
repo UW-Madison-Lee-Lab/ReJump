@@ -86,7 +86,7 @@ class RewardManager():
             reward_tensor[i, valid_response_length - 1] = score
             print(f"score: {score}")
             print("shape of reward_tensor: ", reward_tensor.shape)
-            print(f"reward_tensor: {reward_tensor}")
+            print(f"reward_tensor (first 15 rows): {reward_tensor[:15]}")
             input("Press Enter to continue...")
 
             if data_source not in already_print_data_sources:
