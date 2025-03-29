@@ -105,7 +105,7 @@ def main(config):
     dataloader = DataLoader(
         rlhf_dataset, 
         batch_size=config.data.batch_size, 
-        shuffle=True,
+        shuffle=False,
         drop_last=False,
         collate_fn=collate_fn
     )
@@ -179,14 +179,27 @@ def main(config):
     # eval
     passes = 0
 
+    # Add generation_eval field based on max_score
+    generation_eval = []
 
     k = None
     for i in range(total_samples):
         if k is None: k = len(reward_tensor_lst[i])
         max_score = np.max(reward_tensor_lst[i])
 
+        # Set generation_eval to 1 if max_score is 1, otherwise 0
+        generation_eval.append(1 if max_score == 1 else 0)
+
         if max_score == 1:
             passes += 1
+
+    # Add generation_eval to dataset
+    dataset["generation_eval"] = generation_eval
+    
+    # Save dataset to the specified path
+    output_path = "/staging/szhang967/2Test_Blobs_New_Mar28.json"
+    dataset.to_json(output_path, orient="records")
+    print(f"Saved evaluation results to {output_path}")
 
     print(f'pass@{k}: {passes / total_samples}')
 
