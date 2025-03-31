@@ -117,3 +117,6 @@ results/
 **/auto/
 **/trials/
 **/run_exps/auto_iterative_sft/
+
+
+analyze_deepseek/
