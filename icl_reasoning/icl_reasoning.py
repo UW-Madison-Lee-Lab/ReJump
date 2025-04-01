@@ -33,8 +33,6 @@ class TestDataConfig:
     task_type: str = MISSING  # blobs, circles, linear, moons
     flip_rate: float = MISSING  # 0.0, 0.1, 0.2
     noise_type: float = MISSING  # noise level like 0.1, 1.0
-    shot_type: int = MISSING  # 50, 100
-    nsamples_type: int = MISSING  # 500
     num_samples: int = MISSING  # Number of test samples to use
 
 
@@ -171,6 +169,14 @@ def extract_test_prompt_content(result: Dict[str, Any]) -> str:
     raise ValueError("Failed to extract prompt content from result")
 
 
+def extract_icl_reasonings(result: Dict[str, Any]) -> str:
+    """
+    Extract the model's reasonings from a DeepSeek result
+    """
+    if "reasonings" in result and isinstance(result["reasonings"], list) and len(result["reasonings"]) > 0:
+        return result["reasonings"][0]
+    raise ValueError("Failed to extract reasonings from result")
+
 def extract_icl_responses(result: Dict[str, Any]) -> str:
     """
     Extract the model's responses from a DeepSeek result
@@ -230,7 +236,7 @@ def create_prompt(instruction: str, icl_examples: List[Dict[str, Any]], test_exa
         if not example_prompt:
             raise ValueError(f"Failed to extract prompt content from example {i+1}")
             
-        example_response = extract_icl_responses(example)
+        example_response = extract_icl_reasonings(example) + "\n\n" + extract_icl_responses(example)
         if not example_response:
             raise ValueError(f"Failed to extract response from example {i+1}")
         
@@ -530,12 +536,12 @@ def main(cfg: DictConfig) -> None:
             "features": test_row["features"],
             "label": test_row["label"] if "label" in test_row else None,
             "icl_example_meta_info": icl_config_info,
-            "icl_examples": all_icl_examples,
-            "test_examples": test_examples,
+            "icl_examples": [json.dumps(ex) if isinstance(ex, dict) else str(ex) for ex in all_icl_examples],  # Convert to string to avoid parquet issues
+            "test_examples": json.dumps(test_examples),  # Convert to JSON string for consistent serialization
             "test_data": {
                 "task_type": cfg.test_data.task_type,
-                "shot_type": cfg.test_data.shot_type,
-                "nsamples_type": cfg.test_data.nsamples_type,
+                "shot_type": cfg.test_data_examples.shot_type,
+                "nsamples_type": cfg.test_data_examples.nsamples_type,
                 "noise_type": cfg.test_data.noise_type,
                 "flip_rate": cfg.test_data.flip_rate,
             }
@@ -544,15 +550,30 @@ def main(cfg: DictConfig) -> None:
         dataset.append(entry)
     
     # Create a descriptive filename
-    filename = f"{cfg.test_data.task_type}_{cfg.test_data.shot_type}shot_n{cfg.test_data.noise_type}_f{cfg.test_data.flip_rate}_test{cfg.test_data.num_samples}_icl{len(cfg.icl_examples)}_seed{cfg.icl_example_seed}.parquet"
+    filename = f"{cfg.test_data.task_type}_{cfg.test_data_examples.shot_type}shot_n{cfg.test_data.noise_type}_f{cfg.test_data.flip_rate}_test{cfg.test_data.num_samples}_icl{len(cfg.icl_examples)}_seed{cfg.icl_example_seed}.parquet"
     output_file = output_path / filename
     
     # Convert to DataFrame and save as parquet
     df = pd.DataFrame(dataset)
-    df.to_parquet(str(output_file))
+    
+    # Ensure all object columns are serialized consistently for parquet
+    try:
+        df.to_parquet(str(output_file))
+    except Exception as e:
+        print(f"Failed to save directly to parquet: {e}")
+        print("Attempting to save with more stringent serialization...")
+        
+        # Alternative approach: serialize all complex objects to ensure consistency
+        for col in df.columns:
+            if df[col].dtype == 'object':
+                df[col] = df[col].apply(lambda x: json.dumps(x) if not isinstance(x, (str, int, float)) else x)
+        
+        # Try saving again
+        df.to_parquet(str(output_file))
     
     print(f"Created dataset with {len(dataset)} samples, saved to {output_file}")
 
 
 if __name__ == "__main__":
     main()
+    
