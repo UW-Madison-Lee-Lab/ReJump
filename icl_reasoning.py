@@ -52,7 +52,7 @@ class TestDataExampleConfig:
 class ICLReasoningConfig:
     icl_examples: List[ICLExampleConfig] = field(default_factory=list)
     test_data: TestDataConfig = MISSING
-    test_data_examples: List[TestDataExampleConfig] = field(default_factory=list)
+    test_data_examples: TestDataExampleConfig = MISSING
     icl_example_seed: int = 42
     test_data_seed: int = 42
     output_path: str = "/staging/szhang967/icl_datasets"
@@ -245,18 +245,21 @@ def create_prompt(instruction: str, icl_examples: List[Dict[str, Any]], test_exa
         prompt += f"Problem: {example_content}\n"
         prompt += f"Reasoning: {example_response}\n\n"
     
-    # Add generated test examples in a more concise format
-    if test_examples:#没有就报错
-        prompt += "We first provide you with some examples of how to classify data points for this specific dataset.\n\n"
+    # Add generated test examples in the format matching user's example
+    if not test_examples:
+        raise ValueError("No test examples provided. Test examples are required for the prompt.")
         
-        for i, (features, label) in enumerate(test_examples):
-            formatted_features = f"{features[0]:.6f}, {features[1]:.6f}"
-            prompt += f"Features: [{formatted_features}], Label: {label}\n"
-        
-        prompt += "\n"
+    prompt += f"The dataset has {num_classes} classes: {list(range(num_classes))}. We first provide you with some examples of how to classify data points.\n"
+    
+    for features, label in test_examples:
+        # Format with 3 decimal places without brackets to match example format
+        formatted_features = f"{features[0]:.3f}, {features[1]:.3f}"
+        prompt += f"Features: {formatted_features}, Label: {label}\n"
+    
+    prompt += "\n"
     
     # Add the test problem
-    test_prompt = f"The dataset has {num_classes} classes: {list(range(num_classes))}. Given the data point with features {test_features[0]:.6f}, {test_features[1]:.6f}, classify it into one of the possible classes. Show your work in <think></think> tags. And return the final answer in <answer></answer> tags, for example <answer>1</answer>."
+    test_prompt = f"Given the data point with features {test_features[0]:.3f}, {test_features[1]:.3f}, classify it into one of the possible classes. Show your work in <think></think> tags. And return the final answer in <answer></answer> tags, for example <answer>1</answer>."
     
     prompt += f"Now, solve this problem:\n{test_prompt}"
     
@@ -320,87 +323,15 @@ def main(cfg: DictConfig) -> None:
     dataset = []
     
     # Check if all test_data_examples configs match the test_data task_type
-    for example_config in cfg.test_data_examples:
-        if example_config.task_type != cfg.test_data.task_type:
-            raise ValueError(f"All test_data_examples must have the same task_type as test_data. "
-                            f"Found {example_config.task_type} instead of {cfg.test_data.task_type}")
+    if cfg.test_data_examples.task_type != cfg.test_data.task_type:
+        raise ValueError(f"All test_data_examples must have the same task_type as test_data. "
+                        f"Found {cfg.test_data_examples.task_type} instead of {cfg.test_data.task_type}")
     
-    # Generate test data using data generation functions
-    test_data_df = generate_test_data(
-        task_type=cfg.test_data.task_type,
-        num_samples=1000,  # Generate a larger pool of samples to choose from
-        noise_level=cfg.test_data.noise_type,
-        flip_rate=cfg.test_data.flip_rate,
-        seed_value=cfg.test_data_seed
-    )
-    
-    if len(test_data_df) < cfg.test_data.num_samples:
-        raise ValueError(f"Not enough test data samples: {len(test_data_df)} < {cfg.test_data.num_samples}")
-    
-    # Track all generated features to avoid duplicates
-    all_feature_vectors = []
-    
-    # Sample test data points and keep track of their features
-    if len(test_data_df) <= cfg.test_data.num_samples:
-        test_indices = list(range(len(test_data_df)))
-    else:
-        test_indices = test_rng.choice(len(test_data_df), cfg.test_data.num_samples, replace=False)
-    
-    test_features_list = [test_data_df.iloc[idx]["features"] for idx in test_indices]
-    all_feature_vectors.extend(test_features_list)
-    
-    # Generate test examples for each configuration in test_data_examples
-    test_examples_by_config = []
-    total_test_examples_needed = sum(config.num_examples for config in cfg.test_data_examples)
-    
-    for config in cfg.test_data_examples:
-        # Generate examples that don't overlap with test data or previously generated examples
-        seed_offset = 100  # Start with a different seed for test examples
-        found_examples = []
-        
-        while len(found_examples) < config.num_examples:
-            # Try with different seeds until we find enough non-duplicate examples
-            test_examples_df = generate_test_data(
-                task_type=config.task_type,
-                num_samples=config.num_examples * 10,  # Generate more than we need
-                noise_level=config.noise_type,
-                flip_rate=config.flip_rate,
-                seed_value=cfg.test_data_seed + seed_offset
-            )
-            
-            # Shuffle to get random examples
-            test_examples_df = test_examples_df.sample(frac=1, random_state=test_example_rng)
-            
-            for _, row in test_examples_df.iterrows():
-                if len(found_examples) >= config.num_examples:
-                    break
-                    
-                if not is_duplicate(row["features"], all_feature_vectors):
-                    found_examples.append((row["features"], row["label"]))
-                    all_feature_vectors.append(row["features"])
-            
-            # If we still need more examples, try with a different seed
-            seed_offset += 1
-            
-            if seed_offset > 200:  # Avoid infinite loop
-                raise ValueError(f"Could not generate enough non-duplicate test examples for {config.task_type}")
-        
-        test_examples_by_config.append(found_examples)
-    
-    # Combine all test examples into a single list
-    all_test_examples = []
-    for examples in test_examples_by_config:
-        all_test_examples.extend(examples)
-    
-    # Create base instruction
-    instruction = create_instruction(cfg.test_data.task_type)
-    
-    # Get number of classes for the test task
-    num_classes = get_num_classes(cfg.test_data.task_type)
-    
-    # Collect all ICL examples first from all configurations
+    # First, collect all ICL examples to check for duplicates later
     all_icl_examples = []
     icl_config_info = []
+    icl_features_set = set()  # To store string representation of features for quick lookup
+    icl_prompt_contents = set()  # To store prompt contents for string matching
     
     for icl_config in cfg.icl_examples:
         # Sample ICL examples for this configuration
@@ -416,6 +347,55 @@ def main(cfg: DictConfig) -> None:
                 "noise_type": icl_config.noise_type,
                 "flip_rate": icl_config.flip_rate
             }
+            
+            # Store feature representation for duplicate checking
+            if "features" in example:
+                features_str = str(example["features"])
+                icl_features_set.add(features_str)
+            
+            # Extract and store prompt content for string matching
+            try:
+                prompt_content = extract_test_prompt_content(example)
+                
+                # Method 1: Extract features from [brackets] after "features" (case insensitive)
+                for keyword in ["features", "Features"]:
+                    prompt_parts = prompt_content.split(keyword)
+                    for part in prompt_parts[1:]:  # Skip the first part before "features"
+                        # Try to extract feature values using a simple approach
+                        if "[" in part and "]" in part:
+                            feature_str = part[part.find("["):part.find("]")+1]
+                            icl_prompt_contents.add(feature_str)
+                
+                # Method 2: Extract features from format "Features: x.xxx, y.yyy, Label: z"
+                import re
+                # Pattern to match "Features: X.XXX, Y.YYY" - both with and without brackets
+                patterns = [
+                    r'Features:\s*([-\d\.]+),\s*([-\d\.]+)',
+                    r'features:\s*([-\d\.]+),\s*([-\d\.]+)',
+                    r'Features:\s*\[([-\d\.]+),\s*([-\d\.]+)\]',
+                    r'features:\s*\[([-\d\.]+),\s*([-\d\.]+)\]'
+                ]
+                
+                for pattern in patterns:
+                    matches = re.findall(pattern, prompt_content)
+                    for match in matches:
+                        if len(match) == 2:  # Should have two coordinates
+                            try:
+                                x, y = float(match[0]), float(match[1])
+                                feature_str = f"[{x}, {y}]"
+                                icl_prompt_contents.add(feature_str)
+                                # Also add other formats of the same value
+                                icl_prompt_contents.add(f"[{x:.6f}, {y:.6f}]")
+                                icl_prompt_contents.add(str([x, y]))
+                            except ValueError:
+                                # Skip if conversion to float fails
+                                pass
+                
+                # Store the entire prompt for more thorough comparison later
+                icl_prompt_contents.add(prompt_content)
+                
+            except Exception as e:
+                print(f"Warning: Could not extract prompt content for duplicate checking: {e}")
         
         # Add to our collection
         all_icl_examples.extend(examples)
@@ -434,13 +414,115 @@ def main(cfg: DictConfig) -> None:
     # Shuffle all examples using the random state
     icl_rng.shuffle(all_icl_examples)
     
+    # Generate test data using data generation functions
+    test_data_df = generate_test_data(
+        task_type=cfg.test_data.task_type,
+        num_samples=1000,  # Generate a larger pool of samples to choose from
+        noise_level=cfg.test_data.noise_type,
+        flip_rate=cfg.test_data.flip_rate,
+        seed_value=cfg.test_data_seed
+    )
+    
+    if len(test_data_df) < cfg.test_data.num_samples:
+        raise ValueError(f"Not enough test data samples: {len(test_data_df)} < {cfg.test_data.num_samples}")
+    
+    # Track all generated features to avoid duplicates
+    all_feature_vectors = []
+    all_features_str_set = set()  # String representations for quick lookup
+    
+    # Sample test data points and keep track of their features
+    if len(test_data_df) <= cfg.test_data.num_samples:
+        test_indices = list(range(len(test_data_df)))
+    else:
+        test_indices = test_rng.choice(len(test_data_df), cfg.test_data.num_samples, replace=False)
+    
+    test_features_list = [test_data_df.iloc[idx]["features"] for idx in test_indices]
+    all_feature_vectors.extend(test_features_list)
+    
+    # Add string representations of test features for quick lookup
+    for features in test_features_list:
+        all_features_str_set.add(str(features))
+    
+    # Also add ICL features to avoid overlap
+    all_features_str_set.update(icl_features_set)
+    
+    # Generate test examples that don't overlap with test data or ICL examples
+    seed_offset = 100  # Start with a different seed for test examples
+    test_examples = []
+    
+    while len(test_examples) < cfg.test_data_examples.num_examples:
+        # Try with different seeds until we find enough non-duplicate examples
+        test_examples_df = generate_test_data(
+            task_type=cfg.test_data_examples.task_type,
+            num_samples=cfg.test_data_examples.num_examples * 10,  # Generate more than we need
+            noise_level=cfg.test_data_examples.noise_type,
+            flip_rate=cfg.test_data_examples.flip_rate,
+            seed_value=cfg.test_data_seed + seed_offset
+        )
+        
+        # Shuffle to get random examples
+        test_examples_df = test_examples_df.sample(frac=1, random_state=test_example_rng)
+        
+        for _, row in test_examples_df.iterrows():
+            if len(test_examples) >= cfg.test_data_examples.num_examples:
+                break
+            
+            features = row["features"]
+            features_str = str(features)
+            
+            # Format feature string in various ways that could appear in prompts
+            formatted_features = [
+                f"[{features[0]:.6f}, {features[1]:.6f}]",  # Formatted with brackets
+                f"[{features[0]}, {features[1]}]",  # With brackets, no formatting
+                features_str,  # Raw string representation
+                f"{features[0]:.3f}, {features[1]:.3f}",  # Just numbers with commas, 3 decimals
+                f"{features[0]}, {features[1]}",  # Just numbers with commas, no formatting
+                f"{features[0]:.6f}, {features[1]:.6f}"  # Just numbers with commas, 6 decimals
+            ]
+            
+            # Check if this feature appears in any ICL prompt content
+            is_duplicate_in_prompt = False
+            
+            # First check feature representation as string
+            for feature_format in formatted_features:
+                for prompt_content in icl_prompt_contents:
+                    if feature_format in prompt_content:
+                        is_duplicate_in_prompt = True
+                        break
+                if is_duplicate_in_prompt:
+                    break
+            
+            # Also check for feature format that appears in the sample prompt
+            feature_line = f"Features: {features[0]:.3f}, {features[1]:.3f}, Label: {row['label']}"
+            for prompt_content in icl_prompt_contents:
+                if feature_line in prompt_content:
+                    is_duplicate_in_prompt = True
+                    break
+            
+            if not is_duplicate_in_prompt and features_str not in all_features_str_set and not is_duplicate(features, all_feature_vectors):
+                test_examples.append((features, row["label"]))
+                all_feature_vectors.append(features)
+                all_features_str_set.add(features_str)
+        
+        # If we still need more examples, try with a different seed
+        seed_offset += 1
+        
+        if seed_offset > 200:  # Avoid infinite loop
+            raise ValueError(f"Could not generate enough non-duplicate test examples for {cfg.test_data_examples.task_type}")
+    
+    # Create base instruction
+    instruction = create_instruction(cfg.test_data.task_type)
+    
+    # Get number of classes for the test task
+    num_classes = get_num_classes(cfg.test_data.task_type)
+    
     # For each test data point, create a prompt using the same shuffled ICL examples and test examples
     for idx, test_idx in enumerate(test_indices):
         test_row = test_data_df.iloc[test_idx]
         test_features = test_row["features"]
         
         # Create prompt using the ICL examples, test examples, and test features
-        prompt = create_prompt(instruction, all_icl_examples, all_test_examples, test_features, num_classes)
+        prompt = create_prompt(instruction, all_icl_examples, test_examples, test_features, num_classes)
         
         # Create dataset entry
         entry = {
@@ -449,7 +531,7 @@ def main(cfg: DictConfig) -> None:
             "label": test_row["label"] if "label" in test_row else None,
             "icl_example_meta_info": icl_config_info,
             "icl_examples": all_icl_examples,
-            "test_examples": all_test_examples,
+            "test_examples": test_examples,
             "test_data": {
                 "task_type": cfg.test_data.task_type,
                 "shot_type": cfg.test_data.shot_type,
