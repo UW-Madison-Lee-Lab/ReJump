@@ -82,7 +82,7 @@ def main(config):
     OmegaConf.resolve(config)
 
     # Initialize model based on config
-    use_api = config.model.path in ["deepseek-ai/deepseek-chat", "deepseek-ai/deepseek-reasoner", "openai/gpt-4o", "openai/o1-pro", "openai/o3-mini", "openrouter-deepseek/deepseek-r1", "claude/claude-extended-thinking"]
+    use_api = config.model.path in ["deepseek-ai/deepseek-chat", "deepseek-ai/deepseek-reasoner", "openai/gpt-4o", "openai/o1-pro", "openai/o3-mini", "openrouter-deepseek/deepseek-r1", "claude/claude-3-7-sonnet-20250219"]
     if use_api:
         api_key = DEEPSEEK_API_KEY if "deepseek-ai/deepseek" in config.model.path \
             else OPENAI_API_KEY if "openai" in config.model.path \
