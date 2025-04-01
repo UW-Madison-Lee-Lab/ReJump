@@ -12,7 +12,7 @@ icl_examples:
     num_examples: 3
   
   # Example 2: Moons dataset with 0.1 flip rate
-  - task_type: moons
+  - task_type: linear
     flip_rate: 0.1
     noise_type: 0.1
     shot_type: 50
@@ -37,6 +37,14 @@ test_data:
   shot_type: 50
   nsamples_type: 500
   num_samples: 10
+
+test_data_examples:
+  - task_type: blobs
+    flip_rate: 0.0
+    noise_type: 0.1
+    shot_type: 50
+    nsamples_type: 500
+    num_examples: 3
 
 # Random seeds for reproducibility
 icl_example_seed: 42
