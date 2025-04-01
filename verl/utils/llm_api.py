@@ -1,5 +1,6 @@
 from typing import List, Dict, Any
 from openai import OpenAI
+import anthropic
 import concurrent.futures
 import time
 import numpy as np
@@ -106,6 +107,10 @@ class LLMAPI:
                 base_url="https://openrouter.ai/api/v1"
             )
             self.model = model_name.replace("openrouter-", "")  # Remove the prefix to get the actual model name
+        elif model_name.startswith("claude/"):
+            self.client = anthropic.Anthropic(api_key=api_key)
+            self.model = model_name.replace("claude/", "")  # Remove the prefix to get the actual model name
+            self.client_type = "anthropic"
         else:
             raise ValueError(f"Unsupported model: {model_name}")
 
@@ -119,26 +124,37 @@ class LLMAPI:
         
         for attempt in range(max_retries):
             try:
+                if self.client_type is not None and self.client_type == "anthropic":
+                    response = self.client.messages.create(
+                        model=self.model,
+                        max_tokens=max_tokens,
+                        temperature=temperature,
+                        messages=messages,
+                        thinking={
+                            "type": "enabled",
+                            "budget_tokens": min(16000, max_tokens // 2)
+                            # Use half of max_tokens as thinking budget, capped at 16000
+                        }
+                    )
+                    content = response.content[2].text
+                    reasoning_content = response.content[0].thinking
+                else:
+                    response = self.client.chat.completions.create(
+                        model=self.model,
+                        messages=messages,
+                        #max_tokens=max_tokens,######
+                        #temperature=temperature,
+                        #top_p=0.9,
+                        #frequency_penalty=0.0,
+                        #presence_penalty=0.0,
+                        #stream=False,
+                        #timeout=timeout
+                    )
                 
-                response = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    #max_tokens=max_tokens,######
-                    #temperature=temperature,
-                    #top_p=0.9,
-                    #frequency_penalty=0.0,
-                    #presence_penalty=0.0,
-                    #stream=False,
-                    #timeout=timeout
-                )
-                
-                content = response.choices[0].message.content
-                reasoning_content = getattr(response.choices[0].message, 'reasoning_content', None)
-                if reasoning_content is None:
-                    reasoning_content = getattr(response.choices[0].message, 'reasoning', None)
-                
-                
-                
+                    content = response.choices[0].message.content
+                    reasoning_content = getattr(response.choices[0].message, 'reasoning_content', None)
+                    if reasoning_content is None:
+                        reasoning_content = getattr(response.choices[0].message, 'reasoning', None)
                 """
                 response = self.client.responses.create(
                     model=self.model,
