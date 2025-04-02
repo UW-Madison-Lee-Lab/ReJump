@@ -128,12 +128,10 @@ class LLMAPI:
                     response = self.client.messages.create(
                         model=self.model,
                         max_tokens=max_tokens,
-                        temperature=temperature,
                         messages=messages,
                         thinking={
                             "type": "enabled",
                             "budget_tokens": min(16000, max_tokens // 2)
-                            # Use half of max_tokens as thinking budget, capped at 16000
                         }
                     )
                     content = response.content[2].text
