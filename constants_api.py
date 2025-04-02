@@ -171,4 +171,8 @@ supported_llms = {
         "template_type": "base",
         #"model_size": None,
     },
+    "claude/claude-3-7-sonnet-20250219": {
+        "template_type": "base",
+        #"model_size": None,
+    }
 }
