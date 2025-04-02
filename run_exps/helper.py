@@ -74,6 +74,19 @@ def rl_train(
         label_flip_rate=label_flip_rate,
         data_mode=data_mode
     )
+    result_dir = get_result_dir(
+        dataset_name=dataset_name,
+        model_name=model_name,
+        shot=shot,
+        template_type=template_type,
+        response_length=response_length,
+        num_samples=num_samples,
+        noise_level=noise_level,
+        label_flip_rate=label_flip_rate,
+        data_mode=data_mode,
+        train_step=0,
+    )
+    output_file = get_dataset_filename(split="test", data_mode=data_mode)
     return f"""
 export VLLM_ATTENTION_BACKEND=XFORMERS
 
@@ -83,6 +96,7 @@ python -m verl.trainer.main_ppo \
     data.val_files={dataset_dir}/{get_dataset_filename(split="test", data_mode=data_mode)} \
     data.train_batch_size=128 \
     data.val_batch_size=640 \
+    data.output_path={result_dir}/{output_file} \
     data.max_prompt_length={prompt_length} \
     data.max_response_length={response_length} \
     actor_rollout_ref.model.path={model_name} \

@@ -25,7 +25,7 @@ from enum import Enum
 from pprint import pprint
 from typing import Type, Dict
 from ray.util import pdb
-
+from constants import get_configs_via_result_dir, get_result_dir
 import numpy as np
 from codetiming import Timer
 from omegaconf import OmegaConf, open_dict
@@ -361,7 +361,7 @@ class RayPPOTrainer(object):
                                            collate_fn=collate_fn)
         
         self.val_data = pd.read_parquet(self.config.data.val_files)
-
+        self.val_configs = get_configs_via_result_dir(os.path.dirname(self.config.data.output_path))
         self.val_dataset = RLHFDataset(parquet_files=self.config.data.val_files,
                                        tokenizer=self.tokenizer,
                                        prompt_key=self.config.data.prompt_key,
@@ -456,13 +456,17 @@ class RayPPOTrainer(object):
                 name=f"test_results_{wandb.run.id}_step_{self.global_steps}",
                 type="dataset"
             )
-            output_dir = os.path.dirname(self.config.data.output_path)
+            output_dir = get_result_dir({**self.val_configs, "train_step": self.global_steps})
+            output_file = os.path.basename(self.config.data.output_path)
             os.makedirs(output_dir, exist_ok=True)
-            self.val_data.to_parquet(self.config.data.output_path)
-            self.val_data.to_json(self.config.data.output_path.replace(".parquet", ".json"), orient="records", lines=True)
             
-            artifact.add_file(self.config.data.output_path)
-            artifact.add_file(self.config.data.output_path.replace(".parquet", ".json"))
+            parquet_path = os.path.join(output_dir, output_file)
+            json_path = parquet_path.replace(".parquet", ".json")
+            self.val_data.to_parquet(parquet_path)
+            self.val_data.to_json(json_path, orient="records", lines=True)
+            
+            artifact.add_file(parquet_path)
+            artifact.add_file(json_path)
             wandb.log_artifact(artifact)
         return metric_dict
 
