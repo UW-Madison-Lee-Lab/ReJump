@@ -69,8 +69,7 @@ def main(config):
             entity=WANDB_INFO['entity'],
             config=wandb_configs
         )
-    else:
-        raise ValueError(f"Invalid wandb mode: {config.trainer.wandb}")
+    
     
     print_configs(flatten_dict(config))
     
@@ -187,7 +186,7 @@ def main(config):
     if config.trainer.wandb:
         # Log the dataset as an artifact
         artifact = wandb.Artifact(
-            name=f"generation_results",
+            name=f"generation_results_{wandb.run.id}",
             type="dataset"
         )
         artifact.add_file(config.data.output_path)
