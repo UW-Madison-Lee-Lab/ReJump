@@ -68,7 +68,8 @@ class RewardManager():
             valid_response_ids = response_ids[:valid_response_length]
 
             # decode
-            sequences = torch.cat((valid_prompt_ids, valid_response_ids))
+            # sequences = torch.cat((valid_prompt_ids, valid_response_ids))
+            sequences = valid_response_ids
             sequences_str = self.tokenizer.decode(sequences)
             sequences_lst.append(sequences_str)
             ground_truth = data_item.non_tensor_batch['reward_model']['ground_truth']
