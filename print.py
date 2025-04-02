@@ -1,4 +1,5 @@
 import pandas as pd
+import argparse
 
 # Set pandas display options to show full content
 pd.set_option('display.max_columns', None)
@@ -156,7 +157,10 @@ def print_specific_rows(file_path, rows, columns=None):
                 if isinstance(temp, dict):
                     print(temp)
                 else:
-                    print(temp.item(0))
+                    if col == 'prompt':
+                        print(temp.item(0)["content"])
+                    else:
+                        print(temp.item(0))
                 print("-" * 20)
             print("-" * 30)
         print("-" * 50)
@@ -165,30 +169,28 @@ def print_specific_rows(file_path, rows, columns=None):
         print(f"Error printing specific rows: {e}")
 
 if __name__ == "__main__":
-    # Example usage
-    file_path = "/pvc/home-mjlee/workspace/wjkang/neurips/liftr/results/deepseek-ai-deepseek-reasoner/circles_50_shot_base_reslen_3046_nsamples_500_noise_0.0_flip_rate_0.0/global_step_0/test.parquet"  # Replace with your parquet file path
+    # Set up argument parser
+    parser = argparse.ArgumentParser(description='Print specific rows from a parquet file')
+    parser.add_argument('--rows', type=int, nargs='+', help='Row indices to print (space-separated)')
+    parser.add_argument('--file', type=str, help='Path to the parquet file')
+    parser.add_argument('--columns', type=str, nargs='+', help='Columns to print (space-separated)')
+    
+    args = parser.parse_args()
+    
+    # Use default file path if not provided
+    file_path = args.file if args.file else "/pvc/home-mjlee/workspace/wjkang/neurips/liftr/results/deepseek-ai-deepseek-reasoner/blobs_50_shot_base_reslen_3046_nsamples_500_noise_1.0_flip_rate_0.0/global_step_0/test.parquet"
+    
+    # Use default columns if not provided
+    columns_to_print = args.columns if args.columns else ["prompt", "reasonings"]
+    
+    # Use default rows if not provided
+    rows_to_print = args.rows if args.rows else [0]
     
     # Show all column names first
     show_columns(file_path)
     
     # Read entire DataFrame
     df = read_parquet(file_path)
-    
-    # Get first value
-    #first_value = get_first_value(file_path)
-    
-    # Print specific columns
-    #columns_to_print = ["ground_truths", "responses", "reasonings"]  # Replace with your column names
-    #columns_to_print = ["reasonings"]
-    columns_to_print = ["ground_truths", "responses"]
-    #print_columns(file_path, columns_to_print)
-    
-    # Print full column
-    #print_full_column(file_path, "ground_truths")  # Replace with your column name
-    
-    # Print specific rows
-    rows_to_print = [16,17,18,19,20]  # Replace with your desired row indices
-    #print_specific_rows(file_path, rows_to_print)
     
     # Print specific rows with specific columns
     print_specific_rows(file_path, rows_to_print, columns_to_print)
