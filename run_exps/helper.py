@@ -33,12 +33,14 @@ def mix_dataset(
     dataset_path,
     dataset_ratio,
     num_samples=10000,
+    data_mode="mixed"
 ):
     return f"""
 python {root_dir}/examples/data_preprocess/multitask.py \
     --dataset_path {' '.join(dataset_path)} \
     --dataset_ratio {' '.join([str(ratio) for ratio in dataset_ratio])} \
-    --num_samples {num_samples} 
+    --num_samples {num_samples} \
+    --data_mode {data_mode}
     """
 
 def rl_train(
