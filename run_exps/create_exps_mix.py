@@ -9,34 +9,22 @@ model_size_upper_limit = 10_000_000_000
 
 supported_model_list = [model for model in supported_llms.keys() if supported_llms[model]["model_size"] <= model_size_upper_limit]
 
-shot_list = [10, 50, 100, 200]
-
 parser = argparse.ArgumentParser()
 parser.add_argument("--dataset", type=str, nargs="+", default=["blobs", "moons", "linear"], choices=["blobs", "moons", "linear"])
 parser.add_argument("--model", type=str, nargs="+", default=supported_model_list, choices=supported_model_list)
 parser.add_argument("--mode", type=str, nargs="+", default=["reasoning", "no_reasoning"], choices=["reasoning", "no_reasoning"])
-parser.add_argument("--shot", type=int, nargs="+", default=shot_list)
+parser.add_argument("--shot", type=int, nargs="+", default=[50, 50, 50])
 parser.add_argument("--train", action="store_true")
 parser.add_argument("--n_gpus", type=int, default=2)
 parser.add_argument("--response_length_thinking_factor", type=float, default=2.0)
-parser.add_argument("--load_train_step", type=int, default=-1)
+parser.add_argument("--load_train_step", type=int, default=0)
 parser.add_argument("--n_samples", type=int, nargs="+", default=[10000])
 parser.add_argument("--noise_level", type=float, nargs="+", default=[None, None, None])
 parser.add_argument("--label_flip_rate", type=float, nargs="+", default=[0.0, 0.0, 0.0])
 parser.add_argument("--dataset_ratio", type=str, nargs="+", default=[1, 1, 1])
-parser.add_argument("--plot", action="store_true")
+parser.add_argument("--data_mode", type=str, default="default", choices=["default", "grid", "mixed"])
 parser.add_argument("--wandb", type=int, default=2, choices=[1, 2])
 args = parser.parse_args()
-
-if args.load_train_step is not None:
-    if len(args.model) > 1:
-        raise ValueError("Only one model is supported when loading train step")
-    if len(args.dataset) > 1:
-        raise ValueError("Only one dataset is supported when loading train step")
-    if len(args.mode) > 1:
-        raise ValueError("Only one mode is supported when loading train step")
-    if len(args.shot) > 1:
-        raise ValueError("Only one shot is supported when loading train step")
 
 n_mix = len(args.dataset)
 
@@ -67,6 +55,7 @@ mode_list = args.mode
 shot_list = args.shot
 n_samples_list = args.n_samples
 noise_level_list = args.noise_level
+label_flip_rate_list = args.label_flip_rate
 
 os.makedirs(f"{root_dir}/run_exps/auto", exist_ok=True)
  
@@ -75,123 +64,129 @@ script_paths = []
 for model in model_list:
     for mode in mode_list:
         for n_samples in n_samples_list:
-            for shot in shot_list:
-                command_list = []
-                dataset_paths = []
-                for dataset, noise_level, label_flip_rate, dataset_ratio in zip(dataset_list, noise_level_list, label_flip_rate_list, dataset_ratio_list):    
-                    prompt_length = int((24 * shot + 185) * 1.1)
-                
-                    if noise_level is None:
-                        if dataset == "blobs":
-                            noise_level = 1.0
-                        elif dataset in ["moons", "linear"]:
-                            noise_level = 0.1
-                        else:
-                            noise_level = 0
-                            
-                    if mode == "reasoning":
-                        template_type = supported_llms[model]["template_type"]
-                        response_length = int(prompt_length * args.response_length_thinking_factor)
-                    elif mode == "no_reasoning":
-                        template_type = "no_reasoning"
-                        response_length = 100
+        
+            command_list = []
+            dataset_paths = []
+            for dataset, shot, noise_level, label_flip_rate, dataset_ratio in zip(dataset_list, shot_list, noise_level_list, label_flip_rate_list, dataset_ratio_list):    
+                prompt_length = int((24 * shot + 185) * 1.1)
+            
+                if noise_level is None:
+                    if dataset == "blobs":
+                        noise_level = 1.0
+                    elif dataset in ["moons", "linear"]:
+                        noise_level = 0.1
                     else:
-                        raise ValueError(f"Mode {mode} not supported, should be in [reasoning, no_reasoning]")
-                    
-                    gen_command = gen_dataset(
-                        dataset_name=dataset,
-                        shot=shot,
-                        template_type=template_type,
-                        num_samples=n_samples,
-                        noise_level=noise_level,
-                        label_flip_rate=label_flip_rate,
-                        plot=args.plot
-                    )
-                    dataset_path = get_dataset_dir(
-                        dataset_name=dataset,
-                        shot=shot,
-                        template_type=template_type,
-                        num_samples=n_samples,
-                        noise_level=noise_level,
-                        label_flip_rate=label_flip_rate
-                    )
-                    command_list.append(gen_command)
-                    dataset_paths.append(dataset_path)
-                
-                mix_command = mix_dataset(
-                    dataset_path=dataset_paths,
-                    dataset_ratio=dataset_ratio_list,
-                    num_samples=n_samples
-                )
-                command_list.append(mix_command)
-                
-                mixed_dataset_path = get_mixed_dataset_dir(
-                    dataset_paths=dataset_paths,
-                    dataset_ratios=dataset_ratio_list,
-                    num_samples=n_samples
-                )
-                
-                if args.train:
-                    train_command = rl_train(
-                        dataset_name=mixed_dataset_path,
-                        shot=shot,
-                        model_name=model,
-                        template_type=template_type,
-                        prompt_length=prompt_length,
-                        response_length=response_length,
-                        num_samples=n_samples,
-                        noise_level=noise_level,
-                        label_flip_rate=label_flip_rate,
-                        n_gpus=args.n_gpus
-                    )
-                    command_list.append(train_command)
+                        noise_level = 0
+                        
+                if mode == "reasoning":
+                    template_type = supported_llms[model]["template_type"]
+                    response_length = int(prompt_length * args.response_length_thinking_factor)
+                elif mode == "no_reasoning":
+                    template_type = "no_reasoning"
+                    response_length = 100
                 else:
-                    if args.load_train_step is not None:
-                        model_path = get_model_dir(
-                            dataset_name=mixed_dataset_path,
-                            model_name=model,
-                            shot=shot,
-                            template_type=template_type,
-                            response_length=response_length,
-                            num_samples=n_samples,
-                            noise_level=noise_level,
-                            label_flip_rate=args.label_flip_rate,
-                            train_step=args.load_train_step
-                        )
-                    else:
-                        model_path = model
-                    inference_command = inference(
-                        dataset_name=mixed_dataset_path,
-                        shot=shot,
-                        model_name=model_path,
-                        template_type=template_type,
-                        prompt_length=prompt_length,
-                        response_length=response_length,
-                        num_samples=n_samples,
-                        noise_level=noise_level,
-                        label_flip_rate=label_flip_rate,
-                        n_gpus=args.n_gpus,
-                        plot=args.plot,
-                        wandb=args.wandb
-                    )
-                    command_list.append(inference_command)
-                    
-                model_name = get_model_name(
-                    dataset_name=mixed_dataset_path,
-                    model_name=model,
+                    raise ValueError(f"Mode {mode} not supported, should be in [reasoning, no_reasoning]")
+                
+                
+                gen_command = gen_dataset(
+                    dataset_name=dataset,
                     shot=shot,
                     template_type=template_type,
+                    num_samples=n_samples,
+                    noise_level=noise_level,
+                    label_flip_rate=label_flip_rate
+                )
+                dataset_path = get_dataset_dir(
+                    dataset_name=dataset,
+                    shot=shot,
+                    template_type=template_type,
+                    num_samples=n_samples,
+                    noise_level=noise_level,
+                    label_flip_rate=label_flip_rate
+                )
+                command_list.append(gen_command)
+                dataset_paths.append(dataset_path)
+            
+            mix_command = mix_dataset(
+                dataset_path=dataset_paths,
+                dataset_ratio=dataset_ratio_list,
+                num_samples=n_samples
+            )
+            command_list.append(mix_command)
+            
+            mixed_dataset_path = get_mixed_dataset_dir(
+                dataset_paths=dataset_paths,
+                dataset_ratios=dataset_ratio_list,
+                num_samples=n_samples
+            )
+            
+            if args.train:
+                train_command = rl_train(
+                    dataset_name=mixed_dataset_path,
+                    shot=shot,
+                    model_name=model,
+                    template_type=template_type,
+                    prompt_length=prompt_length,
                     response_length=response_length,
                     num_samples=n_samples,
-                    noise_level=noise_level, 
-                    label_flip_rate=args.label_flip_rate
+                    noise_level=noise_level,
+                    label_flip_rate=label_flip_rate,
+                    n_gpus=args.n_gpus,
+                    data_mode=args.data_mode,
                 )
-                bash_script = "\n".join(command_list)
-                script_path = f"{root_dir}/run_exps/auto/{model_name}_train_{args.train}.sh"
-                script_paths.append(script_path)
-                os.makedirs(os.path.dirname(script_path), exist_ok=True)
-                with open(script_path, "w") as f:
-                    f.write(bash_script)
+                command_list.append(train_command)
+            else:
+                if args.load_train_step is not None:
+                    model_path = get_model_dir(
+                        dataset_name=mixed_dataset_path,
+                        model_name=model,
+                        shot=shot,
+                        template_type=template_type,
+                        response_length=response_length,
+                        num_samples=n_samples,
+                        noise_level=noise_level,
+                        label_flip_rate=args.label_flip_rate,
+                        train_step=args.load_train_step
+                    )
+                else:
+                    model_path = model
+                inference_command = inference(
+                    dataset_name=mixed_dataset_path,
+                    shot=shot,
+                    model_name=model_path,
+                    template_type=template_type,
+                    prompt_length=prompt_length,
+                    response_length=response_length,
+                    num_samples=n_samples,
+                    noise_level=noise_level,
+                    label_flip_rate=label_flip_rate,
+                    n_gpus=args.n_gpus
+                )
+                command_list.append(inference_command)
+                # eval_command = eval(
+                #     dataset_name=dataset,
+                #     shot=shot,
+                #     model_name=model_path,
+                #     template_type=template_type,
+                #     response_length=response_length
+                # )
+                # command_list.append(eval_command)
+                
+            model_name = get_model_name(
+                dataset_name=mixed_dataset_path,
+                model_name=model,
+                shot=shot,
+                template_type=template_type,
+                response_length=response_length,
+                num_samples=n_samples,
+                noise_level=noise_level, 
+                label_flip_rate=args.label_flip_rate
+            )
+            bash_script = "\n".join(command_list)
+            script_path = f"{root_dir}/run_exps/auto/{model_name}_train_{args.train}.sh"
+            script_paths.append(script_path)
+            with open(script_path, "w") as f:
+                f.write(bash_script)
 
 run_all_scripts = "\n".join([f"bash {script_path}" for script_path in script_paths])
 
