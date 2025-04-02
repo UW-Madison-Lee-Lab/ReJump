@@ -617,7 +617,7 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
 def main():
     parser = argparse.ArgumentParser(description='Visualize ICL reasoning output with model responses')
     parser.add_argument('--input', type=str, 
-                        default='/staging/szhang967/icl_dataset-output/blobs_50shot_n1.0_f0.0_test10_icl3_seed42.parquet',
+                        required=True,
                         help='Path to the input parquet file with model responses')
     parser.add_argument('--format', type=str, choices=['txt', 'html'], default='html',
                         help='Output format (txt or html)')

@@ -4,7 +4,7 @@ python -m verl.trainer.main_generation \
     data.path=/staging/szhang967/icl_datasets/blobs_50shot_n1.0_f0.0_test200_icl3_seed42.parquet \
     data.prompt_key=prompt \
     data.n_samples=1 \
-    data.batch_size=8 \
+    data.batch_size=10 \
     data.output_path=/staging/szhang967/icl_dataset-output/blobs_50shot_n1.0_f0.0_test200_icl3_seed42.parquet \
     model.path=Qwen/Qwen2.5-3B-Instruct \
     +model.trust_remote_code=True \
