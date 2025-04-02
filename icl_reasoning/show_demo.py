@@ -56,15 +56,63 @@ def convert_to_readable_format(parquet_file, output_format="txt"):
             for idx, row in df.iterrows():
                 f.write(f"=== Sample {idx+1} ===\n\n")
                 
+                # Write data source if available
+                if 'data_source' in row:
+                    f.write(f"--- Data Source ---\n")
+                    f.write(f"{row['data_source']}\n\n")
+                
                 # Write prompt
                 f.write("--- Prompt ---\n")
-                f.write(row['prompt'])
+                if isinstance(row['prompt'], list):
+                    # For the new format with role-based prompts
+                    for prompt_item in row['prompt']:
+                        if isinstance(prompt_item, dict):
+                            f.write(f"Role: {prompt_item.get('role', 'unknown')}\n")
+                            f.write(f"Content: {prompt_item.get('content', '')}\n")
+                        else:
+                            f.write(f"{prompt_item}\n")
+                elif hasattr(row['prompt'], 'tolist'):  # Handle numpy arrays
+                    prompt_list = row['prompt'].tolist()
+                    for item in prompt_list:
+                        if isinstance(item, dict):
+                            f.write(f"Role: {item.get('role', 'unknown')}\n")
+                            f.write(f"Content: {item.get('content', '')}\n")
+                        else:
+                            f.write(f"{str(item)}\n")
+                else:
+                    # For the old format with direct string prompts
+                    f.write(str(row['prompt']))
                 f.write("\n\n")
                 
-                # Write features and label
-                f.write("--- Features and Label ---\n")
-                f.write(f"Features: {row['features']}\n")
-                f.write(f"Label: {row['label']}\n\n")
+                # Write the label from reward model or directly
+                f.write("--- Label Information ---\n")
+                if 'reward_model' in row and isinstance(row['reward_model'], dict):
+                    f.write(f"Style: {row['reward_model'].get('style', 'unknown')}\n")
+                    ground_truth = row['reward_model'].get('ground_truth', 'N/A')
+                    
+                    # Handle different ground_truth formats
+                    if isinstance(ground_truth, dict):
+                        f.write("Ground Truth:\n")
+                        if 'label' in ground_truth:
+                            f.write(f"  Label: {ground_truth['label']}\n")
+                        if 'features' in ground_truth:
+                            # Format features nicely
+                            if isinstance(ground_truth['features'], list):
+                                features_str = ", ".join([f"{x:.3f}" for x in ground_truth['features']])
+                                f.write(f"  Features: [{features_str}]\n")
+                            else:
+                                f.write(f"  Features: {ground_truth['features']}\n")
+                    else:
+                        f.write(f"Ground Truth: {ground_truth}\n")
+                elif 'label' in row:
+                    # For backwards compatibility with the old format
+                    f.write(f"Label: {row['label']}\n")
+                f.write("\n")
+                
+                # Write ability if available
+                if 'ability' in row:
+                    f.write(f"--- Ability ---\n")
+                    f.write(f"{row['ability']}\n\n")
                 
                 # Write ICL example metadata if available
                 if 'icl_example_meta_info' in row:
@@ -103,6 +151,13 @@ def convert_to_readable_format(parquet_file, output_format="txt"):
                 for key, value in row['test_data'].items():
                     f.write(f"{key}: {value}\n")
                 f.write("\n")
+                
+                # Write extra info if available
+                if 'extra_info' in row and isinstance(row['extra_info'], dict):
+                    f.write("--- Extra Info ---\n")
+                    for key, value in row['extra_info'].items():
+                        f.write(f"{key}: {value}\n")
+                    f.write("\n")
                 
                 # Write separator
                 f.write("="*50 + "\n\n")
