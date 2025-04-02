@@ -8,13 +8,14 @@ from typing import List, Tuple
 from tqdm import tqdm
 import argparse
 from utils import set_seed
-from examples.data_preprocess.helper import save_data, classification_reward_fn, flip_label
+from examples.data_preprocess.helper import save_data, classification_reward_fn, flip_label, prepare_dataset
 
 def gen_dataset(
     num_samples: int,
-    noise: float = 0.1,
+    noise_level: float = 0.1,
     seed_value: int = 42,
     label_flip_rate: float = 0.0,
+    random: bool = False,
 ) -> List[Tuple]:
     """Generate synthetic moons dataset for classification task.
     
@@ -31,9 +32,17 @@ def gen_dataset(
     # Generate synthetic moons data
     X, y = make_moons(
         n_samples=num_samples,
-        noise=noise,
+        noise=noise_level,
         random_state=seed_value
     )
+    
+    if random:
+        # Randomly shift the data points
+        shift_x1 = np.random.uniform(-2, 2)
+        shift_x2 = np.random.uniform(-2, 2)
+        X[:, 0] += shift_x1
+        X[:, 1] += shift_x2
+    
     y = flip_label(y, label_flip_rate, 2)
     
     samples = []
@@ -52,48 +61,28 @@ if __name__ == '__main__':
     parser.add_argument('--num_samples', type=int, default=100000)
     parser.add_argument('--noise_level', type=float, default=0.1)
     parser.add_argument('--test_ratio', type=float, default=0.2)
-    parser.add_argument('--n_shot', type=int, default=0)
+    parser.add_argument('--n_shot', type=int, default=10)
     parser.add_argument('--template_type', type=str, default='base')
     parser.add_argument('--label_flip_rate', type=float, default=0.0)
+    parser.add_argument('--data_mode', type=str, default="default", choices=["default", "grid", "mixed"])
     args = parser.parse_args()
     set_seed(42)
+    
     data_source = 'moons'
-    TEST_SIZE = int(args.num_samples * args.test_ratio)
-    TRAIN_SIZE = args.num_samples - TEST_SIZE
+
     n_classes = 2  # Moons dataset always has 2 classes
     
-    # Generate synthetic dataset
-    samples = gen_dataset(
-        num_samples=args.num_samples,
-        noise=args.noise_level,
-        seed_value=12
-    )
     
-    in_context_samples = gen_dataset(
-        num_samples=args.num_samples,
-        noise=args.noise_level,
-        label_flip_rate=args.label_flip_rate,
-        seed_value=34
-    )
-    
-    dataset_dict = {
-        'features': [sample[0] for sample in samples],
-        'label': [sample[1] for sample in samples]
-    }
-    
-    in_context_dataset_dict = {
-        'features': [sample[0] for sample in in_context_samples],
-        'label': [sample[1] for sample in in_context_samples]
-    }
+    datasets = prepare_dataset(args, gen_dataset)
     
     save_data(
-        dataset_dict,
-        in_context_dataset_dict,
+        datasets['dataset_dict'],
+        datasets['in_context_dataset_dict'],
         data_source,
         args,
         n_classes,
-        TRAIN_SIZE,
-        TEST_SIZE
+        datasets['TRAIN_SIZE'],
+        datasets['TEST_SIZE']
     )
     
 def moons_reward_fn(solution_str, ground_truth):
