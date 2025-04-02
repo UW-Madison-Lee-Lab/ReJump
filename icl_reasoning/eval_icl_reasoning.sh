@@ -1,6 +1,6 @@
 python -m verl.trainer.main_generation \
     trainer.nnodes=1 \
-    trainer.n_gpus_per_node=2 \
+    trainer.n_gpus_per_node=1 \
     data.path=/staging/szhang967/icl_datasets/blobs_50shot_n1.0_f0.0_test10_icl3_seed42.parquet \
     data.prompt_key=prompt \
     data.n_samples=1 \
