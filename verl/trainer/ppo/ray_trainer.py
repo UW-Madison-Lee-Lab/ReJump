@@ -452,6 +452,7 @@ class RayPPOTrainer(object):
         self.val_data['responses'] = output_lst
         
         if wandb.run is not None:
+            print("Logging artifact to wandb!")
             artifact = wandb.Artifact(
                 name=f"test_results_{wandb.run.id}_step_{self.global_steps}",
                 type="dataset"

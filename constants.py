@@ -147,8 +147,11 @@ def get_mixed_dataset_dir(
                 configs[key] = f"{configs[key]}_{get_configs_via_dataset_dir(dataset_path)[key]}"
             else:
                 configs[key] = get_configs_via_dataset_dir(dataset_path)[key]
-                
-    mix_str = "_".join(dataset_ratios)
+           
+    mix_str = ""
+    for dataset_ratio in dataset_ratios:
+        mix_str += f"{dataset_ratio}_"
+    mix_str = mix_str[:-1]
             
     output_dir = get_dataset_dir(
         configs['dataset_name']+"_mix_"+mix_str,
