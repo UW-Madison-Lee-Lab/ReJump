@@ -456,7 +456,8 @@ class RayPPOTrainer(object):
                 name=f"test_results_{wandb.run.id}_step_{self.global_steps}",
                 type="dataset"
             )
-            output_dir = get_result_dir({**self.val_configs, "train_step": self.global_steps})
+            self.val_configs["train_step"] = self.global_steps
+            output_dir = get_result_dir(**self.val_configs)
             output_file = os.path.basename(self.config.data.output_path)
             os.makedirs(output_dir, exist_ok=True)
             
