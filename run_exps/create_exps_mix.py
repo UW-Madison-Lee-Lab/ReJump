@@ -137,7 +137,7 @@ for model in model_list:
                     noise_level=mixed_configs["noise_level"],
                     label_flip_rate=label_flip_rate,
                     n_gpus=args.n_gpus,
-                    data_mode=args.data_mode,
+                    data_mode=mixed_configs["data_mode"],
                 )
                 command_list.append(train_command)
             else:
