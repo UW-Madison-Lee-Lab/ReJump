@@ -22,7 +22,7 @@ parser.add_argument("--n_samples", type=int, nargs="+", default=[10000])
 parser.add_argument("--noise_level", type=float, nargs="+", default=[None, None, None])
 parser.add_argument("--label_flip_rate", type=float, nargs="+", default=[0.0, 0.0, 0.0])
 parser.add_argument("--dataset_ratio", type=str, nargs="+", default=[1, 1, 1])
-parser.add_argument("--data_mode", type=str, default="default", choices=["default", "grid", "mixed"])
+parser.add_argument("--data_mode", type=str, default="mixed", choices=["default", "grid", "mixed"])
 parser.add_argument("--wandb", type=int, default=2, choices=[1, 2])
 args = parser.parse_args()
 
@@ -145,7 +145,8 @@ for model in model_list:
                         response_length=response_length,
                         num_samples=n_samples,
                         noise_level=noise_level,
-                        label_flip_rate=args.label_flip_rate,
+                        label_flip_rate=label_flip_rate,
+                        data_mode=args.data_mode,
                         train_step=args.load_train_step
                     )
                 else:
@@ -160,7 +161,10 @@ for model in model_list:
                     num_samples=n_samples,
                     noise_level=noise_level,
                     label_flip_rate=label_flip_rate,
-                    n_gpus=args.n_gpus
+                    n_gpus=args.n_gpus,
+                    data_mode=args.data_mode,
+                    wandb=args.wandb,
+                    train_step=args.load_train_step
                 )
                 command_list.append(inference_command)
                 # eval_command = eval(
@@ -172,6 +176,7 @@ for model in model_list:
                 # )
                 # command_list.append(eval_command)
                 
+            bash_script = "\n".join(command_list)
             model_name = get_model_name(
                 dataset_name=mixed_dataset_path,
                 model_name=model,
@@ -180,11 +185,12 @@ for model in model_list:
                 response_length=response_length,
                 num_samples=n_samples,
                 noise_level=noise_level, 
-                label_flip_rate=args.label_flip_rate
+                label_flip_rate=label_flip_rate,
+                data_mode=args.data_mode
             )
-            bash_script = "\n".join(command_list)
             script_path = f"{root_dir}/run_exps/auto/{model_name}_train_{args.train}.sh"
             script_paths.append(script_path)
+            os.makedirs(os.path.dirname(script_path), exist_ok=True)
             with open(script_path, "w") as f:
                 f.write(bash_script)
 
