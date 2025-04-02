@@ -134,7 +134,7 @@ class LLMAPI:
                             "budget_tokens": min(16000, max_tokens // 2)
                         }
                     )
-                    content = response.content[2].text
+                    content = response.content[1].text
                     reasoning_content = response.content[0].thinking
                 else:
                     response = self.client.chat.completions.create(
@@ -179,7 +179,7 @@ class LLMAPI:
                     if attempt < max_retries - 1:
                         time.sleep(5)
                         continue
-                
+
                 return content, reasoning_content
                 
             except Exception as e:
