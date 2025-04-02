@@ -16,5 +16,5 @@ python -m verl.trainer.main_generation \
     rollout.tensor_model_parallel_size=1 \
     rollout.gpu_memory_utilization=0.8 \
     trainer.wandb=True \
-    project_name=icl_reasoning_test
+    trainer.project_name=icl_reasoning_test
     
