@@ -616,7 +616,10 @@ def main(cfg: DictConfig) -> None:
             "ability": "classification",
             "reward_model": {
                 "style": "rule",
-                "ground_truth": int(test_row["label"])
+                "ground_truth": {
+                    "features": test_features,
+                    "label": int(test_row["label"])
+                }
             },
             "icl_example_meta_info": icl_config_info,
             "icl_examples": [json.dumps(ex) if isinstance(ex, dict) else str(ex) for ex in all_icl_examples],  # Convert to string to avoid parquet issues

@@ -10,7 +10,7 @@ icl_examples:
     reslen_type: 3046
     nsamples_type: 500
     num_examples: 1
-    icl_example_maxlength: 5000
+    icl_example_maxlength: 6000
   
   # Example 2: Moons dataset with 0.1 flip rate
   - task_type: linear
@@ -20,7 +20,7 @@ icl_examples:
     reslen_type: 3046
     nsamples_type: 500
     num_examples: 1
-    icl_example_maxlength: 5000
+    icl_example_maxlength: 6000
   
   # Example 3: Circles dataset
   - task_type: circles
@@ -30,7 +30,7 @@ icl_examples:
     reslen_type: 3046
     nsamples_type: 500
     num_examples: 1
-    icl_example_maxlength: 5000
+    icl_example_maxlength: 6000
   
 
 # Define test data configuration
