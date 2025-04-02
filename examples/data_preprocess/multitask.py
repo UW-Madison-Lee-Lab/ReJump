@@ -8,7 +8,7 @@ import os
 from utils import set_seed
 from datasets import Dataset, concatenate_datasets
 from examples.data_preprocess.helper import classification_reward_fn, store_data
-from constants import get_mixed_dataset_dir, get_dataset_filename
+from constants import get_mixed_configs, get_dataset_filename, get_dataset_dir
 from typing import List
 from environment import root_dir
 
@@ -65,40 +65,38 @@ def combine_datasets(
         # Construct full path to the dataset
         
         # Load train and test datasets
-        try:
-            train_path = os.path.join(dataset_path, get_dataset_filename(split="train", data_mode=data_mode))
-            test_path = os.path.join(dataset_path, get_dataset_filename(split="test", data_mode=data_mode))
-            
-            train_dataset = Dataset.from_parquet(train_path)
-            test_dataset = Dataset.from_parquet(test_path)
-            
-            # Calculate number of samples to take
-            dataset_ratio = samples_count / num_samples
-            train_size = min(int(dataset_ratio * len(train_dataset)), len(train_dataset))
-            test_size = min(int(dataset_ratio * len(test_dataset)), len(test_dataset))
-            
-            # Sample from datasets
-            train_indices = np.random.choice(len(train_dataset), train_size, replace=False)
-            test_indices = np.random.choice(len(test_dataset), test_size, replace=False)
-            
-            sampled_train = train_dataset.select(train_indices)
-            sampled_test = test_dataset.select(test_indices)
-            
-            # Add task information
-            def add_task_info(example):
-                example['task'] = task_name
-                return example
-            
-            sampled_train = sampled_train.map(add_task_info)
-            sampled_test = sampled_test.map(add_task_info)
-            
-            train_datasets.append(sampled_train)
-            test_datasets.append(sampled_test)
-            
-            print(f"Added {train_size} training and {test_size} testing samples from {dataset_path}")
-            
-        except Exception as e:
-            print(f"Error loading dataset {dataset_path}: {e}")
+        train_path = os.path.join(dataset_path, get_dataset_filename(split="train", data_mode=data_mode))
+        test_path = os.path.join(dataset_path, get_dataset_filename(split="test", data_mode=data_mode))
+        
+        train_dataset = Dataset.from_parquet(train_path)
+        test_dataset = Dataset.from_parquet(test_path)
+        
+        # Calculate number of samples to take
+        dataset_ratio = samples_count / num_samples
+        train_size = min(int(dataset_ratio * len(train_dataset)), len(train_dataset))
+        test_size = min(int(dataset_ratio * len(test_dataset)), len(test_dataset))
+        
+        # Sample from datasets
+        train_indices = np.random.choice(len(train_dataset), train_size, replace=False)
+        test_indices = np.random.choice(len(test_dataset), test_size, replace=False)
+        
+        sampled_train = train_dataset.select(train_indices)
+        sampled_test = test_dataset.select(test_indices)
+        
+        # Add task information
+        def add_task_info(example):
+            example['task'] = task_name
+            return example
+        
+        sampled_train = sampled_train.map(add_task_info)
+        sampled_test = sampled_test.map(add_task_info)
+        
+        train_datasets.append(sampled_train)
+        test_datasets.append(sampled_test)
+        
+        print(f"Added {train_size} training and {test_size} testing samples from {dataset_path}")
+        
+
     
     # Combine all datasets
     if train_datasets and test_datasets:
@@ -141,17 +139,20 @@ if __name__ == '__main__':
     )
     
     # Create directory if it doesn't exist
-    output_dir = get_mixed_dataset_dir(
+    mixed_configs = get_mixed_configs(
         dataset_paths=args.dataset_path,
         dataset_ratios=args.dataset_ratio,
         num_samples=args.num_samples,
     )
     
+    output_dir = get_dataset_dir(**mixed_configs)
+    
     store_data(
         train_dataset=combined_train,
         test_dataset=combined_test,
         local_dir=output_dir,
-        args=args
+        args=args,
+        data_mode=args.data_mode
     )
 
 def multitask_reward_fn(solution_str, ground_truth):
