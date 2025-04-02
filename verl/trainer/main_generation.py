@@ -183,7 +183,16 @@ def main(config):
     dataset.to_parquet(config.data.output_path)
     # save a json copy
     dataset.to_json(config.data.output_path.replace(".parquet", ".json"), orient="records", lines=True)
-        
+    # Upload results to wandb
+    if config.trainer.wandb:
+        # Log the dataset as an artifact
+        artifact = wandb.Artifact(
+            name=f"generation_results",
+            type="dataset"
+        )
+        artifact.add_file(config.data.output_path)
+        artifact.add_file(config.data.output_path.replace(".parquet", ".json"))
+        wandb.log_artifact(artifact)
     
     # eval
     passes = 0
