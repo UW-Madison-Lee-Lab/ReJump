@@ -1,16 +1,16 @@
 python -m verl.trainer.main_generation \
     trainer.nnodes=1 \
     trainer.n_gpus_per_node=1 \
-    data.path=/staging/szhang967/icl_datasets/blobs_50shot_n1.0_f0.0_test10_icl3_seed42.parquet \
+    data.path=/staging/szhang967/icl_datasets/blobs_50shot_n1.0_f0.0_test200_icl3_seed42.parquet \
     data.prompt_key=prompt \
     data.n_samples=1 \
-    data.batch_size=1 \
-    data.output_path=/staging/szhang967/icl_dataset-output/blobs_50shot_n1.0_f0.0_test10_icl3_seed42.parquet \
+    data.batch_size=8 \
+    data.output_path=/staging/szhang967/icl_dataset-output/blobs_50shot_n1.0_f0.0_test200_icl3_seed42.parquet \
     model.path=Qwen/Qwen2.5-3B-Instruct \
     +model.trust_remote_code=True \
     rollout.temperature=0 \
-    rollout.top_k=10 \
-    rollout.top_p=0.9 \
+    rollout.top_k=-1 \
+    rollout.top_p=1 \
     rollout.prompt_length=24000 \
     rollout.response_length=8092 \
     rollout.tensor_model_parallel_size=1 \

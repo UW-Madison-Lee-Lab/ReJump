@@ -38,7 +38,7 @@ test_data:
   task_type: blobs
   flip_rate: 0.0
   noise_type: 1.0
-  num_samples: 10
+  num_samples: 200
 
 # Test data examples configuration (for in-context examples)
 test_data_examples:
