@@ -43,9 +43,7 @@ class TestDataExampleConfig:
     task_type: str = MISSING  # blobs, circles, linear, moons
     flip_rate: float = MISSING  # 0.0, 0.1, 0.2
     noise_type: float = MISSING  # noise level like 0.1, 1.0
-    shot_type: int = MISSING  # 50, 100
-    nsamples_type: int = MISSING  # 500
-    num_examples: int = MISSING  # Number of examples to use
+    shot_type: int = MISSING  # Number of examples to use
 
 
 @dataclass
@@ -216,6 +214,58 @@ def extract_icl_responses(result: Dict[str, Any]) -> str:
     raise ValueError("Failed to extract responses from result")
 
 
+def extract_features_from_prompt(prompt_content):
+    """
+    Extract all possible feature representations from a prompt content string
+    
+    Args:
+        prompt_content: String containing the prompt content
+        
+    Returns:
+        Set of extracted feature strings in various formats
+    """
+    extracted_features = set()
+    
+    # Method 1: Extract features from [brackets] after "features" (case insensitive)
+    for keyword in ["features", "Features"]:
+        prompt_parts = prompt_content.split(keyword)
+        for part in prompt_parts[1:]:  # Skip the first part before "features"
+            # Try to extract feature values using a simple approach
+            if "[" in part and "]" in part:
+                feature_str = part[part.find("["):part.find("]")+1]
+                extracted_features.add(feature_str)
+    
+    # Method 2: Extract features from format "Features: x.xxx, y.yyy, Label: z"
+    import re
+    # Pattern to match "Features: X.XXX, Y.YYY" - both with and without brackets
+    patterns = [
+        r'Features:\s*([-\d\.]+),\s*([-\d\.]+)',
+        r'features:\s*([-\d\.]+),\s*([-\d\.]+)',
+        r'Features:\s*\[([-\d\.]+),\s*([-\d\.]+)\]',
+        r'features:\s*\[([-\d\.]+),\s*([-\d\.]+)\]'
+    ]
+    
+    for pattern in patterns:
+        matches = re.findall(pattern, prompt_content)
+        for match in matches:
+            if len(match) == 2:  # Should have two coordinates
+                try:
+                    x, y = float(match[0]), float(match[1])
+                    feature_str = f"[{x}, {y}]"
+                    extracted_features.add(feature_str)
+                    # Also add other formats of the same value
+                    extracted_features.add(f"[{x:.6f}, {y:.6f}]")
+                    extracted_features.add(str([x, y]))
+                except ValueError:
+                    # Skip if conversion to float fails
+                    pass
+    
+    # Add the entire prompt for more thorough comparison later
+    extracted_features.add(prompt_content)
+    
+    return extracted_features
+
+
 def sample_icl_examples(config: ICLExampleConfig, base_path: str, rng: np.random.RandomState, tokenizer) -> List[Dict[str, Any]]:
     """
     Sample ICL examples based on the configuration, respecting the max token length constraint
@@ -282,8 +332,8 @@ def sample_icl_examples(config: ICLExampleConfig, base_path: str, rng: np.random
     
     # If we couldn't find enough examples under the token limit
     if len(sampled_examples) < config.num_examples:
-        print(f"Warning: Requested {config.num_examples} examples but only {len(sampled_examples)} are under the token limit of {config.icl_example_maxlength}.")
-        
+        # print(f"Warning: Requested {config.num_examples} examples but only {len(sampled_examples)} are under the token limit of {config.icl_example_maxlength}.")
+        raise ValueError(f"Requested {config.num_examples} examples but only {len(sampled_examples)} are under the token limit of {config.icl_example_maxlength}.")
     return sampled_examples
 
 
@@ -384,6 +434,131 @@ def is_duplicate(features, existing_features_list, tolerance=1e-5):
     return False
 
 
+def is_feature_duplicate(features, label, all_features_str_set, all_feature_vectors, icl_prompt_contents):
+    """
+    Check if a feature is a duplicate in various ways
+    
+    Args:
+        features: Feature vector to check
+        label: Label of the sample
+        all_features_str_set: Set of string representations of features
+        all_feature_vectors: List of feature vectors for numerical comparison
+        icl_prompt_contents: Set of prompt contents for string matching
+        
+    Returns:
+        True if duplicate, False otherwise
+    """
+    features_str = str(features)
+    
+    # Format feature string in various ways that could appear in prompts
+    formatted_features = [
+        f"[{features[0]:.6f}, {features[1]:.6f}]",  # Formatted with brackets
+        f"[{features[0]}, {features[1]}]",  # With brackets, no formatting
+        features_str,  # Raw string representation
+        f"{features[0]:.3f}, {features[1]:.3f}",  # Just numbers with commas, 3 decimals
+        f"{features[0]}, {features[1]}",  # Just numbers with commas, no formatting
+        f"{features[0]:.6f}, {features[1]:.6f}"  # Just numbers with commas, 6 decimals
+    ]
+    
+    # Check if this feature appears in any ICL prompt content
+    is_duplicate_in_prompt = False
+    
+    # First check feature representation as string
+    for feature_format in formatted_features:
+        for prompt_content in icl_prompt_contents:
+            if feature_format in prompt_content:
+                is_duplicate_in_prompt = True
+                return True
+    
+    # Also check for feature format that appears in the sample prompt
+    feature_line = f"Features: {features[0]:.3f}, {features[1]:.3f}, Label: {label}"
+    for prompt_content in icl_prompt_contents:
+        if feature_line in prompt_content:
+            return True
+    
+    # Check if feature string representation is in set or if numerically duplicate
+    if features_str in all_features_str_set or is_duplicate(features, all_feature_vectors):
+        return True
+    
+    return False
+
+
+def sample_non_duplicate_examples(
+    task_type: str, 
+    num_samples: int, 
+    noise_level: float, 
+    flip_rate: float, 
+    seed_value: int,
+    all_features_str_set: set,
+    all_feature_vectors: list,
+    icl_prompt_contents: set,
+    rng: np.random.RandomState,
+    max_attempts: int = 10
+) -> Tuple[List[Tuple], List, set]:
+    """
+    Sample a specified number of non-duplicate examples
+    
+    Args:
+        task_type: Type of task (blobs, circles, linear, moons)
+        num_samples: Number of samples to find
+        noise_level: Noise level for data generation
+        flip_rate: Label flip rate
+        seed_value: Base seed value for reproducibility
+        all_features_str_set: Set of existing feature string representations
+        all_feature_vectors: List of existing feature vectors
+        icl_prompt_contents: Set of existing prompt contents
+        rng: Random state for shuffling
+        max_attempts: Maximum number of attempts with different seeds
+        
+    Returns:
+        Tuple containing:
+            - List of tuples (features, label)
+            - Updated list of all feature vectors
+            - Updated set of all feature string representations
+    """
+    examples = []
+    seed_offset = 0
+    attempts = 0
+    
+    # Create local copies to update
+    local_feature_vectors = list(all_feature_vectors)
+    local_features_str_set = set(all_features_str_set)
+    
+    while len(examples) < num_samples and attempts < max_attempts:
+        # Generate more samples than needed
+        current_seed = seed_value + seed_offset
+        examples_df = generate_test_data(
+            task_type=task_type,
+            num_samples=num_samples * 10,
+            noise_level=noise_level,
+            flip_rate=flip_rate,
+            seed_value=current_seed
+        )
+        
+        # Shuffle to get random examples
+        examples_df = examples_df.sample(frac=1, random_state=rng)
+        
+        for _, row in examples_df.iterrows():
+            if len(examples) >= num_samples:
+                break
+                
+            features = row["features"]
+            label = row["label"]
+            
+            if not is_feature_duplicate(features, label, local_features_str_set, local_feature_vectors, icl_prompt_contents):
+                examples.append((features, label))
+                local_feature_vectors.append(features)
+                local_features_str_set.add(str(features))
+        
+        seed_offset += 1
+        attempts += 1
+    
+    if len(examples) < num_samples:
+        raise ValueError(f"Could only find {len(examples)} non-duplicate examples out of requested {num_samples} after {attempts} attempts")
+    
+    return examples, local_feature_vectors, local_features_str_set
+
+
 @hydra.main(config_path=None, config_name="config", version_base=None)
 def main(cfg: DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
@@ -433,45 +608,12 @@ def main(cfg: DictConfig) -> None:
             try:
                 prompt_content = extract_test_prompt_content(example)
                 
-                # Method 1: Extract features from [brackets] after "features" (case insensitive)
-                for keyword in ["features", "Features"]:
-                    prompt_parts = prompt_content.split(keyword)
-                    for part in prompt_parts[1:]:  # Skip the first part before "features"
-                        # Try to extract feature values using a simple approach
-                        if "[" in part and "]" in part:
-                            feature_str = part[part.find("["):part.find("]")+1]
-                            icl_prompt_contents.add(feature_str)
-                
-                # Method 2: Extract features from format "Features: x.xxx, y.yyy, Label: z"
-                import re
-                # Pattern to match "Features: X.XXX, Y.YYY" - both with and without brackets
-                patterns = [
-                    r'Features:\s*([-\d\.]+),\s*([-\d\.]+)',
-                    r'features:\s*([-\d\.]+),\s*([-\d\.]+)',
-                    r'Features:\s*\[([-\d\.]+),\s*([-\d\.]+)\]',
-                    r'features:\s*\[([-\d\.]+),\s*([-\d\.]+)\]'
-                ]
-                
-                for pattern in patterns:
-                    matches = re.findall(pattern, prompt_content)
-                    for match in matches:
-                        if len(match) == 2:  # Should have two coordinates
-                            try:
-                                x, y = float(match[0]), float(match[1])
-                                feature_str = f"[{x}, {y}]"
-                                icl_prompt_contents.add(feature_str)
-                                # Also add other formats of the same value
-                                icl_prompt_contents.add(f"[{x:.6f}, {y:.6f}]")
-                                icl_prompt_contents.add(str([x, y]))
-                            except ValueError:
-                                # Skip if conversion to float fails
-                                pass
-                
-                # Store the entire prompt for more thorough comparison later
-                icl_prompt_contents.add(prompt_content)
+                # Extract features from prompt content
+                features_from_prompt = extract_features_from_prompt(prompt_content)
+                icl_prompt_contents.update(features_from_prompt)
                 
             except Exception as e:
-                print(f"Warning: Could not extract prompt content for duplicate checking: {e}")
+                raise e
         
         # Add to our collection
         all_icl_examples.extend(examples)
@@ -492,101 +634,49 @@ def main(cfg: DictConfig) -> None:
     # Shuffle all examples using the random state
     icl_rng.shuffle(all_icl_examples)
     
-    # Generate test data using data generation functions
-    test_data_df = generate_test_data(
-        task_type=cfg.test_data.task_type,
-        num_samples=1000,  # Generate a larger pool of samples to choose from
-        noise_level=cfg.test_data.noise_type,
-        flip_rate=cfg.test_data.flip_rate,
-        seed_value=cfg.test_data_seed
-    )
-    
-    if len(test_data_df) < cfg.test_data.num_samples:
-        raise ValueError(f"Not enough test data samples: {len(test_data_df)} < {cfg.test_data.num_samples}")
-    
     # Track all generated features to avoid duplicates
     all_feature_vectors = []
     all_features_str_set = set()  # String representations for quick lookup
     
-    # Sample test data points and keep track of their features
-    if len(test_data_df) <= cfg.test_data.num_samples:
-        test_indices = list(range(len(test_data_df)))
-    else:
-        test_indices = test_rng.choice(len(test_data_df), cfg.test_data.num_samples, replace=False)
+    # Extract and add actual feature vectors from ICL examples
+    for example in all_icl_examples:
+        features = example["features"]
+        all_feature_vectors.append(features)
     
-    test_features_list = [test_data_df.iloc[idx]["features"] for idx in test_indices]
-    all_feature_vectors.extend(test_features_list)
-    
-    # Add string representations of test features for quick lookup
-    for features in test_features_list:
-        all_features_str_set.add(str(features))
-    
-    # Also add ICL features to avoid overlap
+    # Add ICL features string representations to avoid overlap
     all_features_str_set.update(icl_features_set)
     
-    # Generate test examples that don't overlap with test data or ICL examples
-    seed_offset = 100  # Start with a different seed for test examples
-    test_examples = []
+    # Sample test data points using the helper function
+    print(f"Sampling {cfg.test_data.num_samples} test data points...")
+    test_data, all_feature_vectors, all_features_str_set = sample_non_duplicate_examples(
+        task_type=cfg.test_data.task_type,
+        num_samples=cfg.test_data.num_samples,
+        noise_level=cfg.test_data.noise_type,
+        flip_rate=cfg.test_data.flip_rate,
+        seed_value=cfg.test_data_seed,
+        all_features_str_set=all_features_str_set,
+        all_feature_vectors=all_feature_vectors,
+        icl_prompt_contents=icl_prompt_contents,
+        rng=test_rng
+    )
     
-    while len(test_examples) < cfg.test_data_examples.num_examples:
-        # Try with different seeds until we find enough non-duplicate examples
-        test_examples_df = generate_test_data(
-            task_type=cfg.test_data_examples.task_type,
-            num_samples=cfg.test_data_examples.num_examples * 10,  # Generate more than we need
-            noise_level=cfg.test_data_examples.noise_type,
-            flip_rate=cfg.test_data_examples.flip_rate,
-            seed_value=cfg.test_data_seed + seed_offset
-        )
-        
-        # Shuffle to get random examples
-        test_examples_df = test_examples_df.sample(frac=1, random_state=test_example_rng)
-        
-        for _, row in test_examples_df.iterrows():
-            if len(test_examples) >= cfg.test_data_examples.num_examples:
-                break
-            
-            features = row["features"]
-            features_str = str(features)
-            
-            # Format feature string in various ways that could appear in prompts
-            formatted_features = [
-                f"[{features[0]:.6f}, {features[1]:.6f}]",  # Formatted with brackets
-                f"[{features[0]}, {features[1]}]",  # With brackets, no formatting
-                features_str,  # Raw string representation
-                f"{features[0]:.3f}, {features[1]:.3f}",  # Just numbers with commas, 3 decimals
-                f"{features[0]}, {features[1]}",  # Just numbers with commas, no formatting
-                f"{features[0]:.6f}, {features[1]:.6f}"  # Just numbers with commas, 6 decimals
-            ]
-            
-            # Check if this feature appears in any ICL prompt content
-            is_duplicate_in_prompt = False
-            
-            # First check feature representation as string
-            for feature_format in formatted_features:
-                for prompt_content in icl_prompt_contents:
-                    if feature_format in prompt_content:
-                        is_duplicate_in_prompt = True
-                        break
-                if is_duplicate_in_prompt:
-                    break
-            
-            # Also check for feature format that appears in the sample prompt
-            feature_line = f"Features: {features[0]:.3f}, {features[1]:.3f}, Label: {row['label']}"
-            for prompt_content in icl_prompt_contents:
-                if feature_line in prompt_content:
-                    is_duplicate_in_prompt = True
-                    break
-            
-            if not is_duplicate_in_prompt and features_str not in all_features_str_set and not is_duplicate(features, all_feature_vectors):
-                test_examples.append((features, row["label"]))
-                all_feature_vectors.append(features)
-                all_features_str_set.add(features_str)
-        
-        # If we still need more examples, try with a different seed
-        seed_offset += 1
-        
-        if seed_offset > 200:  # Avoid infinite loop
-            raise ValueError(f"Could not generate enough non-duplicate test examples for {cfg.test_data_examples.task_type}")
+    # Extract test features and labels
+    test_data_features = [features for features, _ in test_data]
+    test_data_labels = [label for _, label in test_data]
+    
+    # Sample additional examples for the instructions
+    print(f"Sampling {cfg.test_data_examples.shot_type} examples for instructions...")
+    test_examples, all_feature_vectors, all_features_str_set = sample_non_duplicate_examples(
+        task_type=cfg.test_data_examples.task_type,
+        num_samples=cfg.test_data_examples.shot_type,
+        noise_level=cfg.test_data_examples.noise_type,
+        flip_rate=cfg.test_data_examples.flip_rate,
+        seed_value=cfg.test_data_seed + 100,  # Different seed base
+        all_features_str_set=all_features_str_set,
+        all_feature_vectors=all_feature_vectors,
+        icl_prompt_contents=icl_prompt_contents,
+        rng=test_example_rng
+    )
     
     # Create base instruction
     instruction = create_instruction(cfg.test_data.task_type)
@@ -595,10 +685,7 @@ def main(cfg: DictConfig) -> None:
     num_classes = get_num_classes(cfg.test_data.task_type)
     
     # For each test data point, create a prompt using the same shuffled ICL examples and test examples
-    for idx, test_idx in enumerate(test_indices):
-        test_row = test_data_df.iloc[test_idx]
-        test_features = test_row["features"]
-        
+    for idx, (test_features, test_label) in enumerate(zip(test_data_features, test_data_labels)):
         # Create prompt using the ICL examples, test examples, and test features
         prompt_text = create_prompt(instruction, all_icl_examples, test_examples, test_features, num_classes)
         
@@ -618,7 +705,7 @@ def main(cfg: DictConfig) -> None:
                 "style": "rule",
                 "ground_truth": {
                     "features": test_features,
-                    "label": int(test_row["label"])
+                    "label": int(test_label)
                 }
             },
             "icl_example_meta_info": icl_config_info,
@@ -627,7 +714,6 @@ def main(cfg: DictConfig) -> None:
             "test_data": {
                 "task_type": cfg.test_data.task_type,
                 "shot_type": cfg.test_data_examples.shot_type,
-                "nsamples_type": cfg.test_data_examples.nsamples_type,
                 "noise_type": cfg.test_data.noise_type,
                 "flip_rate": cfg.test_data.flip_rate,
             },
@@ -641,7 +727,7 @@ def main(cfg: DictConfig) -> None:
         dataset.append(entry)
     
     # Create a descriptive filename
-    filename = f"{cfg.test_data.task_type}_{cfg.test_data_examples.shot_type}shot_n{cfg.test_data.noise_type}_f{cfg.test_data.flip_rate}_test{cfg.test_data.num_samples}_icl{len(cfg.icl_examples)}_seed{cfg.icl_example_seed}.parquet"
+    filename = f"{cfg.test_data.task_type}_shot{cfg.test_data_examples.shot_type}_n{cfg.test_data.noise_type}_f{cfg.test_data.flip_rate}_test{cfg.test_data.num_samples}_icl{len(cfg.icl_examples)}_seed{cfg.icl_example_seed}.parquet"
     output_file = output_path / filename
     
     # Convert to DataFrame and save as parquet
