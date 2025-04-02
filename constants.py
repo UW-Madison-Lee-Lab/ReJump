@@ -31,7 +31,7 @@ def get_configs_via_model_name(model_name):
         data_mode = match.group(9)
     
         # Check if shot is a digit or a hyphen-separated list of digits
-        if '-' in shot and "-" in noise_level and "-" in label_flip_rate:
+        if '-' in shot or '-' in noise_level or '-' in label_flip_rate:
             return {
                 "dataset_name": dataset_name,
                 "shot": shot,
