@@ -11,7 +11,7 @@ python -m verl.trainer.main_generation \
     rollout.temperature=0 \
     rollout.top_k=10 \
     rollout.top_p=0.9 \
-    rollout.prompt_length=120000 \
+    rollout.prompt_length=24000 \
     rollout.response_length=8092 \
     rollout.tensor_model_parallel_size=1 \
     rollout.gpu_memory_utilization=0.8 \
