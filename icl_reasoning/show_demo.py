@@ -88,7 +88,22 @@ def convert_to_readable_format(parquet_file, output_format="txt"):
                 f.write("--- Label Information ---\n")
                 if 'reward_model' in row and isinstance(row['reward_model'], dict):
                     f.write(f"Style: {row['reward_model'].get('style', 'unknown')}\n")
-                    f.write(f"Ground Truth: {row['reward_model'].get('ground_truth', 'N/A')}\n")
+                    ground_truth = row['reward_model'].get('ground_truth', 'N/A')
+                    
+                    # Handle different ground_truth formats
+                    if isinstance(ground_truth, dict):
+                        f.write("Ground Truth:\n")
+                        if 'label' in ground_truth:
+                            f.write(f"  Label: {ground_truth['label']}\n")
+                        if 'features' in ground_truth:
+                            # Format features nicely
+                            if isinstance(ground_truth['features'], list):
+                                features_str = ", ".join([f"{x:.3f}" for x in ground_truth['features']])
+                                f.write(f"  Features: [{features_str}]\n")
+                            else:
+                                f.write(f"  Features: {ground_truth['features']}\n")
+                    else:
+                        f.write(f"Ground Truth: {ground_truth}\n")
                 elif 'label' in row:
                     # For backwards compatibility with the old format
                     f.write(f"Label: {row['label']}\n")
