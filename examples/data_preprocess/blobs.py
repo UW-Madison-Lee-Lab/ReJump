@@ -16,6 +16,7 @@ def gen_dataset(
     cluster_std: float = 1.0,
     seed_value: int = 42,
     label_flip_rate: float = 0.0,
+    random: bool = False,
 ) -> List[Tuple]:
     """Generate synthetic blob dataset for classification task.
     
@@ -29,12 +30,16 @@ def gen_dataset(
     """
     np.random.seed(seed_value)
     
-    # default centers
-    centers = [
-        [-2.50919762,  9.01428613],
-       [ 4.63987884,  1.97316968],
-       [-6.87962719, -6.88010959]
-    ]
+    if random: 
+        # default centers
+        centers = [
+            [-2.50919762,  9.01428613],
+            [ 4.63987884,  1.97316968],
+            [-6.87962719, -6.88010959]
+        ]
+    else:
+        centers = None
+        
     # Generate synthetic data
     X, y = make_blobs(
         n_samples=num_samples,
@@ -84,23 +89,27 @@ def gen_grid_dataset(grid_size=100, x_range=(-10, 10), y_range=(-10, 10)):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--hdfs_dir', default=None)
-    parser.add_argument('--num_samples', type=int, default=100000)
+    parser.add_argument('--num_samples', type=int, default=100)
     parser.add_argument('--noise_level', type=float, default=1.0)
     parser.add_argument('--test_ratio', type=float, default=0.2)
-    parser.add_argument('--n_shot', type=int, default=0)
+    parser.add_argument('--n_shot', type=int, default=10)
     parser.add_argument('--template_type', type=str, default='base')
     parser.add_argument('--label_flip_rate', type=float, default=0.0)
-    parser.add_argument('--plot', type=int, default=0, choices=[0, 1])
+    parser.add_argument('--data_mode', type=str, default="default", choices=["default", "grid", "mixed"])
     args = parser.parse_args()
     set_seed(42)
     
     data_source = 'blobs'
     n_classes = 3
     
-    if args.plot:
+    if args.n_shot <= 0:
+        raise ValueError("n_shot must be greater than 0")
+    
+    samples, in_context_samples = [], []
+    if args.data_mode == "grid":
         # For plotting mode, generate a grid dataset for testing
-        test_samples = gen_grid_dataset(grid_size = int(args.num_samples ** 0.5))
-        TEST_SIZE = len(test_samples)
+        samples = gen_grid_dataset(grid_size = int(args.num_samples ** 0.5))
+        TEST_SIZE = len(samples)
         TRAIN_SIZE = 0
         
         # Generate a small set of in-context examples
@@ -110,16 +119,7 @@ if __name__ == '__main__':
             seed_value=34
         )
         
-        dataset_dict = {
-            'features': [sample[0] for sample in test_samples],
-            'label': [sample[1] for sample in test_samples]
-        }
-        
-        in_context_dataset_dict = {
-            'features': [sample[0] for sample in in_context_samples],
-            'label': [sample[1] for sample in in_context_samples]
-        }
-    else:
+    elif args.data_mode == "default":
         # Normal mode - generate regular training and test sets
         TEST_SIZE = int(args.num_samples * args.test_ratio)
         TRAIN_SIZE = args.num_samples - TEST_SIZE
@@ -128,6 +128,7 @@ if __name__ == '__main__':
         samples = gen_dataset(
             num_samples=args.num_samples,
             cluster_std=args.noise_level,
+            random = args.random,
             seed_value=12
         )
         
@@ -135,18 +136,38 @@ if __name__ == '__main__':
             num_samples=args.num_samples,
             cluster_std=args.noise_level,
             label_flip_rate=args.label_flip_rate,
+            random = args.random,
             seed_value=34
         )
         
-        dataset_dict = {
-            'features': [sample[0] for sample in samples],
-            'label': [sample[1] for sample in samples]
-        }
+    elif args.data_mode == "mixed":
+        # Mixed mode - generate a small set of in-context examples and a large set of test samples
+        TEST_SIZE = int(args.num_samples * args.test_ratio)
+        TRAIN_SIZE = args.num_samples - TEST_SIZE
         
-        in_context_dataset_dict = {
-            'features': [sample[0] for sample in in_context_samples],
-            'label': [sample[1] for sample in in_context_samples]
-        }
+        for i in range(args.num_samples):
+            data = gen_dataset(
+                num_samples=args.n_shot+1,
+                cluster_std=args.noise_level,
+                label_flip_rate=args.label_flip_rate,
+                random = True,
+                seed_value=i
+            )
+            samples.append(data[0])
+            in_context_samples.append(data[1:])
+    else:
+        raise ValueError(f"Invalid data mode: {args.data_mode}")
+    
+    dataset_dict = {
+        'features': [sample[0] for sample in samples],
+        'label': [sample[1] for sample in samples]
+    }
+    
+    pdb.set_trace()
+    in_context_dataset_dict = {
+        'features': [sample[0] for sample in in_context_samples],
+        'label': [sample[1] for sample in in_context_samples]
+    }
     
     save_data(
         dataset_dict,
@@ -158,7 +179,6 @@ if __name__ == '__main__':
         TEST_SIZE,
         plot=args.plot
     )
-    
 
 
 def blobs_reward_fn(solution_str, ground_truth):
