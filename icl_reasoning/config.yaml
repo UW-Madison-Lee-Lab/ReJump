@@ -23,28 +23,52 @@ icl_examples:
     icl_example_maxlength: 6000
   
   # Example 3: Circles dataset
-  - task_type: circles
+  # - task_type: circles
+  #   flip_rate: 0.0
+  #   noise_type: 0.0
+  #   shot_type: 50
+  #   reslen_type: 3046
+  #   nsamples_type: 500
+  #   num_examples: 1
+  #   icl_example_maxlength: 6000
+  
+  - task_type: blobs
     flip_rate: 0.0
-    noise_type: 0.0
+    noise_type: 1.0
     shot_type: 50
     reslen_type: 3046
     nsamples_type: 500
     num_examples: 1
-    icl_example_maxlength: 6000
-  
 
 # Define test data configuration
-test_data:
-  task_type: blobs
-  flip_rate: 0.0
-  noise_type: 1.0
-  num_samples: 200
+# test_data:
+#   task_type: blobs
+#   flip_rate: 0.0
+#   noise_type: 1.0
+#   num_samples: 200
+
+
 
 # Test data examples configuration (for in-context examples)
-test_data_examples:
-  task_type: blobs
+# test_data_examples:
+#   task_type: blobs
+#   flip_rate: 0.0
+#   noise_type: 1.0
+#   shot_type: 50
+#   nsamples_type: 50
+#   num_examples: 50
+
+
+test_data:
+  task_type: circles
   flip_rate: 0.0
-  noise_type: 1.0
+  noise_type: 0.0
+  num_samples: 200
+
+test_data_examples:
+  task_type: circles
+  flip_rate: 0.0
+  noise_type: 0.0
   shot_type: 50
   nsamples_type: 50
   num_examples: 50
