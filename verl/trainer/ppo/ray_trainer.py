@@ -18,6 +18,7 @@ This trainer supports model-agonistic model initialization with huggingface
 
 import os
 import uuid
+import wandb
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
@@ -35,6 +36,8 @@ from verl.single_controller.ray import RayResourcePool, RayWorkerGroup, RayClass
 from verl.single_controller.ray.base import create_colocated_worker_cls
 from verl.trainer.ppo import core_algos
 from verl.utils.seqlen_balancing import get_seqlen_balanced_partitions, log_seqlen_unbalance
+
+import pandas as pd
 
 WorkerType = Type[Worker]
 
@@ -356,6 +359,8 @@ class RayPPOTrainer(object):
                                            shuffle=True,
                                            drop_last=True,
                                            collate_fn=collate_fn)
+        
+        self.val_data = pd.read_parquet(self.config.data.val_files)
 
         self.val_dataset = RLHFDataset(parquet_files=self.config.data.val_files,
                                        tokenizer=self.tokenizer,
@@ -393,6 +398,7 @@ class RayPPOTrainer(object):
     def _validate(self):
         reward_tensor_lst = []
         data_source_lst = []
+        output_lst = []
         for test_data in self.val_dataloader:
             test_batch = DataProto.from_single_dict(test_data)
             # test_batch = test_batch.to('cuda')
@@ -420,12 +426,15 @@ class RayPPOTrainer(object):
 
             # evaluate using reward_function
             # for certain reward function (e.g. sandbox), the generation can overlap with reward
-            reward_tensor = self.val_reward_fn(test_batch)
-
+            reward_dict = self.val_reward_fn(test_batch)
+            reward_tensor = reward_dict['reward_tensor']
             reward_tensor_lst.append(reward_tensor)
+            output_lst.extend(reward_dict['sequences_lst'])
             data_source_lst.append(test_batch.non_tensor_batch.get('data_source', ['unknown'] * reward_tensor.shape[0]))
 
         reward_tensor = torch.cat(reward_tensor_lst, dim=0).sum(-1).cpu()  # (batch_size,)
+        
+        
         data_sources = np.concatenate(data_source_lst, axis=0)
         # evaluate test_score based on data source
         data_source_reward = {}
@@ -438,7 +447,23 @@ class RayPPOTrainer(object):
         metric_dict = {}
         for data_source, rewards in data_source_reward.items():
             metric_dict[f'val/test_score/{data_source}'] = np.mean(rewards)
-
+            
+        
+        self.val_data['responses'] = output_lst
+        
+        if wandb.run is not None:
+            artifact = wandb.Artifact(
+                name=f"test_results_{wandb.run.id}_step_{self.global_steps}",
+                type="dataset"
+            )
+            output_dir = os.path.dirname(self.config.data.output_path)
+            os.makedirs(output_dir, exist_ok=True)
+            self.val_data.to_parquet(self.config.data.output_path)
+            self.val_data.to_json(self.config.data.output_path.replace(".parquet", ".json"), orient="records", lines=True)
+            
+            artifact.add_file(self.config.data.output_path)
+            artifact.add_file(self.config.data.output_path.replace(".parquet", ".json"))
+            wandb.log_artifact(artifact)
         return metric_dict
 
     def init_workers(self):
