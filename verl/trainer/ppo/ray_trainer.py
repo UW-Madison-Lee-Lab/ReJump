@@ -583,11 +583,18 @@ class RayPPOTrainer(object):
         """
         from verl.utils.tracking import Tracking
         from omegaconf import OmegaConf
-
-        logger = Tracking(project_name=self.config.trainer.project_name,
-                          experiment_name=self.config.trainer.experiment_name,
-                          default_backend=self.config.trainer.logger,
-                          config=OmegaConf.to_container(self.config, resolve=True))
+        from environment import WANDB_INFO
+        from utils import flatten_dict
+        
+        wandb_configs = flatten_dict(self.config)
+        wandb_configs.update(get_configs_via_result_dir(os.path.dirname(self.config.data.output_path)))
+        logger = Tracking(
+            project_name=f"{WANDB_INFO['project']}-rl",
+            entity=WANDB_INFO['entity'],
+            config=wandb_configs,
+            default_backend=self.config.trainer.logger,
+            # config=OmegaConf.to_container(self.config, resolve=True)
+        )
 
         self.global_steps = 0
 

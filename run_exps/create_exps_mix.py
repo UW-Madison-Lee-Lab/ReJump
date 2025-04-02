@@ -22,7 +22,7 @@ parser.add_argument("--n_samples", type=int, nargs="+", default=[10000])
 parser.add_argument("--noise_level", type=float, nargs="+", default=[None, None, None])
 parser.add_argument("--label_flip_rate", type=float, nargs="+", default=[0.0, 0.0, 0.0])
 parser.add_argument("--dataset_ratio", type=str, nargs="+", default=[1, 1, 1])
-parser.add_argument("--data_mode", type=str, default="mixed", choices=["default", "grid", "mixed"])
+parser.add_argument("--data_mode", type=str, default="mixed", choices=["default", "mixed"])
 parser.add_argument("--wandb", type=int, default=2, choices=[1, 2])
 args = parser.parse_args()
 
@@ -110,7 +110,8 @@ for model in model_list:
             mix_command = mix_dataset(
                 dataset_path=dataset_paths,
                 dataset_ratio=dataset_ratio_list,
-                num_samples=n_samples
+                num_samples=n_samples,
+                data_mode=args.data_mode
             )
             command_list.append(mix_command)
             

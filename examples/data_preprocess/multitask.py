@@ -8,7 +8,7 @@ import os
 from utils import set_seed
 from datasets import Dataset, concatenate_datasets
 from examples.data_preprocess.helper import classification_reward_fn, store_data
-from constants import get_dataset_dir, get_mixed_dataset_dir
+from constants import get_mixed_dataset_dir, get_dataset_filename
 from typing import List
 from environment import root_dir
 
@@ -16,7 +16,8 @@ def combine_datasets(
     dataset_paths: List[str],
     dataset_ratios: List[float],
     num_samples: int,
-    seed_value: int = 42
+    seed_value: int = 42,
+    data_mode: str = "default"
 ):
     """Combine existing datasets based on specified ratios.
     
@@ -65,8 +66,8 @@ def combine_datasets(
         
         # Load train and test datasets
         try:
-            train_path = os.path.join(dataset_path, 'train.parquet')
-            test_path = os.path.join(dataset_path, 'test.parquet')
+            train_path = os.path.join(dataset_path, get_dataset_filename(split="train", data_mode=data_mode))
+            test_path = os.path.join(dataset_path, get_dataset_filename(split="test", data_mode=data_mode))
             
             train_dataset = Dataset.from_parquet(train_path)
             test_dataset = Dataset.from_parquet(test_path)
@@ -121,6 +122,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_samples', type=int, default=10000)
     parser.add_argument('--dataset_path', type=str, nargs='+', default=[f'{root_dir}/datasets/blobs/50_shot/qwen-instruct/10000_samples_3.0_noise'])
     parser.add_argument('--dataset_ratio', type=str, nargs='+', default=['1.0'])
+    parser.add_argument('--data_mode', type=str, default="default")
 
     args = parser.parse_args()
     set_seed(42)
@@ -134,14 +136,15 @@ if __name__ == '__main__':
         dataset_paths=args.dataset_path,
         dataset_ratios=args.dataset_ratio,
         num_samples=args.num_samples,
-        seed_value=42
+        seed_value=42,
+        data_mode=args.data_mode
     )
     
     # Create directory if it doesn't exist
     output_dir = get_mixed_dataset_dir(
         dataset_paths=args.dataset_path,
         dataset_ratios=args.dataset_ratio,
-        num_samples=args.num_samples
+        num_samples=args.num_samples,
     )
     
     store_data(
