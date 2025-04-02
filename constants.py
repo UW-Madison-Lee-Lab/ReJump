@@ -30,29 +30,17 @@ def get_configs_via_model_name(model_name):
         label_flip_rate = match.group(8)
         data_mode = match.group(9)
     
-        # Check if shot is a digit or a hyphen-separated list of digits
-        if '-' in shot or '-' in noise_level or '-' in label_flip_rate:
-            return {
-                "dataset_name": dataset_name,
-                "shot": shot,
-                "template_type": template_type,
-                "response_length": response_length,
-                "num_samples": num_samples,
-                "noise_level": noise_level,
-                "label_flip_rate": label_flip_rate,
-                "data_mode": data_mode
-            }
-        else:
-            return {    
-                "dataset_name": match.group(2),
-                "model_name": match.group(1),
-                "shot": int(match.group(3)),
-                "template_type": match.group(4),
-                "response_length": int(match.group(5)),
-                "num_samples": int(match.group(6)),
-                "noise_level": float(match.group(7)),
-                "label_flip_rate": float(match.group(8)),
-                "data_mode": match.group(9)
+
+        return {
+            "dataset_name": dataset_name,
+            "model_name": model_name,
+            "shot": shot,
+            "template_type": template_type,
+            "response_length": response_length,
+            "num_samples": num_samples,
+            "noise_level": noise_level,
+            "label_flip_rate": label_flip_rate,
+            "data_mode": data_mode
         }
     else:
         raise ValueError(f"Invalid model name: {model_name}")
@@ -147,6 +135,7 @@ def get_configs_via_dataset_dir(dataset_dir):
         "label_flip_rate": label_flip_rate,
         "data_mode": data_mode
     }
+    
 def get_dataset_filename(
     split,
     data_mode,
