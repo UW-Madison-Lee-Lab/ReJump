@@ -5,7 +5,103 @@ import numpy as np
 import re
 from constants import get_dataset_dir
 import pandas as pd
-from ray.util import pdb
+import pdb
+
+def prepare_dataset(args, gen_dataset):
+    if args.n_shot <= 0:
+        raise ValueError("n_shot must be greater than 0")
+    samples, in_context_samples = [], []
+    if args.data_mode == "default":
+        TEST_SIZE = int(args.num_samples * args.test_ratio)
+        TRAIN_SIZE = args.num_samples - TEST_SIZE
+        
+        # Generate synthetic dataset
+        samples = gen_dataset(
+            num_samples=args.num_samples,
+            noise_level=args.noise_level,
+            random = False,
+            seed_value=12
+        )
+        
+        in_context_samples = gen_dataset(
+            num_samples=args.num_samples,
+            noise_level=args.noise_level,
+            label_flip_rate=args.label_flip_rate,
+            random = False,
+            seed_value=34
+        )
+    elif args.data_mode == "grid":
+        samples = gen_grid_dataset(grid_size = int(args.num_samples ** 0.5))
+        TEST_SIZE = len(samples)
+        TRAIN_SIZE = 0
+        
+        # Generate a small set of in-context examples
+        in_context_samples = gen_dataset(
+            num_samples=args.n_shot,
+            noise_level=args.noise_level,
+            seed_value=34,
+            random = False
+        )
+    elif args.data_mode == "mixed":
+        TEST_SIZE = int(args.num_samples * args.test_ratio)
+        TRAIN_SIZE = args.num_samples - TEST_SIZE
+        for i in range(args.num_samples):
+            data = gen_dataset(
+                num_samples=args.n_shot+1,
+                noise_level=args.noise_level,
+                label_flip_rate=args.label_flip_rate,
+                random = True,
+                seed_value=i
+            )
+            samples.append(data[0])
+            in_context_samples.append(data[1:])
+    else:
+        raise ValueError(f"Invalid data mode: {args.data_mode}")
+    
+    dataset_dict = {
+        'features': [sample[0] for sample in samples],
+        'label': [sample[1] for sample in samples]
+    }
+    
+    if args.data_mode == "mixed":
+        in_context_dataset_dict = in_context_samples
+    else:
+        in_context_dataset_dict = {
+            'features': [sample[0] for sample in in_context_samples],
+            'label': [sample[1] for sample in in_context_samples]
+        }
+
+    return {
+        "dataset_dict": dataset_dict,
+        "in_context_dataset_dict": in_context_dataset_dict,
+        "TEST_SIZE": TEST_SIZE,
+        "TRAIN_SIZE": TRAIN_SIZE
+    }
+
+def gen_grid_dataset(grid_size=100, x_range=(-10, 10), y_range=(-10, 10)):
+    """Generate a grid of points for visualization and testing.
+    
+    Args:
+        grid_size: Number of points in each dimension
+        x_range: Range of x values
+        y_range: Range of y values
+    
+    Returns:
+        List of tuples containing (features, dummy_label)
+    """
+    x = np.linspace(x_range[0], x_range[1], grid_size)
+    y = np.linspace(y_range[0], y_range[1], grid_size)
+    xx, yy = np.meshgrid(x, y)
+    
+    samples = []
+    for i in range(grid_size):
+        for j in range(grid_size):
+            features = [xx[i, j], yy[i, j]]
+            # Dummy label, will be predicted by the model
+            label = 0
+            samples.append((features, label))
+    
+    return samples
 
 def format_features(features):
     return "[" + ", ".join([f"{x:.3f}" for x in features]) + "]"
@@ -25,7 +121,7 @@ def make_prefix(dp, template_type, n_classes, n_shot=0, in_context_dataset=None)
     label = dp['label']
     
     # Add in-context examples if requested
-    in_context_examples = ""
+    in_context_examples, in_context_samples = "", []
     if n_shot > 0 and in_context_dataset is not None:
         in_context_examples = "We first provide you with some examples of how to classify data points.\n"
         # Randomly select indices for in-context examples
@@ -38,6 +134,7 @@ def make_prefix(dp, template_type, n_classes, n_shot=0, in_context_dataset=None)
             example_label = example['label']
             
             in_context_examples += f"Features: {format_features(example_features)}, Label: {example_label}\n"
+            in_context_samples.append({"features": example_features, "label": example_label})
     
     if template_type == 'base':
         """This works for any base model"""
@@ -66,8 +163,53 @@ def make_prefix(dp, template_type, n_classes, n_shot=0, in_context_dataset=None)
         <|im_start|>assistant
         <answer>
         """
-    return prefix
+    return prefix, in_context_samples
 
+
+def make_map_fn(split, args, n_classes, in_context_dataset, data_source, data_mode):
+
+    
+    def process_fn(example, idx):
+        if data_mode in ["grid", "default"]:
+            in_context_dataset_ = in_context_dataset[split]
+        else:
+            in_context_dataset_ = Dataset.from_dict({
+                "features": [in_context_dataset[split][idx][i][0] for i in range(len(in_context_dataset[split][idx]))],
+                "label": [in_context_dataset[split][idx][i][1] for i in range(len(in_context_dataset[split][idx]))]
+            })
+        
+        question, in_context_samples = make_prefix(
+            example, 
+            template_type=args.template_type, 
+            n_classes=n_classes, 
+            n_shot=args.n_shot, 
+            in_context_dataset=in_context_dataset_
+        )
+        
+        solution = {
+            "features": example['features'],
+            "label": example['label'],
+            "in_context_samples": in_context_samples
+        }
+        data = {
+            "data_source": data_source,
+            "prompt": [{
+                "role": "user",
+                "content": question,
+            }],
+            "ability": "classification",
+            "reward_model": {
+                "style": "rule",
+                "ground_truth": solution
+            },
+            "extra_info": {
+                'split': split,
+                'index': idx,
+            }
+        }
+        return data
+    return process_fn
+    
 def save_data(
     dataset_dict,
     in_context_dataset_dict,
@@ -76,10 +218,10 @@ def save_data(
     n_classes,
     TRAIN_SIZE,
     TEST_SIZE,
-    plot = False,
+    data_mode = "default",
 ): 
     raw_dataset = Dataset.from_dict(dataset_dict)
-    raw_in_context_dataset = Dataset.from_dict(in_context_dataset_dict)
+    
     
     assert len(raw_dataset) >= TRAIN_SIZE + TEST_SIZE
     # Create non-overlapping train and test sets
@@ -91,52 +233,32 @@ def save_data(
     
     train_dataset = raw_dataset.select(train_indices)
     test_dataset = raw_dataset.select(test_indices)
-    if not plot:
+    
+
+    
+    if data_mode == "default":
+        raw_in_context_dataset = Dataset.from_dict(in_context_dataset_dict)
         in_context_dataset = {
             "train": raw_in_context_dataset.select(train_indices),
             "test": raw_in_context_dataset.select(test_indices)
         }
-    else:
+    elif data_mode == "grid":
+        raw_in_context_dataset = Dataset.from_dict(in_context_dataset_dict)
         in_context_dataset = {
             "train": raw_in_context_dataset.select(train_indices),
             "test": raw_in_context_dataset
         }
+    elif data_mode == "mixed":
+        in_context_dataset = {
+            "train": [in_context_dataset_dict[i] for i in train_indices],
+            "test": [in_context_dataset_dict[i] for i in test_indices]
+        }
+    else:
+        raise ValueError(f"Invalid data mode: {data_mode}")
 
-    def make_map_fn(split):
-        def process_fn(example, idx):
-            question = make_prefix(
-                example, 
-                template_type=args.template_type, 
-                n_classes=n_classes, 
-                n_shot=args.n_shot, 
-                in_context_dataset=in_context_dataset[split]
-            )
-            
-            solution = {
-                "features": example['features'],
-                "label": example['label']
-            }
-            data = {
-                "data_source": data_source,
-                "prompt": [{
-                    "role": "user",
-                    "content": question,
-                }],
-                "ability": "classification",
-                "reward_model": {
-                    "style": "rule",
-                    "ground_truth": solution
-                },
-                "extra_info": {
-                    'split': split,
-                    'index': idx,
-                }
-            }
-            return data
-        return process_fn
-    
-    train_dataset = train_dataset.map(function=make_map_fn('train'), with_indices=True)
-    test_dataset = test_dataset.map(function=make_map_fn('test'), with_indices=True)
+    train_dataset = train_dataset.map(function=make_map_fn('train', args, n_classes, in_context_dataset, data_source, data_mode), with_indices=True)
+    test_dataset = test_dataset.map(function=make_map_fn('test', args, n_classes, in_context_dataset, data_source, data_mode), with_indices=True)
+
 
     local_dir = get_dataset_dir(
         dataset_name=data_source,
@@ -152,7 +274,7 @@ def save_data(
         train_dataset=train_dataset,
         test_dataset=test_dataset,
         args=args,
-        plot=plot
+        data_mode=data_mode
     )
     
         
@@ -161,9 +283,9 @@ def store_data(
     train_dataset,
     test_dataset,
     args,
-    plot
+    data_mode
 ):
-    if plot:
+    if data_mode == "grid":
         test_dataset.to_parquet(os.path.join(local_dir, 'grid.parquet'))
     else:
         hdfs_dir = args.hdfs_dir
@@ -171,8 +293,8 @@ def store_data(
         # Create directory if it doesn't exist
         os.makedirs(local_dir, exist_ok=True)
         
-        train_dataset.to_parquet(os.path.join(local_dir, 'train.parquet'))
-        test_dataset.to_parquet(os.path.join(local_dir, 'test.parquet'))
+        train_dataset.to_parquet(os.path.join(local_dir, f'train_{data_mode}.parquet'))
+        test_dataset.to_parquet(os.path.join(local_dir, f'test_{data_mode}.parquet'))
 
         if hdfs_dir is not None:
             makedirs(hdfs_dir)
