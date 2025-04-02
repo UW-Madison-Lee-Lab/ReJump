@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 import hydra
 from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING, DictConfig, OmegaConf
+from transformers import AutoTokenizer
 
 # Import data generation functions from data_preprocess
 from examples.data_preprocess.moons import gen_dataset as gen_moons_dataset
@@ -26,6 +27,7 @@ class ICLExampleConfig:
     reslen_type: int = MISSING  # 3046, 5686
     nsamples_type: int = MISSING  # 500
     num_examples: int = MISSING  # Number of examples to use
+    icl_example_maxlength: int = 5000  # Maximum token length for example
 
 
 @dataclass
@@ -53,6 +55,7 @@ class ICLReasoningConfig:
     test_data_examples: TestDataExampleConfig = MISSING
     icl_example_seed: int = 42
     test_data_seed: int = 42
+    tokenizer_name: str = "Qwen/Qwen2.5-3B-Instruct"  # Tokenizer used for length calculation
     output_path: str = "/staging/szhang967/icl_datasets"
 
 
@@ -61,6 +64,33 @@ cs.store(name="config", node=ICLReasoningConfig)
 cs.store(group="icl_examples", name="example_config", node=ICLExampleConfig)
 cs.store(group="test_data", name="test_config", node=TestDataConfig)
 cs.store(group="test_data_examples", name="test_data_example_config", node=TestDataExampleConfig)
+
+
+def get_tokenizer(tokenizer_name: str):
+    """
+    Get the tokenizer for token length calculation
+    """
+    try:
+        return AutoTokenizer.from_pretrained(tokenizer_name, trust_remote_code=True)
+    except Exception as e:
+        print(f"Warning: Failed to load tokenizer {tokenizer_name}: {e}")
+        print("Falling back to default tokenizer (gpt2)")
+        return AutoTokenizer.from_pretrained("gpt2")
+
+
+def calculate_token_length(text: str, tokenizer) -> int:
+    """
+    Calculate the token length of a text string
+    
+    Args:
+        text: Input text
+        tokenizer: Tokenizer object
+        
+    Returns:
+        Number of tokens
+    """
+    tokens = tokenizer.encode(text)
+    return len(tokens)
 
 
 def load_deepseek_results(base_path: str, task_type: str, shot_type: int, 
@@ -186,9 +216,18 @@ def extract_icl_responses(result: Dict[str, Any]) -> str:
     raise ValueError("Failed to extract responses from result")
 
 
-def sample_icl_examples(config: ICLExampleConfig, base_path: str, rng: np.random.RandomState) -> List[Dict[str, Any]]:
+def sample_icl_examples(config: ICLExampleConfig, base_path: str, rng: np.random.RandomState, tokenizer) -> List[Dict[str, Any]]:
     """
-    Sample ICL examples based on the configuration
+    Sample ICL examples based on the configuration, respecting the max token length constraint
+    
+    Args:
+        config: ICL example configuration
+        base_path: Base path for DeepSeek results
+        rng: Random state for reproducibility
+        tokenizer: Tokenizer for length calculation
+        
+    Returns:
+        List of sampled examples
     """
     # Load all available examples from the specified configuration
     results = load_deepseek_results(
@@ -201,14 +240,51 @@ def sample_icl_examples(config: ICLExampleConfig, base_path: str, rng: np.random
         config.flip_rate
     )
     
-    # Sample the required number of examples
-    if len(results) <= config.num_examples:
-        if len(results) == 0:
-            raise ValueError(f"No examples found for configuration: {config}")
-        print(f"Warning: Requested {config.num_examples} examples but only {len(results)} available. Using all available examples.")
-        return results
+    if len(results) == 0:
+        raise ValueError(f"No examples found for configuration: {config}")
     
-    return rng.choice(results, config.num_examples, replace=False).tolist()
+    # Shuffle the results to get different samples each time
+    results_copy = results.copy()
+    rng.shuffle(results_copy)
+    
+    # Sample examples that respect the maximum token length
+    sampled_examples = []
+    for example in results_copy:
+        if len(sampled_examples) >= config.num_examples:
+            break
+            
+        # Check if example is under the maximum token length
+        try:
+            prompt_content = extract_test_prompt_content(example)
+            reasoning = extract_icl_reasonings(example)
+            response = extract_icl_responses(example)
+            
+            # Combine all text that would be included in the ICL example
+            full_example_text = f"Problem: {prompt_content}\nReasoning: {reasoning}\n\n{response}"
+            token_length = calculate_token_length(full_example_text, tokenizer)
+            
+            if token_length <= config.icl_example_maxlength:
+                # Add metadata about this example
+                example['config_info'] = {
+                    "task_type": config.task_type,
+                    "shot_type": config.shot_type,
+                    "reslen_type": config.reslen_type,
+                    "nsamples_type": config.nsamples_type,
+                    "noise_type": config.noise_type,
+                    "flip_rate": config.flip_rate,
+                    "token_length": token_length
+                }
+                sampled_examples.append(example)
+            else:
+                print(f"Skipping example with token length {token_length} > {config.icl_example_maxlength}")
+        except Exception as e:
+            print(f"Error processing example: {e}")
+    
+    # If we couldn't find enough examples under the token limit
+    if len(sampled_examples) < config.num_examples:
+        print(f"Warning: Requested {config.num_examples} examples but only {len(sampled_examples)} are under the token limit of {config.icl_example_maxlength}.")
+        
+    return sampled_examples
 
 
 def create_prompt(instruction: str, icl_examples: List[Dict[str, Any]], test_examples: List[Tuple], test_features: List[float], num_classes: int) -> str:
@@ -322,6 +398,10 @@ def main(cfg: DictConfig) -> None:
     test_rng = np.random.RandomState(cfg.test_data_seed)
     test_example_rng = np.random.RandomState(cfg.test_data_seed + 1) # different seed
     
+    # Load tokenizer for token length calculation
+    tokenizer = get_tokenizer(cfg.tokenizer_name)
+    print(f"Loaded tokenizer: {cfg.tokenizer_name}")
+    
     # Base paths
     deepseek_results_base = "/home/szhang967/liftr/analyze_deepseek/deepseek-resutls/deepseek-ai-deepseek-reasoner"
     
@@ -340,21 +420,11 @@ def main(cfg: DictConfig) -> None:
     icl_prompt_contents = set()  # To store prompt contents for string matching
     
     for icl_config in cfg.icl_examples:
-        # Sample ICL examples for this configuration
-        examples = sample_icl_examples(icl_config, deepseek_results_base, icl_rng)
+        # Sample ICL examples for this configuration with token length check
+        examples = sample_icl_examples(icl_config, deepseek_results_base, icl_rng, tokenizer)
         
-        # Add metadata about these examples
+        # Store feature representation for duplicate checking
         for example in examples:
-            example['config_info'] = {
-                "task_type": icl_config.task_type,
-                "shot_type": icl_config.shot_type,
-                "reslen_type": icl_config.reslen_type,
-                "nsamples_type": icl_config.nsamples_type,
-                "noise_type": icl_config.noise_type,
-                "flip_rate": icl_config.flip_rate
-            }
-            
-            # Store feature representation for duplicate checking
             if "features" in example:
                 features_str = str(example["features"])
                 icl_features_set.add(features_str)
@@ -407,15 +477,17 @@ def main(cfg: DictConfig) -> None:
         all_icl_examples.extend(examples)
         
         # Store config info for metadata
-        icl_config_info.append({
-            "task_type": icl_config.task_type,
-            "shot_type": icl_config.shot_type,
-            "reslen_type": icl_config.reslen_type,
-            "nsamples_type": icl_config.nsamples_type,
-            "noise_type": icl_config.noise_type,
-            "flip_rate": icl_config.flip_rate,
-            "num_examples": len(examples)
-        })
+        if examples:  # Only add config info if we have examples
+            icl_config_info.append({
+                "task_type": icl_config.task_type,
+                "shot_type": icl_config.shot_type,
+                "reslen_type": icl_config.reslen_type,
+                "nsamples_type": icl_config.nsamples_type,
+                "noise_type": icl_config.noise_type,
+                "flip_rate": icl_config.flip_rate,
+                "num_examples": len(examples),
+                "icl_example_maxlength": icl_config.icl_example_maxlength
+            })
     
     # Shuffle all examples using the random state
     icl_rng.shuffle(all_icl_examples)
@@ -530,6 +602,10 @@ def main(cfg: DictConfig) -> None:
         # Create prompt using the ICL examples, test examples, and test features
         prompt_text = create_prompt(instruction, all_icl_examples, test_examples, test_features, num_classes)
         
+        # Calculate final prompt length in tokens
+        prompt_token_length = calculate_token_length(prompt_text, tokenizer)
+        print(f"Test example {idx+1}: Prompt length = {prompt_token_length} tokens")
+        
         # Create dataset entry with the new format
         entry = {
             "data_source": cfg.test_data.task_type,
@@ -555,6 +631,7 @@ def main(cfg: DictConfig) -> None:
             "extra_info": {
                 'split': 'test',
                 'index': idx,
+                'prompt_token_length': prompt_token_length
             }
         }
         
@@ -583,6 +660,7 @@ def main(cfg: DictConfig) -> None:
         df.to_parquet(str(output_file))
     
     print(f"Created dataset with {len(dataset)} samples, saved to {output_file}")
+    print(f"Max prompt token length: {max([entry['extra_info']['prompt_token_length'] for entry in dataset])}")
 
 
 if __name__ == "__main__":
