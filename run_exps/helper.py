@@ -1,5 +1,5 @@
 from environment import root_dir
-from constants import get_dataset_dir, get_model_name, get_result_dir
+from constants import get_dataset_dir, get_model_name, get_result_dir, get_dataset_filename
 import pdb
 
 def gen_dataset(
@@ -9,7 +9,7 @@ def gen_dataset(
     num_samples=10000,
     noise_level=None,
     label_flip_rate=0.0,
-    plot=False
+    data_mode="default"
 ):
     if dataset_name == "blobs":
         noise_level = 1.0 if noise_level is None else noise_level
@@ -25,7 +25,7 @@ python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --noise_level={noise_level} \
     --test_ratio=0.2 \
     --label_flip_rate={label_flip_rate} \
-    --plot={int(plot)}
+    --data_mode={data_mode}
     """ 
 
 
@@ -51,7 +51,8 @@ def rl_train(
     num_samples=10000,
     noise_level=None,
     label_flip_rate=0.0,
-    n_gpus=2
+    n_gpus=2,
+    data_mode="default"
 ):
     dataset_dir = get_dataset_dir(
         dataset_name=dataset_name,
@@ -59,7 +60,8 @@ def rl_train(
         template_type=template_type,
         num_samples=num_samples,
         noise_level=noise_level,
-        label_flip_rate=label_flip_rate
+        label_flip_rate=label_flip_rate,
+        data_mode=data_mode
     )
     trained_model_name = get_model_name(
         dataset_name=dataset_name,
@@ -69,15 +71,16 @@ def rl_train(
         response_length=response_length,
         num_samples=num_samples,
         noise_level=noise_level,
-        label_flip_rate=label_flip_rate
+        label_flip_rate=label_flip_rate,
+        data_mode=data_mode
     )
     return f"""
 export VLLM_ATTENTION_BACKEND=XFORMERS
 
 python -m verl.trainer.main_ppo \
     algorithm.adv_estimator=grpo \
-    data.train_files={dataset_dir}/train.parquet \
-    data.val_files={dataset_dir}/test.parquet \
+    data.train_files={dataset_dir}/{get_dataset_filename(split="train", data_mode=data_mode)} \
+    data.val_files={dataset_dir}/{get_dataset_filename(split="test", data_mode=data_mode)} \
     data.train_batch_size=128 \
     data.val_batch_size=640 \
     data.max_prompt_length={prompt_length} \
@@ -127,7 +130,9 @@ def inference(
     noise_level=None,
     label_flip_rate=0.0,
     n_gpus=2,
-    plot=False
+    data_mode="default",
+    train_step=0,
+    wandb=2,
 ):
     dataset_dir = get_dataset_dir(
         dataset_name=dataset_name,
@@ -135,7 +140,8 @@ def inference(
         template_type=template_type,
         num_samples=num_samples,
         noise_level=noise_level,
-        label_flip_rate=label_flip_rate
+        label_flip_rate=label_flip_rate,
+        data_mode=data_mode
     )
     result_dir = get_result_dir(
         dataset_name=dataset_name,
@@ -145,9 +151,11 @@ def inference(
         response_length=response_length,
         num_samples=num_samples,
         noise_level=noise_level,
-        label_flip_rate=label_flip_rate
+        label_flip_rate=label_flip_rate,
+        data_mode=data_mode,
+        train_step=train_step
     )
-    output_file = "grid.parquet" if plot else "test.parquet"
+    output_file = get_dataset_filename(split="test", data_mode=data_mode)
     return f"""
 python -m verl.trainer.main_generation \
     trainer.nnodes=1 \
@@ -166,6 +174,6 @@ python -m verl.trainer.main_generation \
     rollout.response_length={response_length} \
     rollout.tensor_model_parallel_size={n_gpus} \
     rollout.gpu_memory_utilization=0.8 \
-    trainer.wandb=True \
+    trainer.wandb={wandb} \
     rollout.n=1
     """

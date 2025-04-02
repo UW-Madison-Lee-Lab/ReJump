@@ -33,6 +33,7 @@ def gen_dataset(
     np.random.seed(seed_value)
     if random:
         factor = np.random.uniform(0.1, 0.9)
+        scale_factor = np.random.uniform(.5,2)
     else:
         factor = 0.9
     
@@ -45,6 +46,8 @@ def gen_dataset(
         random_state=seed_value
     )
     
+    if random:
+        X = X * scale_factor
     # Optionally flip some labels to make it even harder
     y = flip_label(y, label_flip_rate, 2)
     
@@ -61,7 +64,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--hdfs_dir', default=None)
     parser.add_argument('--num_samples', type=int, default=100)
-    parser.add_argument('--noise_level', type=float, default=0.05)
+    parser.add_argument('--noise_level', type=float, default=0)
     parser.add_argument('--test_ratio', type=float, default=0.2)
     parser.add_argument('--n_shot', type=int, default=10)
     parser.add_argument('--template_type', type=str, default='base')
@@ -83,6 +86,7 @@ if __name__ == '__main__':
         n_classes,
         datasets['TRAIN_SIZE'],
         datasets['TEST_SIZE'],
+        data_mode = args.data_mode,
     )
     
 

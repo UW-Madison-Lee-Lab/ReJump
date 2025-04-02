@@ -3,7 +3,7 @@ import os
 from verl.utils.hdfs_io import copy, makedirs
 import numpy as np
 import re
-from constants import get_dataset_dir
+from constants import get_dataset_dir, get_dataset_filename
 import pandas as pd
 import pdb
 
@@ -125,7 +125,7 @@ def make_prefix(dp, template_type, n_classes, n_shot=0, in_context_dataset=None)
     if n_shot > 0 and in_context_dataset is not None:
         in_context_examples = "We first provide you with some examples of how to classify data points.\n"
         # Randomly select indices for in-context examples
-        random_indices = np.random.choice(len(in_context_dataset), n_shot, replace=False)
+        random_indices = np.random.choice(len(in_context_dataset), n_shot, replace= len(in_context_dataset) < n_shot)
         
         
         for i in random_indices:
@@ -266,7 +266,8 @@ def save_data(
         template_type=args.template_type,
         num_samples=args.num_samples,
         noise_level=args.noise_level,
-        label_flip_rate=args.label_flip_rate
+        label_flip_rate=args.label_flip_rate,
+        data_mode=data_mode,
     )
 
     store_data(
@@ -286,19 +287,27 @@ def store_data(
     data_mode
 ):
     if data_mode == "grid":
-        test_dataset.to_parquet(os.path.join(local_dir, 'grid.parquet'))
+        grid_path = os.path.join(local_dir, get_dataset_filename(split="grid", data_mode=data_mode))
+        test_dataset.to_parquet(grid_path)
+        print(f"Test dataset saved to {grid_path}")
     else:
         hdfs_dir = args.hdfs_dir
 
         # Create directory if it doesn't exist
         os.makedirs(local_dir, exist_ok=True)
         
-        train_dataset.to_parquet(os.path.join(local_dir, f'train_{data_mode}.parquet'))
-        test_dataset.to_parquet(os.path.join(local_dir, f'test_{data_mode}.parquet'))
+        train_path = os.path.join(local_dir, get_dataset_filename(split="train", data_mode=data_mode))
+        test_path = os.path.join(local_dir, get_dataset_filename(split="test", data_mode=data_mode))
+        train_dataset.to_parquet(train_path)
+        test_dataset.to_parquet(test_path)
+
+        print(f"Train dataset saved to {train_path}")
+        print(f"Test dataset saved to {test_path}")
 
         if hdfs_dir is not None:
             makedirs(hdfs_dir)
             copy(src=local_dir, dst=hdfs_dir)
+            
 
 def classification_reward_fn(solution_str, ground_truth):
     all_matches = list(re.finditer(r'<answer>(.*?)</answer>', solution_str, re.DOTALL))

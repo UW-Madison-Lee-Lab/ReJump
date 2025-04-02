@@ -58,7 +58,7 @@ def gen_dataset(
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--hdfs_dir', default=None)
-    parser.add_argument('--num_samples', type=int, default=100000)
+    parser.add_argument('--num_samples', type=int, default=100)
     parser.add_argument('--noise_level', type=float, default=0.1)
     parser.add_argument('--test_ratio', type=float, default=0.2)
     parser.add_argument('--n_shot', type=int, default=10)
@@ -82,7 +82,8 @@ if __name__ == '__main__':
         args,
         n_classes,
         datasets['TRAIN_SIZE'],
-        datasets['TEST_SIZE']
+        datasets['TEST_SIZE'],
+        data_mode = args.data_mode,
     )
     
 def moons_reward_fn(solution_str, ground_truth):
