@@ -6,8 +6,9 @@ import re
 from constants import get_dataset_dir
 import pandas as pd
 from ray.util import pdb
+
 def format_features(features):
-    return ", ".join([f"{x:.3f}" for x in features])
+    return "[" + ", ".join([f"{x:.3f}" for x in features]) + "]"
 
 def flip_label(y, label_flip_rate, n_classes):
     if label_flip_rate > 0:
@@ -50,11 +51,11 @@ def make_prefix(dp, template_type, n_classes, n_shot=0, in_context_dataset=None)
     elif template_type == 'qwen-instruct':
         """This works for Qwen Instruct Models"""
         prefix = f"""
-        <|im_start|>system\nYou are a helpful assistant. You first thinks about the reasoning process in the mind and then provides the user with the answer.<|im_end|>\n
-        <|im_start|>user\n The dataset has {n_classes} classes: {list(range(n_classes))}. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer>1</answer>.<|im_end|>\n<|im_start|>assistant\nLet me solve this step by step.\n<think>
+        <|im_start|>system\nYou are a helpful assistant. You first think about the reasoning process in your mind and then provide the user with the answer.<|im_end|>\n
+        <|im_start|>user\n The dataset has {len(features)} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer>1</answer>.<|im_end|>\n<|im_start|>assistant\nLet me solve this step by step.\n<think>
         """
     elif template_type == 'no_reasoning':
-        """This do not allow any reasoning"""
+        """This does not allow any reasoning"""
         prefix = f"""
         <|im_start|>system
         You are a helpful assistant. You always provide the user directly with the answer without any reasoning.
