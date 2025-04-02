@@ -17,19 +17,42 @@ def get_model_name(
 ):
     return f"{model_name.replace('/', '-')}/{dataset_name}_{shot}_shot_{template_type}_reslen_{response_length}_nsamples_{num_samples}_noise_{noise_level}_flip_rate_{label_flip_rate}_mode_{data_mode}"
 def get_configs_via_model_name(model_name):
-    pattern = r"(.+?)/(.+?)_(\d+)_shot_(.+)_reslen_(.+)_nsamples_(.+)_noise_(.+)_flip_rate_(.+)_mode_(.+)"
+    pattern = r"(.+?)/(.+?)_(.+?)_shot_(.+)_reslen_(.+)_nsamples_(.+)_noise_(.+)_flip_rate_(.+)_mode_(.+)"
     match = re.match(pattern, model_name)
+    
     if match:
-        return {    
-            "dataset_name": match.group(2),
-            "model_name": match.group(1),
-            "shot": int(match.group(3)),
-            "template_type": match.group(4),
-            "response_length": int(match.group(5)),
-            "num_samples": int(match.group(6)),
-            "noise_level": float(match.group(7)),
-            "label_flip_rate": float(match.group(8)),
-            "data_mode": match.group(9)
+        dataset_name = match.group(2)
+        shot = match.group(3)
+        template_type = match.group(4)
+        response_length = match.group(5)
+        num_samples = match.group(6)
+        noise_level = match.group(7)
+        label_flip_rate = match.group(8)
+        data_mode = match.group(9)
+    
+        # Check if shot is a digit or a hyphen-separated list of digits
+        if '-' in shot and "-" in noise_level and "-" in label_flip_rate:
+            return {
+                "dataset_name": dataset_name,
+                "shot": shot,
+                "template_type": template_type,
+                "response_length": response_length,
+                "num_samples": num_samples,
+                "noise_level": noise_level,
+                "label_flip_rate": label_flip_rate,
+                "data_mode": data_mode
+            }
+        else:
+            return {    
+                "dataset_name": match.group(2),
+                "model_name": match.group(1),
+                "shot": int(match.group(3)),
+                "template_type": match.group(4),
+                "response_length": int(match.group(5)),
+                "num_samples": int(match.group(6)),
+                "noise_level": float(match.group(7)),
+                "label_flip_rate": float(match.group(8)),
+                "data_mode": match.group(9)
         }
     else:
         raise ValueError(f"Invalid model name: {model_name}")
@@ -134,7 +157,7 @@ def get_dataset_filename(
         return f"{split}_{data_mode}.parquet"
     
 
-def get_mixed_dataset_dir(
+def get_mixed_configs(
     dataset_paths,
     dataset_ratios,
     num_samples,
@@ -142,28 +165,22 @@ def get_mixed_dataset_dir(
 
     configs = dict()
     for dataset_path in dataset_paths:
-        for key in get_configs_via_dataset_dir(dataset_path):
+        data_configs = get_configs_via_dataset_dir(dataset_path)
+        for key in data_configs:
             if key in configs:
-                configs[key] = f"{configs[key]}-{get_configs_via_dataset_dir(dataset_path)[key]}"
+                configs[key] = f"{configs[key]}-{data_configs[key]}"
             else:
-                configs[key] = get_configs_via_dataset_dir(dataset_path)[key]
+                configs[key] = data_configs[key]
            
     mix_str = ""
     for dataset_ratio in dataset_ratios:
         mix_str += f"{dataset_ratio}-"
     mix_str = mix_str[:-1]
             
-    output_dir = get_dataset_dir(
-        configs['dataset_name']+"_mix_"+mix_str,
-        configs['shot'],
-        configs['template_type'],
-        num_samples,
-        configs['noise_level'],
-        configs['label_flip_rate'],
-        configs['data_mode']
-    )
-    
-    return output_dir
+    configs['dataset_name'] = configs['dataset_name']+"_mix_"+mix_str
+    configs['num_samples'] = num_samples
+
+    return configs
     
 supported_llms = {
     # Qwen

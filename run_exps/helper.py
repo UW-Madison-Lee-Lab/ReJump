@@ -171,6 +171,8 @@ def inference(
         data_mode=data_mode,
         train_step=train_step
     )
+    if "-" in data_mode:
+        data_mode = "mixed"
     output_file = get_dataset_filename(split="test", data_mode=data_mode)
     return f"""
 python -m verl.trainer.main_generation \

@@ -49,10 +49,8 @@ import wandb
 
 @hydra.main(config_path='config', config_name='generation', version_base=None)
 def main(config):
-    config.model.path = extract_model_name(config.model.path)
-    
     if config.trainer.wandb == 1:
-
+        config.model.path = extract_model_name(config.model.path)
         run_name = f"run-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
         wandb.init(
             project=f"{WANDB_INFO['project']}-{config.trainer.project_name}",
