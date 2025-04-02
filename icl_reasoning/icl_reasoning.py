@@ -528,13 +528,20 @@ def main(cfg: DictConfig) -> None:
         test_features = test_row["features"]
         
         # Create prompt using the ICL examples, test examples, and test features
-        prompt = create_prompt(instruction, all_icl_examples, test_examples, test_features, num_classes)
+        prompt_text = create_prompt(instruction, all_icl_examples, test_examples, test_features, num_classes)
         
-        # Create dataset entry
+        # Create dataset entry with the new format
         entry = {
-            "prompt": prompt,
-            "features": test_row["features"],
-            "label": test_row["label"] if "label" in test_row else None,
+            "data_source": cfg.test_data.task_type,
+            "prompt": [{
+                "role": "user",
+                "content": prompt_text,
+            }],
+            "ability": "classification",
+            "reward_model": {
+                "style": "rule",
+                "ground_truth": int(test_row["label"])
+            },
             "icl_example_meta_info": icl_config_info,
             "icl_examples": [json.dumps(ex) if isinstance(ex, dict) else str(ex) for ex in all_icl_examples],  # Convert to string to avoid parquet issues
             "test_examples": json.dumps(test_examples),  # Convert to JSON string for consistent serialization
@@ -544,6 +551,10 @@ def main(cfg: DictConfig) -> None:
                 "nsamples_type": cfg.test_data_examples.nsamples_type,
                 "noise_type": cfg.test_data.noise_type,
                 "flip_rate": cfg.test_data.flip_rate,
+            },
+            "extra_info": {
+                'split': 'test',
+                'index': idx,
             }
         }
         
