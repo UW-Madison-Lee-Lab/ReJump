@@ -151,6 +151,8 @@ def get_dataset_filename(
     split,
     data_mode,
 ):
+    if "-" in data_mode:
+        data_mode = "mixed"
     if data_mode == "grid":
         return "grid.parquet"
     else:
