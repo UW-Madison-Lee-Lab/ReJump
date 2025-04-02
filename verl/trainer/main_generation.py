@@ -42,7 +42,7 @@ from verl.trainer.ppo.helper import RewardManager
 from verl.utils.hdfs_io import makedirs
 from verl.single_controller.ray import RayClassWithInitArgs, RayResourcePool, RayWorkerGroup
 from utils import flatten_dict, print_configs
-
+from constants import get_configs_via_result_dir
 from verl.trainer.fsdp_sft_trainer import extract_model_name
 from environment import WANDB_INFO
 import wandb
@@ -51,7 +51,7 @@ import wandb
 def main(config):
     config.model.path = extract_model_name(config.model.path)
     
-    if config.trainer.wandb:
+    if config.trainer.wandb == 1:
 
         run_name = f"run-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
         wandb.init(
@@ -60,8 +60,17 @@ def main(config):
 
             name=run_name,
             config=flatten_dict(config)
- )
-        
+        )
+    elif config.trainer.wandb == 2:
+        wandb_configs = flatten_dict(config)
+        wandb_configs.update(get_configs_via_result_dir(os.path.dirname(config.data.output_path)))
+        wandb.init(
+            project=f"{WANDB_INFO['project']}-generation",
+            entity=WANDB_INFO['entity'],
+            config=wandb_configs
+        )
+    else:
+        raise ValueError(f"Invalid wandb mode: {config.trainer.wandb}")
     
     print_configs(flatten_dict(config))
     
