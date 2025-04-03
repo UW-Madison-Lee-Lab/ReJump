@@ -5,7 +5,7 @@ import concurrent.futures
 import time
 import numpy as np
 import torch
-from verl import DataProto
+import pdb
 from verl.utils.reward_score import gsm8k, math, multiply, countdown
 
 def _select_rm_score_fn(data_source):
@@ -81,7 +81,7 @@ class APIRewardManager:
             return reward_tensor
 
 class LLMAPI:
-    def __init__(self, api_key: str, model_name: str):
+    def __init__(self, api_key: str, model_name: str, template_type: str = None):
         """
         Initialize the LLM API client.
         
@@ -96,23 +96,31 @@ class LLMAPI:
                 base_url="https://api.deepseek.com/v1"
             )
             self.model = model_name.replace("deepseek-ai/", "")  # Remove the prefix to get the actual model name
+            self.client_type = "deepseek"
         elif model_name.startswith("openai/"):
             self.client = OpenAI(
                 api_key=api_key
             )
             self.model = model_name.replace("openai/", "")  # Remove the prefix to get the actual model name
+            self.client_type = "openai"
         elif model_name.startswith("openrouter-"):
             self.client = OpenAI(
                 api_key=api_key,
                 base_url="https://openrouter.ai/api/v1"
             )
             self.model = model_name.replace("openrouter-", "")  # Remove the prefix to get the actual model name
+            self.client_type = "openrouter"
         elif model_name.startswith("claude/"):
             self.client = anthropic.Anthropic(api_key=api_key)
             self.model = model_name.replace("claude/", "")  # Remove the prefix to get the actual model name
             self.client_type = "anthropic"
         else:
             raise ValueError(f"Unsupported model: {model_name}")
+        
+        if "no_reasoning" in template_type:
+            self.thinking = False
+        else:
+            self.thinking = True
 
     def generate(self, messages: List[Dict[str, str]], max_tokens: int = 8000, temperature: float = 0.7) -> str:
         max_retries = 1000  # Very large number of retries
@@ -125,14 +133,21 @@ class LLMAPI:
         for attempt in range(max_retries):
             try:
                 if self.client_type is not None and self.client_type == "anthropic":
-                    response = self.client.messages.create(
-                        model=self.model,
-                        max_tokens=max_tokens,
-                        messages=messages,
+                    if self.thinking:
                         thinking={
                             "type": "enabled",
                             "budget_tokens": min(16000, max_tokens // 2)
                         }
+                    else:
+                        thinking = {
+                            "type": "disabled",
+                        }
+            
+                    response = self.client.messages.create(
+                        model=self.model,
+                        max_tokens=max_tokens,
+                        messages=messages,
+                        thinking=thinking
                     )
                     content = response.content[1].text
                     reasoning_content = response.content[0].thinking
@@ -167,21 +182,17 @@ class LLMAPI:
                 breakpoint()                
                 
                 """
-                
-                
-                
 
-                
-
-                
                 # Check if response is complete (ends with proper tags or punctuation)
                 if '</answer>' not in content:
-                    if attempt < max_retries - 1:
-                        time.sleep(5)
-                        continue
+                    print(f"response: {content}")
 
                 return content, reasoning_content
-                
+
+            except KeyboardInterrupt:
+                raise KeyboardInterrupt
+            except pdb.bdb.BdbQuit:
+                raise pdb.bdb.BdbQuit
             except Exception as e:
                 if attempt < max_retries - 1:
                     time.sleep(5)

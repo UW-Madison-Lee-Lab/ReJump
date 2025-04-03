@@ -16,6 +16,7 @@ Generate responses given a dataset of prompts
 """
 import ray
 import numpy as np
+import pdb
 import hydra
 import os
 import time
@@ -65,6 +66,7 @@ login(token=HUGGINGFACE_API_KEY)
 
 @hydra.main(config_path='config', config_name='generation', version_base=None)
 def main(config):
+    wandb_configs = flatten_dict(config)
     if config.trainer.wandb == 1:
         config.model.path = extract_model_name(config.model.path)
         run_name = f"run-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
@@ -73,10 +75,10 @@ def main(config):
             entity=WANDB_INFO['entity'],
 
             name=run_name,
-            config=flatten_dict(config)
+            config=wandb_configs
         )
     elif config.trainer.wandb == 2:
-        wandb_configs = flatten_dict(config)
+        
         wandb_configs.update(get_configs_via_result_dir(os.path.dirname(config.data.output_path)))
         wandb.init(
             project=f"{WANDB_INFO['project']}-generation",
@@ -95,11 +97,12 @@ def main(config):
     # Initialize model based on config
     use_api = config.model.path in ["deepseek-ai/deepseek-chat", "deepseek-ai/deepseek-reasoner", "openai/gpt-4o", "openai/o1-pro", "openai/o3-mini", "openrouter-deepseek/deepseek-r1", "claude/claude-3-7-sonnet-20250219"]
     if use_api:
+        data_configs = get_configs_via_result_dir(os.path.dirname(config.data.output_path))
         api_key = DEEPSEEK_API_KEY if "deepseek-ai/deepseek" in config.model.path \
             else OPENAI_API_KEY if "openai" in config.model.path \
             else ANTHROPIC_API_KEY if "claude" in config.model.path \
             else OPENROUTER_API_KEY
-        model = LLMAPI(api_key=api_key, model_name=config.model.path)
+        model = LLMAPI(api_key=api_key, model_name=config.model.path, template_type=data_configs["template_type"])
         chat_lst_converter = LLMAPI.convert_chat_list
         # Use Qwen tokenizer for API mode
         local_path = "Qwen/Qwen2.5-3B-Instruct"

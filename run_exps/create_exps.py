@@ -60,7 +60,7 @@ for dataset in dataset_list:
                             template_type = supported_llms[model]["template_type"]
                             response_length = int(prompt_length * args.response_length_thinking_factor)
                         elif mode == "no_reasoning":
-                            template_type = "no_reasoning"
+                            template_type = supported_llms[model]["template_type"] + "_no_reasoning"
                             response_length = 100
                         else:
                             raise ValueError(f"Mode {mode} not supported, should be in [reasoning, no_reasoning]")
