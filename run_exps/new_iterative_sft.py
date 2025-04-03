@@ -41,11 +41,13 @@ def parse_args():
     parser.add_argument("--n", type=int, default=1)
     parser.add_argument("--generation_batch_size", type=int, default=128)
 
-    
-
     # Add debug parameter to skip to train_on_correct_responses
     parser.add_argument("--debug_from_train_on_correct_responses", action="store_true",
                        help="Skip generation and evaluation steps and start from training")
+    
+    # Add parameter to only test without training
+    parser.add_argument("--test_before_training", action="store_true",
+                       help="Only generate and evaluate test responses, then exit without training")
     
     return parser.parse_args()
 
@@ -232,6 +234,11 @@ def main():
                     
                     # Evaluate test responses
                     evaluate_responses(test_output_path, current_model, "test", dataset, args)
+                    
+                    # Exit if test_before_training flag is set
+                    if args.test_before_training:
+                        print("Test before training flag is set. Exiting after test evaluation.")
+                        sys.exit(0)
                     
                     # Generate training responses
                     train_output_path = generate_responses(dataset, dataset_local_dir, current_model, iteration, True, args, model_basename)

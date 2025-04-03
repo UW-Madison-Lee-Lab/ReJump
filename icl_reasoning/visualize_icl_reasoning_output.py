@@ -271,6 +271,8 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
     full_correct_predictions = 0
     full_refined_correct = 0  # For storing the correct count for refined accuracy
     unparseable_predictions = 0  # Count of unparseable predictions
+    parseable_predictions = 0  # Count of parseable predictions
+    parseable_correct = 0  # Count of correct predictions among parseable ones
     
     print(f"Calculating accuracy on all {total_data_size} samples...")
     
@@ -359,7 +361,13 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
         if is_correct:
             full_correct_predictions += 1
             full_refined_correct += 1  # Correct predictions also count as correct in refined accuracy
-        elif not can_parse_prediction and ground_truth is not None and 'label' in ground_truth:
+            if can_parse_prediction:
+                parseable_correct += 1
+        
+        # Track parseable predictions
+        if can_parse_prediction:
+            parseable_predictions += 1
+        elif ground_truth is not None and 'label' in ground_truth:
             # For samples with unparseable predictions, calculate refined accuracy
             unparseable_predictions += 1
             
@@ -377,8 +385,12 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
     accuracy = (full_correct_predictions / total_data_size) * 100 if total_data_size > 0 else 0
     refined_accuracy = (full_refined_correct / total_data_size) * 100 if total_data_size > 0 else 0
     
+    # Calculate accuracy for parseable predictions only
+    parseable_accuracy = (parseable_correct / parseable_predictions) * 100 if parseable_predictions > 0 else 0
+    
     print(f"Overall accuracy from all {total_data_size} samples: {accuracy:.2f}%")
     print(f"Refined accuracy (random guess for unparseable): {refined_accuracy:.2f}%")
+    print(f"Parseable accuracy (excluding unparseable): {parseable_accuracy:.2f}% ({parseable_predictions}/{total_data_size} samples)")
     print(f"Unparseable predictions: {unparseable_predictions} ({unparseable_predictions/total_data_size*100:.2f}%)")
         
     # Sample the dataframe if needed for visualization, ensuring balanced correct/incorrect samples
@@ -545,6 +557,9 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
             f'<div class="accuracy-big">',
             f'Accuracy: {accuracy:.2f}% &nbsp;|&nbsp; Refined Accuracy: {refined_accuracy:.2f}%',
             f'</div>',
+            f'<div class="accuracy-big" style="background-color: #e9f0ff; border-color: #1565C0;">',
+            f'Parseable Accuracy: {parseable_accuracy:.2f}% (excluding {unparseable_predictions} unparseable samples)',
+            f'</div>',
             f'<div>Unparseable Predictions: {unparseable_predictions} ({unparseable_predictions/total_data_size*100:.2f}%)</div>',
             f'<hr style="margin: 20px 0; border: 0; height: 2px; background: #333;">',
         ]
@@ -558,6 +573,7 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
             f'<tr><td>Correct Predictions (all data)</td><td>{full_correct_predictions}</td></tr>',
             f'<tr><td>Accuracy (all data)</td><td>{accuracy:.2f}%</td></tr>',
             f'<tr><td>Refined Accuracy</td><td>{refined_accuracy:.2f}%</td></tr>',
+            f'<tr><td>Parseable Accuracy</td><td>{parseable_accuracy:.2f}% ({parseable_predictions}/{total_data_size} samples)</td></tr>',
             f'<tr><td>Unparseable Predictions</td><td>{unparseable_predictions} ({unparseable_predictions/total_data_size*100:.2f}%)</td></tr>',
             f'</table>',
             f'{balance_note}',
@@ -1440,6 +1456,7 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
             f.write(f"Correct predictions (all data): {full_correct_predictions}\n")
             f.write(f"Accuracy (all data): {accuracy:.2f}%\n")
             f.write(f"Refined accuracy: {refined_accuracy:.2f}%\n")
+            f.write(f"Parseable accuracy: {parseable_accuracy:.2f}% ({parseable_predictions}/{total_data_size} samples)\n")
             f.write(f"Unparseable predictions: {unparseable_predictions} ({unparseable_predictions/total_data_size*100:.2f}%)\n")
             if balance_note:
                 f.write(f"{balance_note}\n")
@@ -1450,6 +1467,7 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
     print(f"Correct predictions (all data): {full_correct_predictions}")
     print(f"Accuracy (all data): {accuracy:.2f}%")
     print(f"Refined accuracy: {refined_accuracy:.2f}%")
+    print(f"Parseable accuracy: {parseable_accuracy:.2f}% ({parseable_predictions}/{total_data_size} samples)")
     print(f"Unparseable predictions: {unparseable_predictions} ({unparseable_predictions/total_data_size*100:.2f}%)")
     
     return str(output_file)
