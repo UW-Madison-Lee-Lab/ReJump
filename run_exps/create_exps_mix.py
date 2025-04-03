@@ -10,7 +10,7 @@ model_size_upper_limit = 10_000_000_000
 supported_model_list = [model for model in supported_llms.keys() if supported_llms[model]["model_size"] <= model_size_upper_limit]
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--dataset", type=str, nargs="+", default=["blobs", "moons", "circles"], choices=["blobs", "moons", "linear"])
+parser.add_argument("--dataset", type=str, nargs="+", default=["blobs", "moons", "circles"], choices=["blobs", "moons", "circles"])
 parser.add_argument("--model", type=str, nargs="+", default=supported_model_list, choices=supported_model_list)
 parser.add_argument("--mode", type=str, nargs="+", default=["reasoning", "no_reasoning"], choices=["reasoning", "no_reasoning"])
 parser.add_argument("--shot", type=int, nargs="+", default=[50, 50, 50])
