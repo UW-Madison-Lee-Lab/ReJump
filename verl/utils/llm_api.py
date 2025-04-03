@@ -96,17 +96,20 @@ class LLMAPI:
                 base_url="https://api.deepseek.com/v1"
             )
             self.model = model_name.replace("deepseek-ai/", "")  # Remove the prefix to get the actual model name
+            self.client_type = "deepseek"
         elif model_name.startswith("openai/"):
             self.client = OpenAI(
                 api_key=api_key
             )
             self.model = model_name.replace("openai/", "")  # Remove the prefix to get the actual model name
+            self.client_type = "openai"
         elif model_name.startswith("openrouter-"):
             self.client = OpenAI(
                 api_key=api_key,
                 base_url="https://openrouter.ai/api/v1"
             )
             self.model = model_name.replace("openrouter-", "")  # Remove the prefix to get the actual model name
+            self.client_type = "openrouter"
         elif model_name.startswith("claude/"):
             self.client = anthropic.Anthropic(api_key=api_key)
             self.model = model_name.replace("claude/", "")  # Remove the prefix to get the actual model name
@@ -139,6 +142,7 @@ class LLMAPI:
                         thinking = {
                             "type": "disabled",
                         }
+            
                     response = self.client.messages.create(
                         model=self.model,
                         max_tokens=max_tokens,
@@ -181,9 +185,7 @@ class LLMAPI:
 
                 # Check if response is complete (ends with proper tags or punctuation)
                 if '</answer>' not in content:
-                    if attempt < max_retries - 1:
-                        time.sleep(5)
-                        continue
+                    print(f"response: {content}")
 
                 return content, reasoning_content
 

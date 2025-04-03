@@ -24,7 +24,7 @@ parser.add_argument("--n_samples", type=int, nargs="+", default=[10000])
 parser.add_argument("--noise_level", type=float, nargs="+", default=[None])
 parser.add_argument("--label_flip_rate", type=float, default=0.0)
 parser.add_argument("--data_mode", type=str, default="default", choices=["default", "grid", "mixed"])
-parser.add_argument("--wandb", type=int, default=2, choices=[1, 2])
+parser.add_argument("--wandb", type=int, default=2, choices=[0, 1, 2])
 args = parser.parse_args()
 
 if args.load_train_step:
