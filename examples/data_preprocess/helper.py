@@ -171,6 +171,23 @@ def make_prefix(dp, template_type, n_classes, n_shot=0, in_context_dataset=None)
         User: The dataset has {len(features)} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. Your response should be in <answer> </answer> tags without any other text, for example <answer>1</answer>.
         Assistant: 
         """
+        
+    elif template_type == 'reasoning_api':
+        prefix = f"""
+        The dataset has {len(features)} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. Your answer should be just the class label, without any other text or punctuation.
+        """
+    elif template_type == "standard_api_no_reasoning":
+        prefix = f"""
+        The dataset has {len(features)} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. Your answer should be just the class label, without any other text or punctuation.
+        """
+    elif template_type == "standard_api":
+        prefix = f"""
+        The dataset has {len(features)} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes.  
+        Let's think step by step. Please provide your thinking process in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer>1</answer>. Note that your final answer should be just the class label, without any other text or punctuation.
+        """
+    else:
+        raise ValueError(f"Invalid template type: {template_type}")
+    
     return prefix, in_context_samples
 
 

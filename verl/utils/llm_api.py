@@ -6,6 +6,7 @@ import time
 import numpy as np
 import torch
 import pdb
+import re
 from verl.utils.reward_score import gsm8k, math, multiply, countdown
 
 def _select_rm_score_fn(data_source):
@@ -114,13 +115,18 @@ class LLMAPI:
             self.client = anthropic.Anthropic(api_key=api_key)
             self.model = model_name.replace("claude/", "")  # Remove the prefix to get the actual model name
             self.client_type = "anthropic"
+            
+            if "thinking" in self.model: 
+                self.model = self.model.replace("-thinking", "")
+                self.thinking = "enabled"
+            elif "no_reasoning" in template_type:
+                self.thinking = "cot"
+            else:
+                self.thinking = "disabled"
+                
         else:
             raise ValueError(f"Unsupported model: {model_name}")
         
-        if "no_reasoning" in template_type:
-            self.thinking = False
-        else:
-            self.thinking = True
 
     def generate(self, messages: List[Dict[str, str]], max_tokens: int = 8000, temperature: float = 0.7) -> str:
         max_retries = 1000  # Very large number of retries
@@ -133,7 +139,7 @@ class LLMAPI:
         for attempt in range(max_retries):
             try:
                 if self.client_type is not None and self.client_type == "anthropic":
-                    if self.thinking:
+                    if self.thinking == "enabled":
                         thinking={
                             "type": "enabled",
                             "budget_tokens": min(16000, max_tokens // 2)
@@ -145,12 +151,24 @@ class LLMAPI:
             
                     response = self.client.messages.create(
                         model=self.model,
+                        system = "You are a helpful data analysis assistant.",
                         max_tokens=max_tokens,
                         messages=messages,
                         thinking=thinking
                     )
-                    content = response.content[1].text
-                    reasoning_content = response.content[0].thinking
+                    
+                    if self.thinking == "enabled":
+                        reasoning_content = f"<think>{response.content[0].thinking}</think>"
+                        content = reasoning_content + f"<answer>{response.content[1].text}</answer>"
+                    elif self.thinking == "cot":
+                        content = response.content[0].text
+                        
+                        reasoning_match = re.search(r'<think>(.*?)</think>', content, re.DOTALL)
+                        reasoning_content = f"<think>{reasoning_match.group(1).strip()}</think>" if reasoning_match else ""
+                        content = f"<answer>{content}</answer>"
+                    else:
+                        content = f"<answer>{response.content[0].text}</answer>"
+                        reasoning_content = ""
                 else:
                     response = self.client.chat.completions.create(
                         model=self.model,

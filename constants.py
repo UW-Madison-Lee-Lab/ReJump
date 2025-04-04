@@ -220,32 +220,36 @@ supported_llms = {
     },
     # Deepseek api
     "deepseek-ai/deepseek-chat": {
-        "template_type": "base",
+        "template_type": "standard_api",
         "model_size": 0,
     },
     "deepseek-ai/deepseek-reasoner": {
-        "template_type": "base",
+        "template_type": "reasoning_api",
         "model_size": 0,
     },
     # OpenAI api
     "openai/gpt-4o": {
-        "template_type": "base",
+        "template_type": "standard_api",
         "model_size": 0,
     },
     "openai/o1-pro": {
-        "template_type": "base",
+        "template_type": "reasoning_api",
         "model_size": 0,
     },
     "openai/o3-mini": {
-        "template_type": "base",
+        "template_type": "reasoning_api",
         "model_size": 0,
     },
     "openrouter-deepseek/deepseek-r1": {
-        "template_type": "base",
+        "template_type": "reasoning_api",
         "model_size": 0,
     },
     "claude/claude-3-7-sonnet-20250219": {
-        "template_type": "base",
+        "template_type": "standard_api",
+        "model_size": 0,
+    },
+    "claude/claude-3-7-sonnet-20250219-thinking": {
+        "template_type": "reasoning_api",
         "model_size": 0,
     }
 }
