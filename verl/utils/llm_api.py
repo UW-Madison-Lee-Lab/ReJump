@@ -112,8 +112,18 @@ class LLMAPI:
             self.model = model_name.replace("openrouter-", "")  # Remove the prefix to get the actual model name
             self.client_type = "openrouter"
         elif model_name.startswith("claude/"):
-            self.client = anthropic.Anthropic(api_key=api_key)
+            print(f"Initializing Claude client with model: {model_name}")
+            try:
+                self.client = anthropic.Anthropic(
+                    api_key=api_key,
+                    timeout=120.0  # Set timeout to 120 seconds
+                )
+                print(f"Claude client initialized successfully")
+            except Exception as e:
+                print(f"Error initializing Claude client: {str(e)}")
+                raise
             self.model = model_name.replace("claude/", "")  # Remove the prefix to get the actual model name
+            print(f"Using Claude model: {self.model}")
             self.client_type = "anthropic"
             if "thinking" in self.model: 
                 self.model = self.model.replace("-thinking", "")
@@ -130,9 +140,9 @@ class LLMAPI:
         
 
     def generate(self, messages: List[Dict[str, str]], max_tokens: int = 8000, temperature: float = 0.7) -> str:
-        max_retries = 1  # Very large number of retries
+        max_retries = 10  # Increased retry count
         if max_retries <= 0: raise ValueError("max_retries must be greater than 0")
-        timeout = 60  # 60 seconds timeout
+        timeout = 120  # Increased timeout to 120 seconds
         
         # Ensure messages is a list
         if not isinstance(messages, list):
@@ -205,46 +215,51 @@ class LLMAPI:
                 time.sleep(10)
                 continue
 
-            # except KeyboardInterrupt:
-            #     raise KeyboardInterrupt
-            # except pdb.bdb.BdbQuit:
-            #     raise pdb.bdb.BdbQuit
-            # except Exception as e:
-            #     if attempt < max_retries - 1:
-            #         time.sleep(5)
-            #         continue
+            except KeyboardInterrupt:
+                raise KeyboardInterrupt
+            except pdb.bdb.BdbQuit:
+                raise pdb.bdb.BdbQuit
+            except Exception as e:
+                print(f"Error in API call (attempt {attempt+1}/{max_retries}): {str(e)}")
+                
+                if "maximum context length" in str(e).lower():
+                    print("Hit maximum context length, returning partial response")
+                    return (response.choices[0].message.content, getattr(response.choices[0].message, 'reasoning_content', None)) if 'response' in locals() else ("", None)
+                
+                if attempt < max_retries - 1:
+                    print(f"Retrying in 5 seconds...")
+                    time.sleep(5)
+                    continue
                     
-            #     if "maximum context length" in str(e).lower():
-            #         return (response.choices[0].message.content, getattr(response.choices[0].message, 'reasoning_content', None)) if 'response' in locals() else ("", None)
-            #     raise
+                raise
 
     def process_batch(self, batch_chat_lst: List[Dict[str, str]], n_samples: int = 1, config=None, batch_idx: int = 0, wandb=None, ground_truths=None, data_sources=None) -> List[List[str]]:
         """Process a batch of chat messages in parallel using threading."""
         batch_output_lst = [[] for _ in range(n_samples)]
         
         def process_single_chat(chat, sample_idx):
-            # try:
-            gen_start_time = time.time()
-            
-            response_content, reasoning_content, answer_content = self.generate(
-                messages=chat,
-                max_tokens=config.rollout.response_length if config else 8000,
-                temperature=config.rollout.temperature if config else 0.7
-            )
-            response_length = len(response_content.split())
-            generation_time = time.time() - gen_start_time
-            
-            metrics = {
-                f'sample_{sample_idx}/generation_time': generation_time,
-                f'sample_{sample_idx}/tokens_per_second': response_length / max(generation_time, 1e-6),
-                f'sample_{sample_idx}/response_length': response_length,
-                'batch': batch_idx,
-                'sample_idx': sample_idx
-            }
-            return response_content, reasoning_content, answer_content, metrics, None
-            # except Exception as e:
-            #     print(f"Error processing chat {sample_idx}: {str(e)}")
-            #     return None, None, None, None, e
+            try:
+                gen_start_time = time.time()
+                
+                response_content, reasoning_content, answer_content = self.generate(
+                    messages=chat,
+                    max_tokens=config.rollout.response_length if config else 8000,
+                    temperature=config.rollout.temperature if config else 0.7
+                )
+                response_length = len(response_content.split())
+                generation_time = time.time() - gen_start_time
+                
+                metrics = {
+                    f'sample_{sample_idx}/generation_time': generation_time,
+                    f'sample_{sample_idx}/tokens_per_second': response_length / max(generation_time, 1e-6),
+                    f'sample_{sample_idx}/response_length': response_length,
+                    'batch': batch_idx,
+                    'sample_idx': sample_idx
+                }
+                return response_content, reasoning_content, answer_content, metrics, None
+            except Exception as e:
+                print(f"Error processing chat {sample_idx}: {str(e)}")
+                return None, None, None, None, e
 
         # Create a thread pool for parallel processing
         max_workers = min(len(batch_chat_lst), config.rollout.api_workers)
