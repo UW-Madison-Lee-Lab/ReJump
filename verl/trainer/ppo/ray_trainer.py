@@ -463,12 +463,8 @@ class RayPPOTrainer(object):
             os.makedirs(output_dir, exist_ok=True)
             
             parquet_path = os.path.join(output_dir, output_file)
-            json_path = parquet_path.replace(".parquet", ".json")
             self.val_data.to_parquet(parquet_path)
-            self.val_data.to_json(json_path, orient="records", lines=True)
-            
             artifact.add_file(parquet_path)
-            artifact.add_file(json_path)
             wandb.log_artifact(artifact)
         return metric_dict
 
