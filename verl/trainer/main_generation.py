@@ -80,7 +80,7 @@ def main(config):
         )
     elif config.trainer.wandb == 2:
         
-        wandb_configs.update(get_configs_via_result_dir(os.path.dirname(config.data.output_path)))
+        # wandb_configs.update(get_configs_via_result_dir(os.path.dirname(config.data.output_path)))
         wandb.init(
             project=f"{WANDB_INFO['project']}-generation",
             entity=WANDB_INFO['entity'],
@@ -98,9 +98,9 @@ def main(config):
     # Initialize model based on config
     use_api = supported_llms[config.model.path]["type"] == "api"
     if use_api:
-        data_configs = get_configs_via_result_dir(os.path.dirname(config.data.output_path))
+        # data_configs = get_configs_via_result_dir(os.path.dirname(config.data.output_path))
         api_key = supported_llms[config.model.path]["api_key"]
-        model = LLMAPI(api_key=api_key, model_name=config.model.path, template_type=data_configs["template_type"])
+        model = LLMAPI(api_key=api_key, model_name=config.model.path, template_type="reasoning_api")
         chat_lst_converter = LLMAPI.convert_chat_list
         # Use Qwen tokenizer for API mode
         local_path = "Qwen/Qwen2.5-3B-Instruct"
