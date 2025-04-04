@@ -7,7 +7,7 @@ ANTHROPIC_API_KEY = 'sk-ant-api03-AMHIj-ojTz9mtdXMbNsZwW0Bfcnu0LGxseGeBEB81a4MUU
 GEMINI_API_KEY = {
     'yz': 'AIzaSyDa6IZiztMRZl_j2_em_MjruiCyZs9vEFs',
 }
-DEEPSEEK_API_KEY = "your-deepseek-api-key"
+DEEPSEEK_API_KEY = "sk-ce72d5c263804f29b988f2e8ab53fd62"
 OPENROUTER_API_KEY = "your-openrouter-api-key"
  
 HF_HOME = "/data/yzeng58/.cache/huggingface"

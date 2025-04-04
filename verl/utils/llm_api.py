@@ -115,21 +115,23 @@ class LLMAPI:
             self.client = anthropic.Anthropic(api_key=api_key)
             self.model = model_name.replace("claude/", "")  # Remove the prefix to get the actual model name
             self.client_type = "anthropic"
-            
             if "thinking" in self.model: 
                 self.model = self.model.replace("-thinking", "")
-                self.thinking = "enabled"
-            elif "no_reasoning" in template_type:
-                self.thinking = "cot"
-            else:
-                self.thinking = "disabled"
-                
         else:
             raise ValueError(f"Unsupported model: {model_name}")
+
+
+        if "reasoning_api" in template_type:
+            self.thinking = "enabled"
+        elif "no_reasoning" in template_type:
+            self.thinking = "disabled"
+        else:
+            self.thinking = "cot"
         
 
     def generate(self, messages: List[Dict[str, str]], max_tokens: int = 8000, temperature: float = 0.7) -> str:
-        max_retries = 1000  # Very large number of retries
+        max_retries = 1  # Very large number of retries
+        if max_retries <= 0: raise ValueError("max_retries must be greater than 0")
         timeout = 60  # 60 seconds timeout
         
         # Ensure messages is a list
@@ -158,98 +160,94 @@ class LLMAPI:
                     )
                     
                     if self.thinking == "enabled":
-                        reasoning_content = f"<think>{response.content[0].thinking}</think>"
-                        content = reasoning_content + f"<answer>{response.content[1].text}</answer>"
-                    elif self.thinking == "cot":
-                        content = response.content[0].text
-                        
-                        reasoning_match = re.search(r'<think>(.*?)</think>', content, re.DOTALL)
-                        reasoning_content = f"<think>{reasoning_match.group(1).strip()}</think>" if reasoning_match else ""
-                        content = f"<answer>{content}</answer>"
+                        reasoning = response.content[0].thinking
+                        output = response.content[1].text
                     else:
-                        content = f"<answer>{response.content[0].text}</answer>"
-                        reasoning_content = ""
+                        output = response.content[0].text
+                    
                 else:
                     response = self.client.chat.completions.create(
                         model=self.model,
                         messages=messages,
-                        #max_tokens=max_tokens,######
-                        #temperature=temperature,
-                        #top_p=0.9,
-                        #frequency_penalty=0.0,
-                        #presence_penalty=0.0,
-                        #stream=False,
-                        #timeout=timeout
                     )
                 
-                    content = response.choices[0].message.content
-                    reasoning_content = getattr(response.choices[0].message, 'reasoning_content', None)
-                    if reasoning_content is None:
-                        reasoning_content = getattr(response.choices[0].message, 'reasoning', None)
-                """
-                response = self.client.responses.create(
-                    model=self.model,
-                    input=messages, 
-                    #generate_summary="detailed"
-                )
-
-
-                print(response.output) 
-                #print(response.summary)
-                
-                breakpoint()                
-                
-                """
-
-                # Check if response is complete (ends with proper tags or punctuation)
-                if '</answer>' not in content:
-                    print(f"response: {content}")
-
-                return content, reasoning_content
-
-            except KeyboardInterrupt:
-                raise KeyboardInterrupt
-            except pdb.bdb.BdbQuit:
-                raise pdb.bdb.BdbQuit
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    time.sleep(5)
-                    continue
+                    output = response.choices[0].message.content
+                    reasoning = getattr(response.choices[0].message, 'reasoning_content', None)
+                    if reasoning is None:
+                        reasoning = getattr(response.choices[0].message, 'reasoning', None)
                     
-                if "maximum context length" in str(e).lower():
-                    return (response.choices[0].message.content, getattr(response.choices[0].message, 'reasoning_content', None)) if 'response' in locals() else ("", None)
-                raise
+
+                if self.thinking == "enabled":
+                    reasoning_content = reasoning
+                    answer_content = output
+                    response_content = f"<think>{reasoning_content}\n<answer>{answer_content}</answer>"
+                elif self.thinking == "cot":
+                    reasoning_match = re.search(r'<think>(.*?)</think>', output, re.DOTALL)
+                    reasoning_content = reasoning_match.group(1).strip() if reasoning_match else ""
+                    
+                    answer_match = re.search(r'<answer>(.*?)</answer>', output, re.DOTALL)
+                    answer_content = answer_match.group(1).strip() if answer_match else ""
+                    response_content = output
+                else:
+                    reasoning_content = ""
+                    answer_content = output
+                    response_content = f"<answer>{answer_content}</answer>"
+                    
+                # Check if response is complete (ends with proper tags or punctuation)
+                if '</answer>' not in response_content:
+                    print(f"output: {output}")
+                    print(f"reasoning: {reasoning}")
+
+                return response_content, reasoning_content, answer_content
+            
+            except anthropic.RateLimitError as e:
+                print(f"Rate limit error: {e}")
+                time.sleep(10)
+                continue
+
+            # except KeyboardInterrupt:
+            #     raise KeyboardInterrupt
+            # except pdb.bdb.BdbQuit:
+            #     raise pdb.bdb.BdbQuit
+            # except Exception as e:
+            #     if attempt < max_retries - 1:
+            #         time.sleep(5)
+            #         continue
+                    
+            #     if "maximum context length" in str(e).lower():
+            #         return (response.choices[0].message.content, getattr(response.choices[0].message, 'reasoning_content', None)) if 'response' in locals() else ("", None)
+            #     raise
 
     def process_batch(self, batch_chat_lst: List[Dict[str, str]], n_samples: int = 1, config=None, batch_idx: int = 0, wandb=None, ground_truths=None, data_sources=None) -> List[List[str]]:
         """Process a batch of chat messages in parallel using threading."""
         batch_output_lst = [[] for _ in range(n_samples)]
         
         def process_single_chat(chat, sample_idx):
-            try:
-                gen_start_time = time.time()
-                
-                response, reasoning_content = self.generate(
-                    messages=chat,
-                    max_tokens=config.rollout.response_length if config else 8000,
-                    temperature=config.rollout.temperature if config else 0.7
-                )
-                response_length = len(response.split())
-                generation_time = time.time() - gen_start_time
-                
-                metrics = {
-                    f'sample_{sample_idx}/generation_time': generation_time,
-                    f'sample_{sample_idx}/tokens_per_second': response_length / max(generation_time, 1e-6),
-                    f'sample_{sample_idx}/response_length': response_length,
-                    'batch': batch_idx,
-                    'sample_idx': sample_idx
-                }
-                return response, reasoning_content, metrics, None
-            except Exception as e:
-                print(f"Error processing chat {sample_idx}: {str(e)}")
-                return None, None, None, e
+            # try:
+            gen_start_time = time.time()
+            
+            response_content, reasoning_content, answer_content = self.generate(
+                messages=chat,
+                max_tokens=config.rollout.response_length if config else 8000,
+                temperature=config.rollout.temperature if config else 0.7
+            )
+            response_length = len(response_content.split())
+            generation_time = time.time() - gen_start_time
+            
+            metrics = {
+                f'sample_{sample_idx}/generation_time': generation_time,
+                f'sample_{sample_idx}/tokens_per_second': response_length / max(generation_time, 1e-6),
+                f'sample_{sample_idx}/response_length': response_length,
+                'batch': batch_idx,
+                'sample_idx': sample_idx
+            }
+            return response_content, reasoning_content, answer_content, metrics, None
+            # except Exception as e:
+            #     print(f"Error processing chat {sample_idx}: {str(e)}")
+            #     return None, None, None, None, e
 
         # Create a thread pool for parallel processing
-        max_workers = min(len(batch_chat_lst), 16)
+        max_workers = min(len(batch_chat_lst), config.rollout.api_workers)
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = []
             for i in range(n_samples):
@@ -258,11 +256,13 @@ class LLMAPI:
                     futures.append((future, i, j))
 
             batch_reasoning_lst = [[] for _ in range(n_samples)]
+            batch_answer_lst = [[] for _ in range(n_samples)]
             for future, sample_idx, chat_idx in futures:
-                response, reasoning_content, metrics, error = future.result()
+                response_content, reasoning_content, answer_content, metrics, error = future.result()
                 if error is None:
-                    batch_output_lst[sample_idx].append(response)
+                    batch_output_lst[sample_idx].append(response_content)
                     batch_reasoning_lst[sample_idx].append(reasoning_content)
+                    batch_answer_lst[sample_idx].append(answer_content)
                     if wandb is not None:
                         wandb.log(metrics)
                 else:
@@ -278,9 +278,9 @@ class LLMAPI:
                 ground_truths=ground_truths,
                 data_sources=data_sources
             )
-            return batch_output_lst, reward_dict, batch_reasoning_lst
+            return batch_output_lst, reward_dict, batch_reasoning_lst, batch_answer_lst
 
-        return batch_output_lst, None, batch_reasoning_lst
+        return batch_output_lst, None, batch_reasoning_lst, batch_answer_lst
 
     @staticmethod
     def convert_chat_list(chat_lst: List[Any]) -> List[Dict[str, str]]:
