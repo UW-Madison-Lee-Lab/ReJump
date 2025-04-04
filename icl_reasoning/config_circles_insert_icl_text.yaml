@@ -1,0 +1,33 @@
+# Sample configuration for the ICL reasoning script
+
+defaults:
+  - _self_
+  
+# Configuration for ICL examples using text direct mode
+icl_examples:
+  - _target_: liftr.icl_reasoning.icl_reasoning.TextDirectICLExampleConfig
+    text_file_path: "/home/szhang967/liftr/icl_reasoning/icl_examples.txt"
+    example_count: 3  # 指定文本文件中包含的示例数量
+    icl_example_maxlength: 100000  # 设置较大的最大长度以确保文本内容不会被截断
+
+# Test data configuration
+test_data:
+  _target_: liftr.icl_reasoning.icl_reasoning.TestDataConfig
+  task_type: "circles"
+  flip_rate: 0.0
+  noise_type: 0.1
+  num_samples: 100
+
+# Test data examples configuration
+test_data_examples:
+  _target_: liftr.icl_reasoning.icl_reasoning.TestDataExampleConfig
+  task_type: "circles"
+  flip_rate: 0.0
+  noise_type: 0.1
+  shot_type: 50
+
+# Global settings
+icl_example_seed: 42
+test_data_seed: 42
+tokenizer_name: "Qwen/Qwen2.5-3B-Instruct"
+output_path: "/staging/szhang967/icl_datasets_apr4" 

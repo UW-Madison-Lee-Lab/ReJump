@@ -169,7 +169,7 @@ def convert_to_readable_format(parquet_file, output_format="txt"):
 def main():
     parser = argparse.ArgumentParser(description='Convert parquet file to human-readable format')
     parser.add_argument('--input', type=str, 
-                        default='/staging/szhang967/icl_datasets/blobs_50shot_n1.0_f0.0_test10_icl3_seed42.parquet',
+                        default='/staging/szhang967/icl_datasets_apr4/circles_shot50_n0.1_f0.0_test100_icl1_seed42_direct_path.parquet',
                         help='Path to the input parquet file')
     parser.add_argument('--format', type=str, choices=['txt', 'json'], default='txt',
                         help='Output format (txt or json)')
