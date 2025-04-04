@@ -858,7 +858,9 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
                                 prompt_content = example_data['prompt']['content']
                             
                             if prompt_content:
-                                html_content.append(f'<div><b>Prompt:</b></div>')
+                                # 计算token数量
+                                prompt_token_length = calculate_token_length(prompt_content, tokenizer)
+                                html_content.append(f'<div><b>Prompt:</b> <span style="color:#666; font-size:0.9em;">[{prompt_token_length} tokens]</span></div>')
                                 html_content.append(f'<div style="white-space: pre-wrap; font-family: monospace; background-color: #f5f5f5; padding: 5px; margin-bottom: 5px; max-height: 200px; overflow-y: auto;">{html.escape(prompt_content)}</div>')
                         
                         # Extract reasonings
@@ -869,7 +871,9 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
                             else:
                                 reasoning_text = str(reasonings)
                             
-                            html_content.append(f'<div><b>Reasoning:</b></div>')
+                            # 计算token数量
+                            reasoning_token_length = calculate_token_length(reasoning_text, tokenizer)
+                            html_content.append(f'<div><b>Reasoning:</b> <span style="color:#666; font-size:0.9em;">[{reasoning_token_length} tokens]</span></div>')
                             html_content.append(f'<div style="white-space: pre-wrap; font-family: monospace; background-color: #f5f5f5; padding: 5px; margin-bottom: 5px; max-height: 150px; overflow-y: auto;">{html.escape(reasoning_text)}</div>')
                         
                         # Extract responses
@@ -880,7 +884,9 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
                             else:
                                 response_text = str(responses)
                             
-                            html_content.append(f'<div><b>Response:</b></div>')
+                            # 计算token数量
+                            response_token_length = calculate_token_length(response_text, tokenizer)
+                            html_content.append(f'<div><b>Response:</b> <span style="color:#666; font-size:0.9em;">[{response_token_length} tokens]</span></div>')
                             html_content.append(f'<div style="white-space: pre-wrap; font-family: monospace; background-color: #f5f5f5; padding: 5px; max-height: 150px; overflow-y: auto;">{html.escape(response_text)}</div>')
                         
                         # Extract data source if available
@@ -1158,11 +1164,14 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
                                 else:
                                     reasoning_text = str(reasonings)
                                 
+                                # 计算token数量
+                                reasoning_token_length = calculate_token_length(reasoning_text, tokenizer)
+                                
                                 # Truncate if too long for text format
                                 if len(reasoning_text) > 300:
                                     reasoning_text = reasoning_text[:300] + "... [truncated]"
                                 
-                                f.write(f"\nReasoning: {reasoning_text}\n")
+                                f.write(f"\nReasoning: [{reasoning_token_length} tokens] {reasoning_text}\n")
                             
                             # Brief response summary
                             if 'responses' in example_data and example_data['responses']:
@@ -1172,11 +1181,14 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
                                 else:
                                     response_text = str(responses)
                                 
+                                # 计算token数量
+                                response_token_length = calculate_token_length(response_text, tokenizer)
+                                
                                 # Truncate if too long for text format
                                 if len(response_text) > 200:
                                     response_text = response_text[:200] + "... [truncated]"
                                 
-                                f.write(f"\nResponse: {response_text}\n")
+                                f.write(f"\nResponse: [{response_token_length} tokens] {response_text}\n")
                         else:
                             # Just display a brief summary for text
                             example_str = str(example)
