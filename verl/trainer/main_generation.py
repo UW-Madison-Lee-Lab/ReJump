@@ -220,7 +220,6 @@ def main(config):
                 reward_tensor_lst[i].extend(reward_dict['reward_tensor'].tolist())
                 reasonings_lst[i].extend(batch_reasoning_lst[i])
                 answer_lst[i].extend(batch_answer_lst[i])
-                pdb.set_trace()
         else:
             # Process with HuggingFace model
             test_batch = DataProto.from_single_dict(test_data)
@@ -235,11 +234,6 @@ def main(config):
             }
             test_gen_batch_padded, pad_size = pad_dataproto_to_divisor(test_gen_batch, wg.world_size)
             
-            # Debug: Print first sample's input and output
-            if batch_idx == 0:
-                print("\n=== First Sample Debug Info (HuggingFace Mode) ===")
-                print("Input prompt:", tokenizer.decode(test_batch.batch['input_ids'][0]))
-                print("=====================================\n")
             
             for i in range(config.data.n_samples):
                 test_output_gen_batch_padded = wg.generate_sequences(test_gen_batch_padded)
@@ -268,7 +262,6 @@ def main(config):
     # convert answer_lst from (n_samples, n_data) to (n_data, n_samples)
     answer_lst = np.array(answer_lst, dtype=object)
     answer_lst = np.transpose(answer_lst, axes=(1, 0)).tolist()
-    pdb.set_trace()
     dataset["answers"] = answer_lst
     # convert reasonings_lst from (n_samples, n_data) to (n_data, n_samples)
     reasonings_lst = np.array(reasonings_lst, dtype=object)
