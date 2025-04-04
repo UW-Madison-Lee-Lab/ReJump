@@ -1,6 +1,7 @@
 import os, re
 import pdb
-root_dir = os.path.dirname(os.path.abspath(__file__))
+from environment import root_dir, DEEPSEEK_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, OPENROUTER_API_KEY
+
 
 data_dir = os.path.join(root_dir, 'datasets')
 
@@ -178,78 +179,104 @@ supported_llms = {
     "Qwen/Qwen2.5-0.5B": {
         "template_type": "qwen-instruct",
         "model_size": 500_000_000,
+        "type": "huggingface",
     },
     "Qwen/Qwen2.5-1.5B-Instruct": {
         "template_type": "qwen-instruct",
         "model_size": 1_500_000_000,
+        "type": "huggingface",
     },
     "Qwen/Qwen2.5-3B-Instruct": {
         "template_type": "qwen-instruct",
         "model_size": 3_000_000_000,
+        "type": "huggingface",
     },
     "Qwen/Qwen2.5-7B-Instruct": {
         "template_type": "qwen-instruct",
         "model_size": 7_000_000_000,
+        "type": "huggingface",
     },
     "Qwen/Qwen2.5-14B-Instruct": {
         "template_type": "qwen-instruct",
         "model_size": 14_000_000_000,
+        "type": "huggingface",
     },
     # QwQ
     "Qwen/QwQ-32B-preview": {
         "template_type": "qwen-instruct",
         "model_size": 32_000_000_000,
+        "type": "huggingface",
     },
     # DeepSeek
     "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B": {
         "template_type": "qwen-instruct",
         "model_size": 1_500_000_000,
+        "type": "huggingface",
     },
     "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B": {
         "template_type": "qwen-instruct",
         "model_size": 7_000_000_000,
+        "type": "huggingface",
     },
     "deepseek-ai/DeepSeek-R1-Distill-Llama-8B": {
         "template_type": "qwen-instruct",
         "model_size": 8_000_000_000,
+        "type": "huggingface",
     },
     # Llama
     "meta-llama/Llama-3.1-8B-Instruct": {
         "template_type": "qwen-instruct",
         "model_size": 8_000_000_000,
+        "type": "huggingface",
     },
     # Deepseek api
     "deepseek-ai/deepseek-chat": {
         "template_type": "standard_api",
         "model_size": 0,
+        "type": "api",
+        "api_key": DEEPSEEK_API_KEY,
     },
     "deepseek-ai/deepseek-reasoner": {
         "template_type": "reasoning_api",
         "model_size": 0,
+        "type": "api",
+        "api_key": DEEPSEEK_API_KEY,
     },
     # OpenAI api
     "openai/gpt-4o": {
         "template_type": "standard_api",
         "model_size": 0,
+        "type": "api",
+        "api_key": OPENAI_API_KEY,
     },
     "openai/o1-pro": {
         "template_type": "reasoning_api",
         "model_size": 0,
+        "type": "api",
+        "api_key": OPENAI_API_KEY,
     },
     "openai/o3-mini": {
         "template_type": "reasoning_api",
         "model_size": 0,
+        "type": "api",
+        "api_key": OPENAI_API_KEY,
     },
     "openrouter-deepseek/deepseek-r1": {
         "template_type": "reasoning_api",
         "model_size": 0,
+        "type": "api",
+        "api_key": OPENROUTER_API_KEY,
     },
     "claude/claude-3-7-sonnet-20250219": {
         "template_type": "standard_api",
         "model_size": 0,
+        "type": "api",
+        "api_key": ANTHROPIC_API_KEY,
     },
     "claude/claude-3-7-sonnet-20250219-thinking": {
         "template_type": "reasoning_api",
         "model_size": 0,
+        "type": "api",
+        "api_key": ANTHROPIC_API_KEY,
     }
 }

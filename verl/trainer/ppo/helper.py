@@ -1,6 +1,6 @@
 from verl.utils.reward_score import gsm8k, math, multiply, countdown
 from verl import DataProto
-import torch
+import torch, re
 
 def _select_rm_score_fn(data_source):
     if data_source == 'openai/gsm8k':
@@ -51,6 +51,8 @@ class RewardManager():
 
         reward_tensor = torch.zeros_like(data.batch['responses'], dtype=torch.float32)
         sequences_lst = []
+        answer_lst = []
+        reasoning_lst = []
         already_print_data_sources = {}
 
         for i in range(len(data)):
@@ -88,6 +90,14 @@ class RewardManager():
 
             score = compute_score_fn(solution_str=sequences_str, ground_truth=ground_truth)
             reward_tensor[i, valid_response_length - 1] = score
+            
+            answer_match = re.search(r'<answer>(.*?)</answer>', sequences_str, re.DOTALL)
+            answer_content = answer_match.group(1).strip() if answer_match else ""
+            reasoning_match = re.search(r'<think>(.*?)</think>', sequences_str, re.DOTALL)
+            reasoning_content = reasoning_match.group(1).strip() if reasoning_match else ""
+            
+            answer_lst.append(answer_content)
+            reasoning_lst.append(reasoning_content)
 
             # print(f"ground_truth: {ground_truth}")
             # print("type of ground_truth: ", type(ground_truth))
@@ -109,6 +119,8 @@ class RewardManager():
             return {
                 'reward_tensor': reward_tensor, 
                 'sequences_lst': sequences_lst,
+                'answer_lst': answer_lst,
+                'reasoning_lst': reasoning_lst,
             }
         else:
             return reward_tensor

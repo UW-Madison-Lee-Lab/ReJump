@@ -44,3 +44,4 @@ rollout:
   log_prob_micro_batch_size: 8  # Micro-batch size for log probability computation; 8 for RL training steps.
   # For HF rollout (not used here, but included for reference)
   do_sample: True            # Enable sampling; True uses random sampling instead of greedy decoding.
+  api_workers: 16

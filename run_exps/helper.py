@@ -149,6 +149,7 @@ def inference(
     data_mode="default",
     train_step=0,
     wandb=2,
+    api_workers=16
 ):
     dataset_dir = get_dataset_dir(
         dataset_name=dataset_name,
@@ -191,5 +192,6 @@ python -m verl.trainer.main_generation \
     rollout.tensor_model_parallel_size={n_gpus} \
     rollout.gpu_memory_utilization=0.8 \
     trainer.wandb={wandb} \
-    rollout.n=1
+    rollout.n=1 \
+    rollout.api_workers={api_workers}
     """
