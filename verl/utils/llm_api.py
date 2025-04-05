@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import pdb
 import re
+import json
 from verl.utils.reward_score import gsm8k, math, multiply, countdown
 
 def _select_rm_score_fn(data_source):
@@ -130,9 +131,9 @@ class LLMAPI:
         
 
     def generate(self, messages: List[Dict[str, str]], max_tokens: int = 8000, temperature: float = 0.7) -> str:
-        max_retries = 1  # Very large number of retries
+        max_retries = 5  # Very large number of retries
         if max_retries <= 0: raise ValueError("max_retries must be greater than 0")
-        timeout = 60  # 60 seconds timeout
+        timeout = 10  # 60 seconds timeout
         
         # Ensure messages is a list
         if not isinstance(messages, list):
@@ -202,7 +203,11 @@ class LLMAPI:
             
             except anthropic.RateLimitError as e:
                 print(f"Rate limit error: {e}")
-                time.sleep(10)
+                time.sleep(timeout)
+                continue
+            except json.decoder.JSONDecodeError as e:
+                print(f"JSONDecodeError: {e}")
+                time.sleep(timeout)
                 continue
 
             # except KeyboardInterrupt:
