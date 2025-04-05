@@ -72,7 +72,7 @@ for dataset in dataset_list:
                             elif dataset in ["moons", "linear"]:
                                 noise_level = 0.1
                             else:
-                                noise_level = 0.0
+                                noise_level = 0.01
                         
                         
                         command_list = []
