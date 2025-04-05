@@ -335,18 +335,39 @@ def store_data(
             
 
 def classification_reward_fn(solution_str, ground_truth):
-    all_matches = list(re.finditer(r'<answer>(.*?)</answer>', solution_str, re.DOTALL))
-    if all_matches:
-        response_extract = None
-        for match in all_matches[::-1]:
-            if match.group(1).strip().isdigit():
-                response_extract = match
-                break
-        if response_extract is not None and response_extract.group(1).strip().isdigit():
-            response_class = int(response_extract.group(1).strip())
-            return response_class == ground_truth['label']
-        else:
-            return 0
-    else:
-        return 0
+    # Direct pattern to extract from cases like <answer>0</answer></answer>
+    # Try a direct match first for the most common patterns
+    direct_match = re.search(r'<answer>(\d+)</answer>', solution_str)
+    if direct_match:
+        response_class = int(direct_match.group(1).strip())
+        return response_class == ground_truth['label']
+    
+    # If direct match fails, try cleaning up malformed tags
+    # Handle escaped slashes and remove extra closing tags
+    cleaned_solution_str = solution_str
+    cleaned_solution_str = re.sub(r'<\\/answer>', '</answer>', cleaned_solution_str)
+    cleaned_solution_str = re.sub(r'</answer>(\s*</answer>)+', '</answer>', cleaned_solution_str)
+    
+    # Try again with the cleaned string
+    clean_match = re.search(r'<answer>(\d+)</answer>', cleaned_solution_str)
+    if clean_match:
+        response_class = int(clean_match.group(1).strip())
+        return response_class == ground_truth['label']
+    
+    # Use a more lenient pattern for other cases
+    # This handles partial or malformed tags
+    lenient_match = re.search(r'<answer[^>]*>(\d+)[^<]*(?:</answer>|<\\/answer>|<?/?answer>)', cleaned_solution_str)
+    if lenient_match:
+        response_class = int(lenient_match.group(1).strip())
+        return response_class == ground_truth['label']
+    
+    # Last resort - just look for digits between any answer-like tags
+    fallback_matches = re.findall(r'<answer.*?>(\d+).*?(?:</answer>|<\\/answer>|answer>)', solution_str, re.DOTALL)
+    if fallback_matches:
+        for answer in fallback_matches[::-1]:
+            if answer.strip().isdigit():
+                response_class = int(answer.strip())
+                return response_class == ground_truth['label']
+    
+    return 0
     
