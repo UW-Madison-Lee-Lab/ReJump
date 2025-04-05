@@ -76,7 +76,7 @@ for model in model_list:
                     elif dataset in ["moons", "linear"]:
                         noise_level = 0.1
                     else:
-                        noise_level = 0.0
+                        noise_level = 0.01
                 if mode == "reasoning":
                     template_type = supported_llms[model]["template_type"]
                     response_length = int(prompt_length * args.response_length_thinking_factor)

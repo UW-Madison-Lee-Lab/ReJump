@@ -16,7 +16,7 @@ def gen_dataset(
     elif dataset_name in ["moons", "linear"]:
         noise_level = 0.1 if noise_level is None else noise_level
     elif dataset_name == "circles":
-        noise_level = 0.0 if noise_level is None else noise_level
+        noise_level = 0.01 if noise_level is None else noise_level
     return f"""
 python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --template_type={template_type} \
