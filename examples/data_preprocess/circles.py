@@ -13,7 +13,7 @@ from examples.data_preprocess.helper import save_data, classification_reward_fn,
 
 def gen_dataset(
     num_samples: int,
-    noise_level: float = 0.0,
+    noise_level: float = 0.01,
     seed_value: int = 42,
     label_flip_rate: float = 0.0,
     random: bool = False,
@@ -33,10 +33,11 @@ def gen_dataset(
     np.random.seed(seed_value)
     if random:
         factor = np.random.uniform(0.1, 0.9)
-        scale_factor = np.random.uniform(.5,2)
+        scale_factor = np.random.uniform(10,20)
     else:
         factor = 0.9
-    
+        scale_factor = 10
+        
     # Generate synthetic data with concentric circles
     # The smaller the factor, the more difficult for KNN to classify
     X, y = make_circles(
@@ -46,8 +47,7 @@ def gen_dataset(
         random_state=seed_value
     )
     
-    if random:
-        X = X * scale_factor
+    X = X * scale_factor
     # Optionally flip some labels to make it even harder
     y = flip_label(y, label_flip_rate, 2)
     
