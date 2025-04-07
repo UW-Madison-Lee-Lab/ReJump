@@ -15,7 +15,7 @@ icl_examples:
       - [23]  # Indices for the first dataset (blobs)
       - [22]  # Indices for the second dataset (linear)
       - [35]  # Indices for the third dataset (moons)
-    icl_example_maxlength: 10000
+    icl_example_maxlength: 1000
 
 # Test data configuration
 test_data:
