@@ -22,6 +22,7 @@ def get_configs_via_model_name(model_name):
     match = re.match(pattern, model_name)
     
     if match:
+        model_name = match.group(1)
         dataset_name = match.group(2)
         shot = match.group(3)
         template_type = match.group(4)
@@ -278,5 +279,5 @@ supported_llms = {
         "model_size": 0,
         "type": "api",
         "api_key": ANTHROPIC_API_KEY,
-    }
+    },
 }
