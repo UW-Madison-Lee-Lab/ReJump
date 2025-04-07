@@ -131,7 +131,7 @@ class LLMAPI:
         
 
     def generate(self, messages: List[Dict[str, str]], max_tokens: int = 8000, temperature: float = 0.7) -> str:
-        max_retries = 5  # Very large number of retries
+        max_retries = 10  # Very large number of retries
         if max_retries <= 0: raise ValueError("max_retries must be greater than 0")
         timeout = 10  # 60 seconds timeout
         
@@ -145,13 +145,12 @@ class LLMAPI:
                     if self.thinking == "enabled":
                         thinking={
                             "type": "enabled",
-                            "budget_tokens": min(16000, max_tokens // 2)
+                            "budget_tokens": min(30000, max_tokens - 10)
                         }
                     else:
                         thinking = {
                             "type": "disabled",
                         }
-            
                     response = self.client.messages.create(
                         model=self.model,
                         system = "You are a helpful data analysis assistant.",
@@ -204,11 +203,14 @@ class LLMAPI:
             except anthropic.RateLimitError as e:
                 print(f"Rate limit error: {e}")
                 time.sleep(timeout)
-                continue
+                
             except json.decoder.JSONDecodeError as e:
                 print(f"JSONDecodeError: {e}")
                 time.sleep(timeout)
-                continue
+                
+            print(f"Failed to generate response after {attempt} attempts, max_retries: {max_retries}")
+            
+        raise Exception("Failed to generate response")
 
             # except KeyboardInterrupt:
             #     raise KeyboardInterrupt
@@ -233,7 +235,7 @@ class LLMAPI:
             
             response_content, reasoning_content, answer_content = self.generate(
                 messages=chat,
-                max_tokens=config.rollout.response_length if config else 8000,
+                max_tokens=config.rollout.response_length,
                 temperature=config.rollout.temperature if config else 0.7
             )
             response_length = len(response_content.split())

@@ -116,7 +116,7 @@ def flip_label(y, label_flip_rate, n_classes):
             y[i] = np.random.choice(possible_labels)
     return y
 
-def make_prefix(dp, template_type, n_classes, n_shot=0, in_context_dataset=None):
+def make_prefix(dp, template_type, n_classes, n_shot=0, in_context_dataset=None, customized_prompt=None):
     features = dp['features']
     label = dp['label']
     
@@ -176,6 +176,10 @@ def make_prefix(dp, template_type, n_classes, n_shot=0, in_context_dataset=None)
         prefix = f"""
         The dataset has {len(features)} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. Your answer should be just the class label, without any other text or punctuation.
         """
+    elif template_type == "reasoning_api_customized":
+        prefix = f"""
+        The dataset has {len(features)} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. \n{customized_prompt}\n Your answer should be just the class label, without any other text or punctuation.
+        """
     elif template_type == "standard_api_no_reasoning":
         prefix = f"""
         The dataset has {len(features)} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. Your answer should be just the class label, without any other text or punctuation.
@@ -191,7 +195,7 @@ def make_prefix(dp, template_type, n_classes, n_shot=0, in_context_dataset=None)
     return prefix, in_context_samples
 
 
-def make_map_fn(split, args, n_classes, in_context_dataset, data_source, data_mode):
+def make_map_fn(split, args, n_classes, in_context_dataset, data_source, data_mode, customized_prompt=None):
 
     
     def process_fn(example, idx):
@@ -208,7 +212,8 @@ def make_map_fn(split, args, n_classes, in_context_dataset, data_source, data_mo
             template_type=args.template_type, 
             n_classes=n_classes, 
             n_shot=args.n_shot, 
-            in_context_dataset=in_context_dataset_
+            in_context_dataset=in_context_dataset_,
+            customized_prompt=customized_prompt
         )
         
         solution = {
@@ -280,9 +285,41 @@ def save_data(
         }
     else:
         raise ValueError(f"Invalid data mode: {data_mode}")
+    
+    if "customized" in args.template_type:
+        while True:
+            customized_prompt = input("Enter a customized prompt for the reasoning API (use '123456' as line break): ")
+            customized_prompt = customized_prompt.replace("123456", "\n")
+            print("The prompt for the reasoning API is: \n\n", customized_prompt, "\n\nare you sure you want to use this prompt? (y/n/q)")
+            if input() == "y":
+                break
+            elif input() == "n":
+                continue
+            elif input() == "q":
+                exit()
+            else:
+                print("Please enter a valid prompt")
+    else:
+        customized_prompt = None
 
-    train_dataset = train_dataset.map(function=make_map_fn('train', args, n_classes, in_context_dataset, data_source, data_mode), with_indices=True)
-    test_dataset = test_dataset.map(function=make_map_fn('test', args, n_classes, in_context_dataset, data_source, data_mode), with_indices=True)
+    train_dataset = train_dataset.map(function=make_map_fn(
+        split='train', 
+        args=args, 
+        n_classes=n_classes, 
+        in_context_dataset=in_context_dataset, 
+        data_source=data_source, 
+        data_mode=data_mode, 
+        customized_prompt=customized_prompt
+    ), with_indices=True)
+    test_dataset = test_dataset.map(function=make_map_fn(
+        split='test', 
+        args=args, 
+        n_classes=n_classes, 
+        in_context_dataset=in_context_dataset, 
+        data_source=data_source, 
+        data_mode=data_mode, 
+        customized_prompt=customized_prompt
+    ), with_indices=True)
 
 
     local_dir = get_dataset_dir(
