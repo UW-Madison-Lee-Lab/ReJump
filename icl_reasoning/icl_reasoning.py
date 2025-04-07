@@ -360,117 +360,56 @@ def sample_icl_examples(config: ICLExampleConfig, base_path: str, rng: np.random
     return sampled_examples
 
 
-# def create_prompt(instruction: str, icl_examples: List[Dict], test_examples: List[Tuple], test_features: List[float], num_classes: int) -> str:
-#     """
-#     Create a prompt with ICL examples, test examples, and test features
-    
-#     Args:
-#         instruction: Task instruction
-#         icl_examples: List of ICL examples
-#         test_examples: List of test examples (features, label)
-#         test_features: Features for the test instance
-#         num_classes: Number of classes for the task
-        
-#     Returns:
-#         Formatted prompt text
-#     """
-#     # Check for text direct mode example
-#     if len(icl_examples) == 1 and "text_content" in icl_examples[0]:
-#         # Use the text content directly as ICL examples
-#         prompt = icl_examples[0]["text_content"] + "\n\n"
-#     else:
-#         # Regular handling for other ICL example types
-#         if len(icl_examples) == 0:
-#             raise ValueError("No ICL examples provided. At least one example is required.")
-        
-#         prompt = instruction + "\n\n"
-        
-#         # Add ICL examples
-#         for i, example in enumerate(icl_examples):
-#             example_prompt = extract_test_prompt_content(example)
-#             if not example_prompt:
-#                 raise ValueError(f"Failed to extract prompt content from example {i+1}")
-                
-#             example_response = extract_icl_reasonings(example) + "\n\n" + extract_icl_responses(example)
-#             if not example_response:
-#                 raise ValueError(f"Failed to extract response from example {i+1}")
-            
-#             # Extract the task description and example data points from the prompt
-#             # Split by "User:" to get the part after it
-#             if "User:" in example_prompt:
-#                 example_content = example_prompt.split("User:", 1)[1].strip()
-#             else:
-#                 example_content = example_prompt
-                
-#             prompt += f"Example {i+1}:\n"
-#             prompt += f"Problem: {example_content}\n"
-#             prompt += f"Reasoning: {example_response}\n\n"
-    
-#     # Add generated test examples in the format matching user's example
-#     if not test_examples:
-#         raise ValueError("No test examples provided. Test examples are required for the prompt.")
-        
-#     prompt += f"The dataset has {num_classes} classes: {list(range(num_classes))}. We first provide you with some examples of how to classify data points.\n"
-    
-#     for features, label in test_examples:
-#         # Format with 3 decimal places without brackets to match example format
-#         formatted_features = f"{features[0]:.3f}, {features[1]:.3f}"
-#         prompt += f"Features: {formatted_features}, Label: {label}\n"
-    
-#     prompt += "\n"
-    
-#     # Add the test problem
-#     test_prompt = f"Given the data point with features {test_features[0]:.3f}, {test_features[1]:.3f}, classify it into one of the possible classes. Show your work in <think></think> tags. And return the final answer in <answer></answer> tags, for example <answer>1</answer>."
-    
-#     prompt += f"Now, solve this problem:\n{test_prompt}"
-    
-#     return prompt
-
-def create_prompt(instruction: str, icl_examples: List[Dict[str, Any]], test_examples: List[Tuple], test_features: List[float], num_classes: int) -> str:
+def create_prompt(instruction: str, icl_examples: List[Dict], test_examples: List[Tuple], test_features: List[float], num_classes: int) -> str:
     """
-    Create a prompt combining instruction, ICL examples, test examples, and test data
+    Create a prompt with ICL examples, test examples, and test features
     
     Args:
         instruction: Task instruction
-        icl_examples: List of ICL examples from DeepSeek
-        test_examples: List of test examples (features, label) tuples
-        test_features: Features of the target test data point
+        icl_examples: List of ICL examples
+        test_examples: List of test examples (features, label)
+        test_features: Features for the test instance
         num_classes: Number of classes for the task
-    
-    Returns:
-        Complete prompt with all components
-    """
-    if len(icl_examples) == 0:
-        raise ValueError("No ICL examples provided. At least one example is required.")
-    
-    prompt = instruction + "\n\n"
-    
-    # Add ICL examples
-    for i, example in enumerate(icl_examples):
-        example_prompt = extract_test_prompt_content(example)
-        if not example_prompt:
-            raise ValueError(f"Failed to extract prompt content from example {i+1}")
-            
-        example_response = extract_icl_reasonings(example) + "\n\n" + extract_icl_responses(example)
-        if not example_response:
-            raise ValueError(f"Failed to extract response from example {i+1}")
         
-        # Extract the task description and example data points from the prompt
-        # Split by "User:" to get the part after it
-        if "User:" in example_prompt:
-            example_content = example_prompt.split("User:", 1)[1].strip()
-        else:
-            example_content = example_prompt
+    Returns:
+        Formatted prompt text
+    """
+    # Check for text direct mode example
+    if len(icl_examples) == 1 and "text_content" in icl_examples[0]:
+        # Use the text content directly as ICL examples
+        prompt = instruction + "\n\n" + icl_examples[0]["text_content"] + "\n\n"
+    else:
+        # Regular handling for other ICL example types
+        if len(icl_examples) == 0:
+            raise ValueError("No ICL examples provided. At least one example is required.")
+        
+        prompt = instruction + "\n\n"
+        
+        # Add ICL examples
+        for i, example in enumerate(icl_examples):
+            example_prompt = extract_test_prompt_content(example)
+            if not example_prompt:
+                raise ValueError(f"Failed to extract prompt content from example {i+1}")
+                
+            example_response = extract_icl_reasonings(example) + "\n\n" + extract_icl_responses(example)
+            if not example_response:
+                raise ValueError(f"Failed to extract response from example {i+1}")
             
-        prompt += f"Example {i+1}:\n"
-        prompt += f"Problem: {example_content}\n"
-        prompt += f"Reasoning: {example_response}\n\n"
+            # Extract the task description and example data points from the prompt
+            # Split by "User:" to get the part after it
+            if "User:" in example_prompt:
+                example_content = example_prompt.split("User:", 1)[1].strip()
+            else:
+                example_content = example_prompt
+                
+            prompt += f"Example {i+1}:\n"
+            prompt += f"Problem: {example_content}\n"
+            prompt += f"Reasoning: {example_response}\n\n"
     
     # Add generated test examples in the format matching user's example
     if not test_examples:
         raise ValueError("No test examples provided. Test examples are required for the prompt.")
-    
-    prompt += "\n\n-----------BELOW IS THE TEST DATA EXAMPLES---------------------------------------\n\n"
+        
     prompt += f"The dataset has {num_classes} classes: {list(range(num_classes))}. We first provide you with some examples of how to classify data points.\n"
     
     for features, label in test_examples:
@@ -478,7 +417,7 @@ def create_prompt(instruction: str, icl_examples: List[Dict[str, Any]], test_exa
         formatted_features = f"{features[0]:.3f}, {features[1]:.3f}"
         prompt += f"Features: {formatted_features}, Label: {label}\n"
     
-    prompt += "\n\n-----------BELOW IS THE TEST DATA POINT---------------------------------------\n\n"
+    prompt += "\n"
     
     # Add the test problem
     test_prompt = f"Given the data point with features {test_features[0]:.3f}, {test_features[1]:.3f}, classify it into one of the possible classes. Show your work in <think></think> tags. And return the final answer in <answer></answer> tags, for example <answer>1</answer>."
@@ -486,6 +425,67 @@ def create_prompt(instruction: str, icl_examples: List[Dict[str, Any]], test_exa
     prompt += f"Now, solve this problem:\n{test_prompt}"
     
     return prompt
+
+# def create_prompt(instruction: str, icl_examples: List[Dict[str, Any]], test_examples: List[Tuple], test_features: List[float], num_classes: int) -> str:
+#     """
+#     Create a prompt combining instruction, ICL examples, test examples, and test data
+    
+#     Args:
+#         instruction: Task instruction
+#         icl_examples: List of ICL examples from DeepSeek
+#         test_examples: List of test examples (features, label) tuples
+#         test_features: Features of the target test data point
+#         num_classes: Number of classes for the task
+    
+#     Returns:
+#         Complete prompt with all components
+#     """
+#     if len(icl_examples) == 0:
+#         raise ValueError("No ICL examples provided. At least one example is required.")
+    
+#     prompt = instruction + "\n\n"
+    
+#     # Add ICL examples
+#     for i, example in enumerate(icl_examples):
+#         example_prompt = extract_test_prompt_content(example)
+#         if not example_prompt:
+#             raise ValueError(f"Failed to extract prompt content from example {i+1}")
+            
+#         example_response = extract_icl_reasonings(example) + "\n\n" + extract_icl_responses(example)
+#         if not example_response:
+#             raise ValueError(f"Failed to extract response from example {i+1}")
+        
+#         # Extract the task description and example data points from the prompt
+#         # Split by "User:" to get the part after it
+#         if "User:" in example_prompt:
+#             example_content = example_prompt.split("User:", 1)[1].strip()
+#         else:
+#             example_content = example_prompt
+            
+#         prompt += f"Example {i+1}:\n"
+#         prompt += f"Problem: {example_content}\n"
+#         prompt += f"Reasoning: {example_response}\n\n"
+    
+#     # Add generated test examples in the format matching user's example
+#     if not test_examples:
+#         raise ValueError("No test examples provided. Test examples are required for the prompt.")
+    
+#     prompt += "\n\n-----------BELOW IS THE TEST DATA EXAMPLES---------------------------------------\n\n"
+#     prompt += f"The dataset has {num_classes} classes: {list(range(num_classes))}. We first provide you with some examples of how to classify data points.\n"
+    
+#     for features, label in test_examples:
+#         # Format with 3 decimal places without brackets to match example format
+#         formatted_features = f"{features[0]:.3f}, {features[1]:.3f}"
+#         prompt += f"Features: {formatted_features}, Label: {label}\n"
+    
+#     prompt += "\n\n-----------BELOW IS THE TEST DATA POINT---------------------------------------\n\n"
+    
+#     # Add the test problem
+#     test_prompt = f"Given the data point with features {test_features[0]:.3f}, {test_features[1]:.3f}, classify it into one of the possible classes. Show your work in <think></think> tags. And return the final answer in <answer></answer> tags, for example <answer>1</answer>."
+    
+#     prompt += f"Now, solve this problem:\n{test_prompt}"
+    
+#     return prompt
 
 def get_num_classes(task_type: str) -> int:
     """

@@ -154,7 +154,7 @@ class LLMAPI:
                     if self.thinking == "enabled":
                         thinking={
                             "type": "enabled",
-                            "budget_tokens": min(16000, max_tokens // 2)
+                            "budget_tokens": min(30000, max_tokens // 2)
                         }
                     else:
                         thinking = {
