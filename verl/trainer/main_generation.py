@@ -29,7 +29,6 @@ os.environ['TOKENIZERS_PARALLELISM'] = 'true'
 # os.environ['TORCH_COMPILE_DISABLE'] = '1'
 
 from verl.utils.model import compute_position_id_with_mask
-from verl.protocol import pad_dataproto_to_divisor, unpad_dataproto
 import pandas as pd
 
 from transformers import AutoTokenizer
@@ -171,8 +170,27 @@ def main(config):
             return_dict=True,
         )
 
-    for batch_idx, test_data in enumerate(dataloader):
-        print(f"Start batch [{batch_idx}/{len(dataloader)}]")
+    for batch_idx in range(num_batch):
+        print(f'[{batch_idx+1}/{num_batch}] Start to process.')
+        batch_start_time = time.time()
+        batch_chat_lst = chat_lst[batch_idx * config_batch_size:(batch_idx + 1) * config_batch_size]
+        encoded_inputs = tokenizer(
+            batch_chat_lst,
+            return_tensors="pt",
+            padding="max_length",
+            max_length=config.rollout.prompt_length,
+            truncation=True
+        )
+        
+        # Extract input_ids and attention_mask from the batch encoding
+        inputs = {
+            'input_ids': encoded_inputs['input_ids'],
+            'attention_mask': encoded_inputs['attention_mask']
+        }
+        
+        input_ids = inputs['input_ids']
+        inputs_back = tokenizer.decode(input_ids[0])
+        pdb.set_trace()
         
         if use_api:
             # Process with API
