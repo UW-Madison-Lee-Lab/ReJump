@@ -230,6 +230,10 @@ class LLMAPI:
                 print(f"JSONDecodeError: {e}")
                 time.sleep(timeout)
                 
+            except IndexError as e:
+                print(f"IndexError: {e}")
+                return "", "", ""
+                
             print(f"Failed to generate response after {attempt} attempts, max_retries: {max_retries}")
             
         raise Exception("Failed to generate response")
