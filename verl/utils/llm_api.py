@@ -185,8 +185,11 @@ class LLMAPI:
                         model=self.model,
                         contents = [messages[0]['content']],
                     )
-                    output = response.candidates[0].content
-                    reasoning = ""
+                    if response is None: 
+                        reasoning, output = "", ""
+                    else:
+                        output = response.candidates[0].content
+                        reasoning = ""
                 else:
                     response = self.client.chat.completions.create(
                         model=self.model,
