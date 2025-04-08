@@ -304,4 +304,34 @@ supported_llms = {
         "type": "api",
         "api_key": GEMINI_API_KEY,
     },
+    "openai/o1-pro": {
+        "template_type": "reasoning_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": OPENAI_API_KEY,
+    },
+    "openai/o3-mini": {
+        "template_type": "reasoning_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": OPENAI_API_KEY,
+    },
+    "openrouter-deepseek/deepseek-r1": {
+        "template_type": "reasoning_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": OPENROUTER_API_KEY,
+    },
+    "claude/claude-3-7-sonnet-20250219": {
+        "template_type": "standard_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": ANTHROPIC_API_KEY,
+    },
+    "claude/claude-3-7-sonnet-20250219-thinking": {
+        "template_type": "reasoning_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": ANTHROPIC_API_KEY,
+    }
 }
