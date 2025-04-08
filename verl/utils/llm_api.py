@@ -9,6 +9,7 @@ import pdb
 import re
 import json
 from verl.utils.reward_score import gsm8k, math, multiply, countdown
+from google import genai 
 
 def _select_rm_score_fn(data_source):
     if data_source == 'openai/gsm8k':
@@ -128,6 +129,10 @@ class LLMAPI:
             self.client_type = "anthropic"
             if "thinking" in self.model: 
                 self.model = self.model.replace("-thinking", "")
+        elif model_name.startswith("google/"):
+            self.client = genai.Client(api_key=api_key)
+            self.model = model_name.replace("google/", "")
+            self.client_type = "google"
         else:
             raise ValueError(f"Unsupported model: {model_name}")
 
@@ -141,7 +146,7 @@ class LLMAPI:
         
 
     def generate(self, messages: List[Dict[str, str]], max_tokens: int = 8000, temperature: float = 0.7) -> str:
-        max_retries = 10  # Increased retry count
+        max_retries = 1000  # Increased retry count
         if max_retries <= 0: raise ValueError("max_retries must be greater than 0")
         timeout = 120  # Increased timeout to 120 seconds
         
@@ -151,7 +156,7 @@ class LLMAPI:
         
         for attempt in range(max_retries):
             try:
-                if self.client_type is not None and self.client_type == "anthropic":
+                if self.client_type == "anthropic":
                     if self.thinking == "enabled":
                         thinking={
                             "type": "enabled",
@@ -174,7 +179,14 @@ class LLMAPI:
                         output = response.content[1].text
                     else:
                         output = response.content[0].text
-                    
+                        
+                elif self.client_type == "google":
+                    response = self.client.models.generate_content(
+                        model=self.model,
+                        contents = [messages[0]['content']],
+                    )
+                    output = response.candidates[0].content
+                    reasoning = ""
                 else:
                     response = self.client.chat.completions.create(
                         model=self.model,
