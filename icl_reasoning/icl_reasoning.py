@@ -67,7 +67,7 @@ class TestDataExampleConfig:
 
 @dataclass
 class ICLReasoningConfig:
-    icl_examples: List[BaseICLExampleConfig] = field(default_factory=list)
+    icl_examples: List[ICLExampleConfig] = field(default_factory=list)
     test_data: TestDataConfig = MISSING
     test_data_examples: TestDataExampleConfig = MISSING
     icl_example_seed: int = 42
