@@ -68,7 +68,7 @@ def process_file(
     instruction_file: str,
     llm_type: str = "openai",
     temperature: float = 0.8,
-    max_tokens: int = 10000,
+    max_tokens: int = 40000,
     max_retries: int = 5,
     delay: int = 1,
     continue_on_error: bool = False

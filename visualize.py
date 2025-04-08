@@ -1129,6 +1129,47 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
             
             html_content.append(f'</div>')
             
+            # Add Claude raw output section if available
+            if 'claude_analysis_raw_output' in row and row['claude_analysis_raw_output'] is not None:
+                html_content.append(f'<div class="section">')
+                html_content.append(f'<div class="section-title">Claude Analysis Raw Output</div>')
+                html_content.append(f'<details>')
+                html_content.append(f'<summary>Show Claude Analysis Raw Output</summary>')
+                claude_raw = row['claude_analysis_raw_output']
+                if not isinstance(claude_raw, str):
+                    claude_raw = str(claude_raw)
+                # Escape HTML content
+                escaped_claude_raw = html.escape(claude_raw)
+                html_content.append(f'<div class="response" style="white-space: pre-wrap; font-family: monospace; max-height: 400px; overflow-y: auto;">{escaped_claude_raw}</div>')
+                html_content.append(f'</details>')
+                html_content.append(f'</div>')
+            
+            # Add Claude extracted JSON section if available
+            if 'claude_analysis_extracted_json' in row and row['claude_analysis_extracted_json'] is not None:
+                html_content.append(f'<div class="section">')
+                html_content.append(f'<div class="section-title">Claude Analysis Extracted JSON</div>')
+                html_content.append(f'<details>')
+                html_content.append(f'<summary>Show Claude Analysis Extracted JSON</summary>')
+                claude_json = row['claude_analysis_extracted_json']
+                if isinstance(claude_json, str):
+                    try:
+                        # Try to parse and prettify if it's a JSON string
+                        parsed_json = json.loads(claude_json)
+                        pretty_json = json.dumps(parsed_json, indent=2)
+                        claude_json = pretty_json
+                    except:
+                        pass  # Keep as is if not valid JSON
+                elif isinstance(claude_json, (dict, list)):
+                    # Convert to pretty JSON string if it's already a dict or list
+                    claude_json = json.dumps(claude_json, indent=2)
+                else:
+                    claude_json = str(claude_json)
+                # Escape HTML content
+                escaped_claude_json = html.escape(claude_json)
+                html_content.append(f'<div class="response" style="white-space: pre-wrap; font-family: monospace; max-height: 400px; overflow-y: auto;">{escaped_claude_json}</div>')
+                html_content.append(f'</details>')
+                html_content.append(f'</div>')
+            
             # Restore collapsible full response, but don't extract tag content
             html_content.append(f'<details open>')
             html_content.append(f'<summary>Model Response (Cleaned)</summary>')
@@ -1542,6 +1583,39 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
                 f.write(f"Response Token Length: {token_length}\n")
                 
                 f.write("\n")
+                
+                # Add Claude raw output section if available in text format
+                if 'claude_analysis_raw_output' in row and row['claude_analysis_raw_output'] is not None:
+                    f.write("--- Claude Analysis Raw Output ---\n")
+                    claude_raw = row['claude_analysis_raw_output']
+                    if not isinstance(claude_raw, str):
+                        claude_raw = str(claude_raw)
+                    # Truncate if too long for text format
+                    if len(claude_raw) > 1000:
+                        claude_raw = claude_raw[:1000] + "... [truncated]"
+                    f.write(f"{claude_raw}\n\n")
+                
+                # Add Claude extracted JSON section if available in text format
+                if 'claude_analysis_extracted_json' in row and row['claude_analysis_extracted_json'] is not None:
+                    f.write("--- Claude Analysis Extracted JSON ---\n")
+                    claude_json = row['claude_analysis_extracted_json']
+                    if isinstance(claude_json, str):
+                        try:
+                            # Try to parse and prettify if it's a JSON string
+                            parsed_json = json.loads(claude_json)
+                            pretty_json = json.dumps(parsed_json, indent=2)
+                            claude_json = pretty_json
+                        except:
+                            pass  # Keep as is if not valid JSON
+                    elif isinstance(claude_json, (dict, list)):
+                        # Convert to pretty JSON string if it's already a dict or list
+                        claude_json = json.dumps(claude_json, indent=2)
+                    else:
+                        claude_json = str(claude_json)
+                    # Truncate if too long for text format
+                    if len(claude_json) > 1000:
+                        claude_json = claude_json[:1000] + "... [truncated]"
+                    f.write(f"{claude_json}\n\n")
                 
                 # Write full response (don't extract tag content)
                 f.write(f"--- Model Response (Cleaned) ---\n")
