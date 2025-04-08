@@ -10,13 +10,14 @@ import hydra
 from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING, DictConfig, OmegaConf
 from transformers import AutoTokenizer
-
+import pdb
 # Import data generation functions from data_preprocess
 from examples.data_preprocess.moons import gen_dataset as gen_moons_dataset
 from examples.data_preprocess.circles import gen_dataset as gen_circles_dataset
 from examples.data_preprocess.blobs import gen_dataset as gen_blobs_dataset
 from examples.data_preprocess.linear import gen_dataset as gen_linear_dataset
 from environment import root_dir
+from constants import get_result_dir, supported_llms, get_dataset_dir
 
 @dataclass
 class BaseICLExampleConfig:
@@ -26,15 +27,15 @@ class BaseICLExampleConfig:
 
 @dataclass
 class ICLExampleConfig(BaseICLExampleConfig):
-    task_type: str = MISSING  # blobs, circles, linear, moons
-    flip_rate: float = MISSING  # 0.0, 0.1, 0.2
-    noise_type: float = MISSING  # noise level like 0.1, 1.0
-    shot_type: int = MISSING  # 50, 100
-    reslen_type: int = MISSING  # 3046, 5686
-    nsamples_type: int = MISSING  # 500
+    dataset_name: str = MISSING  # blobs, circles, linear, moons
+    label_flip_rate: float = MISSING  # 0.0, 0.1, 0.2
+    noise_level: float = MISSING  # noise level like 0.1, 1.0
+    shot: int = MISSING  # 50, 100
+    response_length: int = MISSING  # 3046, 5686
+    num_samples: int = MISSING  # 500
     num_examples: int = MISSING  # Number of examples to use
-
-
+    train_step: int = MISSING  # 0
+    data_mode: str = MISSING  # default, mixed
 @dataclass
 class DirectPathICLExampleConfig(BaseICLExampleConfig):
     dataset_paths: List[str] = field(default_factory=list)  # List of paths to datasets
@@ -51,18 +52,18 @@ class TextDirectICLExampleConfig(BaseICLExampleConfig):
 
 @dataclass
 class TestDataConfig:
-    task_type: str = MISSING  # blobs, circles, linear, moons
-    flip_rate: float = MISSING  # 0.0, 0.1, 0.2
-    noise_type: float = MISSING  # noise level like 0.1, 1.0
+    dataset_name: str = MISSING  # blobs, circles, linear, moons
+    label_flip_rate: float = MISSING  # 0.0, 0.1, 0.2
+    noise_level: float = MISSING  # noise level like 0.1, 1.0
     num_samples: int = MISSING  # Number of test samples to use
 
 
 @dataclass
 class TestDataExampleConfig:
-    task_type: str = MISSING  # blobs, circles, linear, moons
-    flip_rate: float = MISSING  # 0.0, 0.1, 0.2
-    noise_type: float = MISSING  # noise level like 0.1, 1.0
-    shot_type: int = MISSING  # Number of examples to use
+    dataset_name: str = MISSING  # blobs, circles, linear, moons
+    label_flip_rate: float = MISSING  # 0.0, 0.1, 0.2
+    noise_level: float = MISSING  # noise level like 0.1, 1.0
+    shot: int = MISSING  # Number of examples to use
 
 
 @dataclass
@@ -73,7 +74,7 @@ class ICLReasoningConfig:
     icl_example_seed: int = 42
     test_data_seed: int = 42
     tokenizer_name: str = "Qwen/Qwen2.5-3B-Instruct"  # Tokenizer used for length calculation
-    output_path: str = "/staging/szhang967/icl_datasets"
+    output_path: str =f"{root_dir}/datasets"
 
 
 cs = ConfigStore.instance()
@@ -112,71 +113,92 @@ def calculate_token_length(text: str, tokenizer) -> int:
     return len(tokens)
 
 
-def load_deepseek_results(base_path: str, task_type: str, shot_type: int, 
-                         reslen_type: int, nsamples_type: int, 
-                         noise_type: float, flip_rate: float):
+def load_deepseek_results(
+    dataset_name: str,
+    model_name: str,
+    shot: int, 
+    template_type: str, 
+    response_length: int, 
+    num_samples: int, 
+    noise_level: float, 
+    label_flip_rate: float,
+    train_step: int,
+    data_mode: str
+):
     """
     Load DeepSeek results based on the configuration
     """
-    result_dir = f"{task_type}_{shot_type}_shot_base_reslen_{reslen_type}_nsamples_{nsamples_type}_noise_{noise_type}_flip_rate_{flip_rate}"
-    result_path = os.path.join(base_path, result_dir, "global_step_0", "test.json")
+    result_dir = get_result_dir(
+        dataset_name=dataset_name,
+        model_name = model_name,
+        shot = shot,
+        template_type = template_type,
+        response_length = response_length,
+        num_samples = num_samples,
+        noise_level = noise_level,
+        label_flip_rate = label_flip_rate,
+        train_step = train_step,
+        data_mode = data_mode
+    )
+    result_path = os.path.join(result_dir, "test_default.parquet")
     
-    # Read the JSON file
-    with open(result_path, 'r') as f:
-        content = f.read()
-        # Parse each JSON line separately
-        results = []
-        for line in content.strip().split('\n'):
-            if line.strip():
-                results.append(json.loads(line))
-                
+    results = pd.read_parquet(result_path)
+    json_str = results.to_json(orient='records', date_format='iso')
+    results = json.loads(json_str)
+            
     return results
 
 
-def generate_test_data(task_type: str, num_samples: int, noise_level: float, flip_rate: float, seed_value: int) -> pd.DataFrame:
+def generate_test_data(
+    dataset_name: str, 
+    num_samples: int, 
+    noise_level: float, 
+    label_flip_rate: float, 
+    seed_value: int
+) -> pd.DataFrame:
     """
     Generate test data using the appropriate data generator based on task type.
     
     Args:
-        task_type: Type of task (moons, circles, blobs, linear)
+        dataset_name: Type of task (moons, circles, blobs, linear)
         num_samples: Number of samples to generate
         noise_level: Noise level for the generator
-        flip_rate: Label flip rate
+        label_flip_rate: Label flip rate
         seed_value: Random seed for reproducibility
         
     Returns:
         DataFrame containing generated test data
     """
-    if task_type == "moons":
+    if dataset_name == "moons":
         samples = gen_moons_dataset(
             num_samples=num_samples,
             noise_level=noise_level,
-            label_flip_rate=flip_rate,
+            label_flip_rate=label_flip_rate,
             seed_value=seed_value
         )
-    elif task_type == "circles":
+    elif dataset_name == "circles":
         samples = gen_circles_dataset(
             num_samples=num_samples,
             noise_level=noise_level,
-            label_flip_rate=flip_rate,
+            label_flip_rate=label_flip_rate,
             seed_value=seed_value
         )
-    elif task_type == "blobs":
+    elif dataset_name == "blobs":
         samples = gen_blobs_dataset(
             num_samples=num_samples,
             noise_level=noise_level,
-            label_flip_rate=flip_rate,
+            label_flip_rate=label_flip_rate,
             seed_value=seed_value,
         )
-    elif task_type == "linear":
+    elif dataset_name == "linear":
         samples = gen_linear_dataset(
             num_samples=num_samples,
             noise_level=noise_level,
-            label_flip_rate=flip_rate,
+            label_flip_rate=label_flip_rate,
             seed_value=seed_value
         )
     else:
-        raise ValueError(f"Unknown task type: {task_type}")
+        raise ValueError(f"Unknown task type: {dataset_name}")
     
     # Convert to DataFrame
     df = pd.DataFrame({
@@ -187,14 +209,14 @@ def generate_test_data(task_type: str, num_samples: int, noise_level: float, fli
     return df
 
 
-def create_instruction(task_type: str) -> str:
+def create_instruction(dataset_name: str) -> str:
     """
     Create a task instruction based on the task type.
     This instruction should be generic enough to not reveal specific task settings.
     """
-    valid_task_types = ["blobs", "circles", "linear", "moons"]
-    if task_type not in valid_task_types:
-        raise ValueError(f"Invalid task type: {task_type}. Must be one of {valid_task_types}")
+    valid_dataset_names = ["blobs", "circles", "linear", "moons"]
+    if dataset_name not in valid_dataset_names:
+        raise ValueError(f"Invalid task type: {dataset_name}. Must be one of {valid_dataset_names}")
     
     # Use the same instruction for all task types
     instruction = (
@@ -215,7 +237,7 @@ def extract_test_prompt_content(result: Dict[str, Any]) -> str:
     """
     Extract the prompt content from a DeepSeek result
     """
-    if "prompt" in result and isinstance(result["prompt"], list) and len(result["prompt"]) > 0:
+    if "prompt" in result and (isinstance(result["prompt"], list) or isinstance(result["prompt"], np.ndarray)) and len(result["prompt"]) > 0:
         return result["prompt"][0]["content"]
     raise ValueError("Failed to extract prompt content from result")
 
@@ -224,7 +246,7 @@ def extract_icl_reasonings(result: Dict[str, Any]) -> str:
     """
     Extract the model's reasonings from a DeepSeek result
     """
-    if "reasonings" in result and isinstance(result["reasonings"], list) and len(result["reasonings"]) > 0:
+    if "reasonings" in result and (isinstance(result["reasonings"], list) or isinstance(result["reasonings"], np.ndarray)) and len(result["reasonings"]) > 0:
         return result["reasonings"][0]
     raise ValueError("Failed to extract reasonings from result")
 
@@ -232,7 +254,7 @@ def extract_icl_responses(result: Dict[str, Any]) -> str:
     """
     Extract the model's responses from a DeepSeek result
     """
-    if "responses" in result and isinstance(result["responses"], list) and len(result["responses"]) > 0:
+    if "responses" in result and (isinstance(result["responses"], list) or isinstance(result["responses"], np.ndarray)) and len(result["responses"]) > 0:
         return result["responses"][0]
     raise ValueError("Failed to extract responses from result")
 
@@ -289,13 +311,19 @@ def extract_features_from_prompt(prompt_content):
     return extracted_features
 
 
-def sample_icl_examples(config: ICLExampleConfig, base_path: str, rng: np.random.RandomState, tokenizer) -> List[Dict[str, Any]]:
+def sample_icl_examples(
+    config: ICLExampleConfig, 
+    model_name: str,
+    template_type: str,
+    rng: np.random.RandomState, 
+    tokenizer,
+    icl_example_maxlength: int
+) -> List[Dict[str, Any]]:
     """
     Sample ICL examples based on the configuration, respecting the max token length constraint
     
     Args:
         config: ICL example configuration
-        base_path: Base path for DeepSeek results
         rng: Random state for reproducibility
         tokenizer: Tokenizer for length calculation
         
@@ -304,13 +332,16 @@ def sample_icl_examples(config: ICLExampleConfig, base_path: str, rng: np.random
     """
     # Load all available examples from the specified configuration
     results = load_deepseek_results(
-        base_path,
-        config.task_type,
-        config.shot_type,
-        config.reslen_type,
-        config.nsamples_type,
-        config.noise_type,
-        config.flip_rate
+        dataset_name=config.dataset_name,
+        model_name=model_name,
+        shot=config.shot,
+        template_type=template_type,
+        response_length=config.response_length,
+        num_samples=config.num_samples,
+        noise_level=config.noise_level,
+        label_flip_rate=config.label_flip_rate,
+        train_step=config.train_step,
+        data_mode=config.data_mode
     )
     
     if len(results) == 0:
@@ -327,31 +358,28 @@ def sample_icl_examples(config: ICLExampleConfig, base_path: str, rng: np.random
             break
             
         # Check if example is under the maximum token length
-        try:
-            prompt_content = extract_test_prompt_content(example)
-            reasoning = extract_icl_reasonings(example)
-            response = extract_icl_responses(example)
-            
-            # Combine all text that would be included in the ICL example
-            full_example_text = f"Problem: {prompt_content}\nReasoning: {reasoning}\n\n{response}"
-            token_length = calculate_token_length(full_example_text, tokenizer)
-            
-            if token_length <= config.icl_example_maxlength:
-                # Add metadata about this example
-                example['config_info'] = {
-                    "task_type": config.task_type,
-                    "shot_type": config.shot_type,
-                    "reslen_type": config.reslen_type,
-                    "nsamples_type": config.nsamples_type,
-                    "noise_type": config.noise_type,
-                    "flip_rate": config.flip_rate,
-                    "token_length": token_length
-                }
-                sampled_examples.append(example)
-            else:
-                print(f"Skipping example with token length {token_length} > {config.icl_example_maxlength}")
-        except Exception as e:
-            print(f"Error processing example: {e}")
+        
+        prompt_content = extract_test_prompt_content(example)
+        reasoning = extract_icl_reasonings(example)
+        response = extract_icl_responses(example)
+        
+        # Combine all text that would be included in the ICL example
+        full_example_text = f"Problem: {prompt_content}\nReasoning: {reasoning}\n\n{response}"
+        token_length = calculate_token_length(full_example_text, tokenizer)
+        if token_length <= icl_example_maxlength:
+            # Add metadata about this example
+            example['config_info'] = {
+                "shot": config.shot,
+                "response_length": config.response_length,
+                "num_samples": config.num_samples,
+                "noise_level": config.noise_level,
+                "label_flip_rate": config.label_flip_rate,
+                "token_length": token_length
+            }
+            sampled_examples.append(example)
+        else:
+            print(f"Skipping example with token length {token_length} > {icl_example_maxlength}")
+
     
     # If we couldn't find enough examples under the token limit
     if len(sampled_examples) < config.num_examples:
@@ -487,7 +515,7 @@ def create_prompt(instruction: str, icl_examples: List[Dict], test_examples: Lis
     
 #     return prompt
 
-def get_num_classes(task_type: str) -> int:
+def get_num_classes(dataset_name: str) -> int:
     """
     Return the number of classes for each task type
     """
@@ -497,10 +525,10 @@ def get_num_classes(task_type: str) -> int:
         "linear": 2,
         "moons": 2
     }
-    if task_type not in num_classes:
-        raise ValueError(f"Unknown task type: {task_type}")
+    if dataset_name not in num_classes:
+        raise ValueError(f"Unknown task type: {dataset_name}")
     
-    return num_classes[task_type]
+    return num_classes[dataset_name]
 
 
 def is_duplicate(features, existing_features_list, tolerance=1e-5):
@@ -573,10 +601,10 @@ def is_feature_duplicate(features, label, all_features_str_set, all_feature_vect
 
 
 def sample_non_duplicate_examples(
-    task_type: str, 
+    dataset_name: str, 
     num_samples: int, 
     noise_level: float, 
-    flip_rate: float, 
+    label_flip_rate: float, 
     seed_value: int,
     all_features_str_set: set,
     all_feature_vectors: list,
@@ -588,10 +616,10 @@ def sample_non_duplicate_examples(
     Sample a specified number of non-duplicate examples
     
     Args:
-        task_type: Type of task (blobs, circles, linear, moons)
+        dataset_name: Type of task (blobs, circles, linear, moons)
         num_samples: Number of samples to find
         noise_level: Noise level for data generation
-        flip_rate: Label flip rate
+        label_flip_rate: Label flip rate
         seed_value: Base seed value for reproducibility
         all_features_str_set: Set of existing feature string representations
         all_feature_vectors: List of existing feature vectors
@@ -617,10 +645,10 @@ def sample_non_duplicate_examples(
         # Generate more samples than needed
         current_seed = seed_value + seed_offset
         examples_df = generate_test_data(
-            task_type=task_type,
+            dataset_name=dataset_name,
             num_samples=num_samples * 10,
             noise_level=noise_level,
-            flip_rate=flip_rate,
+            label_flip_rate=label_flip_rate,
             seed_value=current_seed
         )
         
@@ -802,9 +830,26 @@ def extract_text_file_content(example: Dict[str, Any]) -> str:
 @hydra.main(config_path=f"{root_dir}/icl_reasoning", config_name="config", version_base=None)
 def main(cfg: DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
+    if cfg.mode == "reasoning":
+        template_type = supported_llms[cfg.model_name]["template_type"]
+    else:
+        raise ValueError(f"Unsupported mode: {cfg.mode}")
     
+    shot = 0
+    for icl_config in cfg.icl_examples:
+        shot += icl_config.shot
+        
     # Create output directory if it doesn't exist
-    output_path = Path(cfg.output_path)
+    output_path = get_dataset_dir(
+        cfg.test_data.dataset_name, 
+        f"{shot}*{cfg.test_data_examples.shot}", 
+        template_type + "_ricl", 
+        cfg.test_data.num_samples, 
+        cfg.test_data.noise_level, 
+        cfg.test_data.label_flip_rate, 
+        cfg.data_mode
+    )
+    output_path = Path(output_path)
     output_path.mkdir(parents=True, exist_ok=True)
     
     # Set random seeds for reproducibility
@@ -817,16 +862,12 @@ def main(cfg: DictConfig) -> None:
     tokenizer = get_tokenizer(cfg.tokenizer_name)
     print(f"Loaded tokenizer: {cfg.tokenizer_name}")
     
-    # Base paths
-    deepseek_results_base = "/home/szhang967/liftr/analyze_deepseek/deepseek-resutls/deepseek-ai-deepseek-reasoner"
-    
-    # Initialize dataset list
     dataset = []
     
-    # Check if all test_data_examples configs match the test_data task_type
-    if cfg.test_data_examples.task_type != cfg.test_data.task_type:
-        raise ValueError(f"All test_data_examples must have the same task_type as test_data. "
-                        f"Found {cfg.test_data_examples.task_type} instead of {cfg.test_data.task_type}")
+    # Check if all test_data_examples configs match the test_data dataset_name
+    if cfg.test_data_examples.dataset_name != cfg.test_data.dataset_name:
+        raise ValueError(f"All test_data_examples must have the same dataset_name as test_data. "
+                        f"Found {cfg.test_data_examples.dataset_name} instead of {cfg.test_data.dataset_name}")
     
     # First, collect all ICL examples to check for duplicates later
     all_icl_examples = []
@@ -879,8 +920,15 @@ def main(cfg: DictConfig) -> None:
             )
         else:
             # Regular mode - sample examples based on configuration
-            print(f"Sampling examples for {icl_config.task_type} with noise {icl_config.noise_type} and flip rate {icl_config.flip_rate}")
-            examples = sample_icl_examples(icl_config, deepseek_results_base, icl_rng, tokenizer)
+            print(f"Sampling examples for {icl_config.dataset_name} with noise {icl_config.noise_level} and label flip rate {icl_config.label_flip_rate}")
+            examples = sample_icl_examples(
+                config=icl_config, 
+                model_name=cfg.model_name,
+                template_type=template_type,
+                rng=icl_rng, 
+                tokenizer=tokenizer,
+                icl_example_maxlength=cfg.icl_example_maxlength
+            )
         
         # Store feature representation for duplicate checking
         for example in examples:
@@ -909,7 +957,7 @@ def main(cfg: DictConfig) -> None:
                 # Direct path mode meta info
                 meta_info = {
                     "num_examples": len(examples),
-                    "icl_example_maxlength": icl_config.icl_example_maxlength
+                    "icl_example_maxlength": cfg.icl_example_maxlength
                 }
                 
                 # Add either multiple dataset paths or single path
@@ -926,20 +974,20 @@ def main(cfg: DictConfig) -> None:
                 meta_info = {
                     "text_file_path": icl_config.text_file_path,
                     "example_count": icl_config.example_count,
-                    "icl_example_maxlength": icl_config.icl_example_maxlength
+                    "icl_example_maxlength": cfg.icl_example_maxlength
                 }
                 icl_config_info.append(meta_info)
             else:
                 # Regular mode meta info
                 icl_config_info.append({
-                    "task_type": icl_config.task_type,
-                    "shot_type": icl_config.shot_type,
-                    "reslen_type": icl_config.reslen_type,
-                    "nsamples_type": icl_config.nsamples_type,
-                    "noise_type": icl_config.noise_type,
-                    "flip_rate": icl_config.flip_rate,
+                    "dataset_name": icl_config.dataset_name,
+                    "shot": icl_config.shot,
+                    "response_length": icl_config.response_length,
+                    "num_samples": icl_config.num_samples,
+                    "noise_level": icl_config.noise_level,
+                    "label_flip_rate": icl_config.label_flip_rate,
                     "num_examples": len(examples),
-                    "icl_example_maxlength": icl_config.icl_example_maxlength
+                    "icl_example_maxlength": cfg.icl_example_maxlength
                 })
     
     # Shuffle all examples using the random state
@@ -961,10 +1009,10 @@ def main(cfg: DictConfig) -> None:
     # Sample test data points using the helper function
     print(f"Sampling {cfg.test_data.num_samples} test data points...")
     test_data, all_feature_vectors, all_features_str_set = sample_non_duplicate_examples(
-        task_type=cfg.test_data.task_type,
+        dataset_name=cfg.test_data.dataset_name,
         num_samples=cfg.test_data.num_samples,
-        noise_level=cfg.test_data.noise_type,
-        flip_rate=cfg.test_data.flip_rate,
+        noise_level=cfg.test_data.noise_level,
+        label_flip_rate=cfg.test_data.label_flip_rate,
         seed_value=cfg.test_data_seed,
         all_features_str_set=all_features_str_set,
         all_feature_vectors=all_feature_vectors,
@@ -977,12 +1025,12 @@ def main(cfg: DictConfig) -> None:
     test_data_labels = [label for _, label in test_data]
     
     # Sample additional examples for the instructions
-    print(f"Sampling {cfg.test_data_examples.shot_type} examples for instructions...")
+    print(f"Sampling {cfg.test_data_examples.shot} examples for instructions...")
     test_examples, all_feature_vectors, all_features_str_set = sample_non_duplicate_examples(
-        task_type=cfg.test_data_examples.task_type,
-        num_samples=cfg.test_data_examples.shot_type,
-        noise_level=cfg.test_data_examples.noise_type,
-        flip_rate=cfg.test_data_examples.flip_rate,
+        dataset_name=cfg.test_data_examples.dataset_name,
+        num_samples=cfg.test_data_examples.shot,
+        noise_level=cfg.test_data_examples.noise_level,
+        label_flip_rate=cfg.test_data_examples.label_flip_rate,
         seed_value=cfg.test_data_seed + 100,  # Different seed base
         all_features_str_set=all_features_str_set,
         all_feature_vectors=all_feature_vectors,
@@ -991,10 +1039,10 @@ def main(cfg: DictConfig) -> None:
     )
     
     # Create base instruction
-    instruction = create_instruction(cfg.test_data.task_type)
+    instruction = create_instruction(cfg.test_data.dataset_name)
     
     # Get number of classes for the test task
-    num_classes = get_num_classes(cfg.test_data.task_type)
+    num_classes = get_num_classes(cfg.test_data.dataset_name)
     
     # For each test data point, create a prompt using the same shuffled ICL examples and test examples
     for idx, (test_features, test_label) in enumerate(zip(test_data_features, test_data_labels)):
@@ -1006,8 +1054,9 @@ def main(cfg: DictConfig) -> None:
         print(f"Test example {idx+1}: Prompt length = {prompt_token_length} tokens")
         
         # Create dataset entry with the new format
+
         entry = {
-            "data_source": cfg.test_data.task_type,
+            "data_source": cfg.test_data.dataset_name,
             "prompt": [{
                 "role": "user",
                 "content": prompt_text,
@@ -1024,10 +1073,10 @@ def main(cfg: DictConfig) -> None:
             "icl_examples": [json.dumps(ex) if isinstance(ex, dict) else str(ex) for ex in all_icl_examples],  # Convert to string to avoid parquet issues
             "test_examples": json.dumps(test_examples),  # Convert to JSON string for consistent serialization
             "test_data": convert_to_serializable({
-                "task_type": cfg.test_data.task_type,
-                "shot_type": cfg.test_data_examples.shot_type,
-                "noise_type": cfg.test_data.noise_type,
-                "flip_rate": cfg.test_data.flip_rate,
+                "dataset_name": cfg.test_data.dataset_name,
+                "shot": cfg.test_data_examples.shot,
+                "noise_level": cfg.test_data.noise_level,
+                "label_flip_rate": cfg.test_data.label_flip_rate,
             }),
             "extra_info": {
                 'split': 'test',
@@ -1045,7 +1094,7 @@ def main(cfg: DictConfig) -> None:
     elif is_text_direct:
         mode_suffix = "_text_direct"
     
-    filename = f"{cfg.test_data.task_type}_shot{cfg.test_data_examples.shot_type}_n{cfg.test_data.noise_type}_f{cfg.test_data.flip_rate}_test{cfg.test_data.num_samples}_icl{len(cfg.icl_examples)}_seed{cfg.icl_example_seed}{mode_suffix}.parquet"
+    filename = f"{cfg.test_data.dataset_name}_shot{cfg.test_data_examples.shot}_n{cfg.test_data.noise_level}_f{cfg.test_data.label_flip_rate}_test{cfg.test_data.num_samples}_icl{len(cfg.icl_examples)}_seed{cfg.icl_example_seed}{mode_suffix}.parquet"
     output_file = output_path / filename
     
     # Pre-process the dataset to ensure all elements are serializable
