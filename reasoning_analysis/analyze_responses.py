@@ -22,26 +22,86 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def extract_json(text: str) -> Dict[str, Any]:
+def extract_json(text: str) -> Any:
     """
-    Extract JSON from text response
+    Extract JSON from text response, handling various formats:
+    1. JSON within ```json code blocks
+    2. JSON within square brackets []
+    3. JSON within curly braces {}
     
     Args:
         text: Text containing JSON
         
     Returns:
-        Extracted JSON as dict or empty dict if not found
+        Extracted JSON (list, dict, etc.) or empty list/dict if not found
     """
+    if text is None:
+        return []
+    
     try:
-        # Look for JSON patterns (between curly braces)
-        json_match = re.search(r'\[.*\]', text, re.DOTALL)
-        if json_match:
-            json_str = json_match.group()
-            return json.loads(json_str)
-        return {}
+        # Try to find JSON array or object in code blocks with ```json
+        code_block_pattern = r'```(?:json)?\s*\n?([\s\S]*?)\n?```'
+        code_blocks = re.findall(code_block_pattern, text, re.DOTALL)
+        
+        # Check each code block for valid JSON
+        for block in code_blocks:
+            block = block.strip()
+            try:
+                # Try parsing the block directly
+                return json.loads(block)
+            except:
+                # If it fails, try to find JSON array inside the block
+                array_match = re.search(r'(\[[\s\S]*\])', block, re.DOTALL)
+                if array_match:
+                    try:
+                        return json.loads(array_match.group(1))
+                    except:
+                        continue  # Try next block
+                
+                # Try to find JSON object inside the block
+                obj_match = re.search(r'(\{[\s\S]*\})', block, re.DOTALL)
+                if obj_match:
+                    try:
+                        return json.loads(obj_match.group(1))
+                    except:
+                        continue  # Try next block
+        
+        # If no valid JSON in code blocks, search directly in the text
+        # Look for JSON arrays
+        array_pattern = r'(\[[\s\S]*?\])'
+        array_matches = re.finditer(array_pattern, text, re.DOTALL)
+        
+        # Try each match from longest to shortest (assuming the longest is the complete JSON)
+        matches = sorted([(m.group(1), len(m.group(1))) for m in array_matches], 
+                         key=lambda x: x[1], reverse=True)
+        
+        for match_text, _ in matches:
+            try:
+                return json.loads(match_text)
+            except:
+                continue
+        
+        # Look for JSON objects if no arrays found
+        obj_pattern = r'(\{[\s\S]*?\})'
+        obj_matches = re.finditer(obj_pattern, text, re.DOTALL)
+        
+        # Try each match from longest to shortest
+        matches = sorted([(m.group(1), len(m.group(1))) for m in obj_matches], 
+                         key=lambda x: x[1], reverse=True)
+        
+        for match_text, _ in matches:
+            try:
+                return json.loads(match_text)
+            except:
+                continue
+        
+        # If everything fails, return empty structure
+        logger.warning("No valid JSON found in the text")
+        return []
+        
     except Exception as e:
         logger.error(f"Error extracting JSON: {e}")
-        return {}
+        return []
 
 
 def read_instruction_file(file_path: str) -> str:
@@ -122,7 +182,7 @@ def process_file(
             df.at[i, f'{column_prefix}_extracted_json'] = json.dumps(extracted_json)
             
             # Save intermediate results after each successful processing
-            if i > 0 and i % 10 == 0:
+            if i > 0 and i % 5 == 0:
                 logger.info(f"Saving intermediate results after processing {i} rows...")
                 df.to_parquet(output_file)
                 
@@ -166,16 +226,16 @@ def parse_arguments():
     parser.add_argument('--temperature', '-t', type=float, default=0.3,
                         help='Temperature for LLM generation (default: 0.3)')
     
-    parser.add_argument('--max-tokens', '-m', type=int, default=1000,
-                        help='Maximum tokens for LLM response (default: 1000)')
+    parser.add_argument('--max_tokens', '-m', type=int, default=20000,
+                        help='Maximum tokens for LLM response (default: 20000)')
     
-    parser.add_argument('--max-retries', '-r', type=int, default=5,
-                        help='Maximum number of retry attempts for API calls (default: 5)')
+    parser.add_argument('--max_retries', '-r', type=int, default=10,
+                        help='Maximum number of retry attempts for API calls (default: 10)')
     
     parser.add_argument('--delay', '-d', type=int, default=1,
                         help='Delay between API calls in seconds (default: 1)')
     
-    parser.add_argument('--continue-on-error', '-c', action='store_true',
+    parser.add_argument('--continue_on_error', '-c', action='store_true',
                         help='Continue processing after errors (default: False)')
     
     parser.add_argument('--verbose', '-v', action='store_true',

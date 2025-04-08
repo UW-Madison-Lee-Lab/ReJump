@@ -287,7 +287,7 @@ def get_prediction_result(response_text: Optional[str], ground_truth) -> Tuple[O
         return None, False
 
 
-def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", save_dir: Optional[str] = None, max_samples: int = 100):
+def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", save_dir: Optional[str] = None, max_samples: int = 100, save_json: bool = True):
     """
     Visualize ICL reasoning output from parquet files with model responses
     
@@ -296,6 +296,7 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
         output_format: Output format, supports txt and html
         save_dir: Directory to save the output file (default: same as input file's directory)
         max_samples: Maximum number of samples to visualize (default: 100)
+        save_json: Whether to save a JSON file with all visualization data (default: True)
         
     Returns:
         Path to the output file
@@ -594,6 +595,174 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
         output_file = output_dir / output_filename
     
     print(f"Output file: {output_file}")
+    
+    # Save to JSON file if requested
+    if save_json:
+        # Prepare JSON data
+        json_data = {
+            "metadata": {
+                "input_file": str(input_file),
+                "timestamp": pd.Timestamp.now().isoformat(),
+                "total_samples": total_data_size,
+                "displayed_samples": displayed_samples,
+                "accuracy": accuracy,
+                "refined_accuracy": refined_accuracy,
+                "parseable_accuracy": parseable_accuracy,
+                "parseable_predictions": parseable_predictions,
+                "unparseable_predictions": unparseable_predictions
+            },
+            "samples": []
+        }
+        
+        # Add all samples that will be displayed
+        for idx, row in display_df.iterrows():
+            # Get ground truth label
+            ground_truth = None
+            if 'reward_model' in row and isinstance(row['reward_model'], dict):
+                ground_truth_data = row['reward_model'].get('ground_truth', None)
+                if isinstance(ground_truth_data, dict) and 'label' in ground_truth_data:
+                    ground_truth = ground_truth_data
+            
+            # Process responses
+            responses = row.get('responses', [])
+            
+            # Handle different types of response data
+            if responses is None:
+                responses = ["No response available"]
+            elif not isinstance(responses, list):
+                # Try to convert to list if it's another iterable
+                try:
+                    responses = list(responses)
+                except (TypeError, ValueError):
+                    responses = [responses]
+            
+            # Get first response (assuming single response per example)
+            response_text = responses[0] if responses and len(responses) > 0 else "No response generated"
+            
+            # Ensure response_text is a string
+            if not isinstance(response_text, str):
+                try:
+                    if isinstance(response_text, bytes):
+                        response_text = response_text.decode('utf-8')
+                    else:
+                        response_text = str(response_text)
+                except Exception:
+                    response_text = str(response_text)  # Last resort
+            
+            # Filter out <|endoftext|> tags
+            response_text = response_text.replace("<|endoftext|>", "")
+            
+            # Get input prompt content
+            input_prompt = row.get('prompt')
+            input_prompt_content = None
+            if input_prompt and isinstance(input_prompt, list) and len(input_prompt) > 0:
+                if isinstance(input_prompt[0], dict) and 'content' in input_prompt[0]:
+                    input_prompt_content = input_prompt[0]['content']
+            
+            # Clean response text
+            cleaned_response_text = clean_response_text(response_text, input_prompt_content)
+            
+            # Remove prompt content from response
+            if input_prompt_content:
+                cleaned_response_text = cleaned_response_text.replace(input_prompt_content, "")
+            
+            # Get data source for reward function selection
+            data_source = row.get('data_source', 'blobs')
+            
+            # Get reward function for the data source
+            reward_fn = select_reward_fn(data_source)
+            
+            # Extract thinking and answer
+            raw_thinking = extract_think_content(cleaned_response_text)
+            raw_answer = extract_answer_content(cleaned_response_text)
+            
+            # Evaluate with the appropriate reward function
+            is_correct = False
+            prediction = None
+            
+            try:
+                # First try with the dedicated reward function
+                is_correct = reward_fn(cleaned_response_text, ground_truth)
+                
+                # Extract prediction for display with enhanced matching
+                prediction = None
+                # First check if there's a clean answer tag
+                if raw_answer and raw_answer.strip().isdigit():
+                    prediction = int(raw_answer.strip())
+                else:
+                    # Try to extract prediction using get_prediction_result function
+                    parsed_prediction, _ = get_prediction_result(cleaned_response_text, ground_truth)
+                    if parsed_prediction is not None:
+                        prediction = parsed_prediction
+                    elif ground_truth and 'label' in ground_truth and is_correct:
+                        # If correct but can't parse prediction, use ground truth
+                        prediction = ground_truth['label']
+            
+            except Exception:
+                # Fallback to simple prediction extraction
+                prediction, is_correct = get_prediction_result(cleaned_response_text, ground_truth)
+                
+            # Create sample data
+            sample_data = {
+                "index": int(idx),
+                "data_source": data_source,
+                "ground_truth": ground_truth,
+                "prediction": prediction,
+                "is_correct": is_correct,
+                "cleaned_response": cleaned_response_text,
+                "raw_thinking": raw_thinking,
+                "raw_answer": raw_answer
+            }
+            
+            # Add additional columns if available
+            if 'claude_analysis_raw_output' in row and row['claude_analysis_raw_output'] is not None:
+                sample_data["claude_analysis_raw_output"] = row['claude_analysis_raw_output']
+            
+            if 'claude_analysis_extracted_json' in row and row['claude_analysis_extracted_json'] is not None:
+                sample_data["claude_analysis_extracted_json"] = row['claude_analysis_extracted_json']
+            
+            # Add extra data fields if available
+            if 'icl_examples' in row:
+                # Simplified version of icl_examples for JSON
+                icl_examples = row.get('icl_examples', [])
+                if isinstance(icl_examples, str):
+                    try:
+                        # Try to parse as JSON if it's a string representation of a list
+                        if icl_examples.startswith('[') and icl_examples.endswith(']'):
+                            icl_examples = json.loads(icl_examples)
+                    except:
+                        pass
+                sample_data["icl_examples_count"] = len(icl_examples) if isinstance(icl_examples, list) else 1
+            
+            if 'test_examples' in row:
+                test_examples = row.get('test_examples', '[]')
+                if isinstance(test_examples, str):
+                    try:
+                        test_examples = json.loads(test_examples)
+                    except:
+                        test_examples = []
+                sample_data["test_examples_count"] = len(test_examples)
+            
+            if 'icl_example_meta_info' in row:
+                sample_data["icl_example_meta_info"] = row['icl_example_meta_info']
+            
+            if 'test_data' in row:
+                sample_data["test_data"] = row['test_data']
+            
+            if 'extra_info' in row:
+                sample_data["extra_info"] = row['extra_info']
+            
+            # Add to samples list
+            json_data["samples"].append(sample_data)
+        
+        # Save to JSON file
+        json_output_file = output_dir / f"{Path(input_file).stem}_visualization_data.json"
+        try:
+            with open(json_output_file, 'w', encoding='utf-8') as f:
+                json.dump(json_data, f, indent=2, default=str)
+            print(f"JSON data saved to: {json_output_file}")
+        except Exception as e:
+            print(f"Error saving JSON data: {e}")
     
     if output_format == "html":
         # HTML output
@@ -1669,6 +1838,8 @@ def main():
                         help='Directory to save the output file (default: same as input file)')
     parser.add_argument('--max-samples', type=int, default=100,
                         help='Maximum number of samples to visualize (default: 100, use 0 for all)')
+    parser.add_argument('--save-json', action='store_true', default=True,
+                        help='Save a JSON file with visualization data (default: True)')
     
     args = parser.parse_args()
     
@@ -1678,7 +1849,7 @@ def main():
         return
     
     # Visualize the output
-    output_file = visualize_icl_reasoning_output(args.input, args.format, args.output_dir, args.max_samples)
+    output_file = visualize_icl_reasoning_output(args.input, args.format, args.output_dir, args.max_samples, args.save_json)
     print(f"Visualization complete! Saved to: {output_file}")
 
 
