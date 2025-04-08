@@ -113,8 +113,18 @@ class LLMAPI:
             self.model = model_name.replace("openrouter-", "")  # Remove the prefix to get the actual model name
             self.client_type = "openrouter"
         elif model_name.startswith("claude/"):
-            self.client = anthropic.Anthropic(api_key=api_key)
+            print(f"Initializing Claude client with model: {model_name}")
+            try:
+                self.client = anthropic.Anthropic(
+                    api_key=api_key,
+                    timeout=120.0  # Set timeout to 120 seconds
+                )
+                print(f"Claude client initialized successfully")
+            except Exception as e:
+                print(f"Error initializing Claude client: {str(e)}")
+                raise
             self.model = model_name.replace("claude/", "")  # Remove the prefix to get the actual model name
+            print(f"Using Claude model: {self.model}")
             self.client_type = "anthropic"
             if "thinking" in self.model: 
                 self.model = self.model.replace("-thinking", "")
@@ -131,9 +141,9 @@ class LLMAPI:
         
 
     def generate(self, messages: List[Dict[str, str]], max_tokens: int = 8000, temperature: float = 0.7) -> str:
-        max_retries = 10  # Very large number of retries
+        max_retries = 10  # Increased retry count
         if max_retries <= 0: raise ValueError("max_retries must be greater than 0")
-        timeout = 10  # 60 seconds timeout
+        timeout = 120  # Increased timeout to 120 seconds
         
         # Ensure messages is a list
         if not isinstance(messages, list):
@@ -212,18 +222,6 @@ class LLMAPI:
             
         raise Exception("Failed to generate response")
 
-            # except KeyboardInterrupt:
-            #     raise KeyboardInterrupt
-            # except pdb.bdb.BdbQuit:
-            #     raise pdb.bdb.BdbQuit
-            # except Exception as e:
-            #     if attempt < max_retries - 1:
-            #         time.sleep(5)
-            #         continue
-                    
-            #     if "maximum context length" in str(e).lower():
-            #         return (response.choices[0].message.content, getattr(response.choices[0].message, 'reasoning_content', None)) if 'response' in locals() else ("", None)
-            #     raise
 
     def process_batch(self, batch_chat_lst: List[Dict[str, str]], n_samples: int = 1, config=None, batch_idx: int = 0, wandb=None, ground_truths=None, data_sources=None) -> List[List[str]]:
         """Process a batch of chat messages in parallel using threading."""

@@ -1,0 +1,40 @@
+# Sample configuration for the ICL reasoning script
+
+defaults:
+  - _self_
+  
+# Configuration for ICL examples using direct path mode only
+icl_examples:
+  # Using multiple datasets with direct path mode
+  - _target_: liftr.icl_reasoning.icl_reasoning.DirectPathICLExampleConfig
+    dataset_paths: 
+      - "/home/szhang967/liftr/analyze_deepseek/deepseek-resutls/deepseek-ai-deepseek-reasoner/blobs_50_shot_base_reslen_3046_nsamples_500_noise_1.0_flip_rate_0.0/global_step_0/test.json"
+      - "/home/szhang967/liftr/analyze_deepseek/deepseek-resutls/deepseek-ai-deepseek-reasoner/linear_50_shot_base_reslen_3046_nsamples_500_noise_0.1_flip_rate_0.0/global_step_0/test.json"
+      - "/home/szhang967/liftr/analyze_deepseek/deepseek-resutls/deepseek-ai-deepseek-reasoner/moons_50_shot_base_reslen_3046_nsamples_500_noise_0.1_flip_rate_0.0/global_step_0/test.json"
+    example_indices_list:
+      - [23]  # Indices for the first dataset (blobs)
+      - [22]  # Indices for the second dataset (linear)
+      - [35]  # Indices for the third dataset (moons)
+    icl_example_maxlength: 1000
+
+# Test data configuration
+test_data:
+  _target_: liftr.icl_reasoning.icl_reasoning.TestDataConfig
+  task_type: "circles"
+  flip_rate: 0.0
+  noise_type: 0.1
+  num_samples: 100
+
+# Test data examples configuration
+test_data_examples:
+  _target_: liftr.icl_reasoning.icl_reasoning.TestDataExampleConfig
+  task_type: "circles"
+  flip_rate: 0.0
+  noise_type: 0.1
+  shot_type: 50
+
+# Global settings
+icl_example_seed: 42
+test_data_seed: 42
+tokenizer_name: "Qwen/Qwen2.5-3B-Instruct"
+output_path: "/staging/szhang967/icl_datasets_better_prompt" 
