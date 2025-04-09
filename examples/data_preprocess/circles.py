@@ -9,7 +9,7 @@ from typing import List, Tuple
 from tqdm import tqdm
 import argparse
 from utils import set_seed
-from examples.data_preprocess.helper import save_data, classification_reward_fn, flip_label, prepare_dataset
+from examples.data_preprocess.helper import save_data, flip_label, prepare_dataset
 
 def gen_dataset(
     num_samples: int,
@@ -88,7 +88,4 @@ if __name__ == '__main__':
         datasets['TEST_SIZE'],
         data_mode = args.data_mode,
     )
-    
 
-def circles_reward_fn(solution_str, ground_truth):
-    return classification_reward_fn(solution_str, ground_truth)

@@ -8,7 +8,7 @@ from typing import List, Tuple
 from tqdm import tqdm
 import argparse
 from utils import set_seed
-from examples.data_preprocess.helper import save_data, classification_reward_fn, flip_label, prepare_dataset
+from examples.data_preprocess.helper import save_data, flip_label, prepare_dataset
 import pdb
 import json
 
@@ -92,6 +92,3 @@ if __name__ == '__main__':
         data_mode = args.data_mode
     )
 
-
-def blobs_reward_fn(solution_str, ground_truth):
-    return classification_reward_fn(solution_str, ground_truth)

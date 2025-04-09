@@ -44,7 +44,7 @@ from verl.utils.llm_api import LLMAPI
 from verl.utils.hdfs_io import makedirs
 from verl.single_controller.ray import RayClassWithInitArgs, RayResourcePool, RayWorkerGroup
 from utils import flatten_dict, print_configs
-from constants import get_configs_via_result_dir, supported_llms
+from constants import get_configs_via_result_dir, supported_llms, supported_datasets
 from verl.trainer.fsdp_sft_trainer import extract_model_name
 import wandb   
 try:
@@ -306,23 +306,40 @@ def main(config):
         artifact.add_file(config.data.output_path)
         wandb.log_artifact(artifact)
     
-    # eval
-    passes = 0
+    config_dict = get_configs_via_result_dir(os.path.dirname(config.data.output_path))
+    if supported_datasets[config_dict['dataset_name']]['type'] == 'regression':
+        sum_square_error = 0
+        
+        k = None
+        for i in range(total_samples):
+            if k is None: k = len(reward_tensor_lst[i])
+            sum_square_error += np.min(reward_tensor_lst[i])
+        
+        mse = sum_square_error / total_samples
+        print(f'mse@{k}: {mse}')
+        
+        if config.trainer.wandb:
+            wandb.log({
+                f'mse': mse,
+            })
+    else:
+        # eval
+        passes = 0
 
-    k = None
-    for i in range(total_samples):
-        if k is None: k = len(reward_tensor_lst[i])
-        max_score = np.max(reward_tensor_lst[i])
+        k = None
+        for i in range(total_samples):
+            if k is None: k = len(reward_tensor_lst[i])
+            max_score = np.max(reward_tensor_lst[i])
 
-        if max_score == 1:
-            passes += 1
+            if max_score == 1:
+                passes += 1
 
-    print(f'pass@{k}: {passes / total_samples}')
+        print(f'pass@{k}: {passes / total_samples}')
 
-    if config.trainer.wandb:
-        wandb.log({
-            f'pass@{k}': passes / total_samples,
-        })
+        if config.trainer.wandb:
+            wandb.log({
+                f'pass@{k}': passes / total_samples,
+            })
 
     if config.trainer.wandb:
         wandb.finish()
