@@ -241,6 +241,10 @@ class LLMAPI:
                 print(f"ReadError: {e}")
                 time.sleep(timeout)
                 
+            except genai.errors.ServerError as e:
+                print(f"ServerError: {e}")
+                time.sleep(timeout)
+                
             except Exception as e:
                 pdb.set_trace()
                 
