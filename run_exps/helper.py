@@ -8,8 +8,8 @@ def gen_dataset(
     shot,
     template_type="qwen-instruct",
     num_samples=10000,
-    noise_level=None,
-    label_flip_rate=0.0,
+    feature_noise=None,
+    label_noise=0.0,
     data_mode="default",
 ):
     if "ricl" in template_type:
@@ -22,8 +22,8 @@ def gen_dataset(
         for i, example_dataset in enumerate(example_datasets):
             icl_example_prompt = f"""
     ++icl_examples.{i}.dataset_name={example_dataset} \
-    ++icl_examples.{i}.label_flip_rate={label_flip_rate} \
-    ++icl_examples.{i}.noise_level={supported_datasets[example_dataset]["noise_level"]} \
+    ++icl_examples.{i}.label_noise={label_noise} \
+    ++icl_examples.{i}.feature_noise={supported_datasets[example_dataset]["feature_noise"]} \
     ++icl_examples.{i}.shot=50 \
     ++icl_examples.{i}.response_length=3046 \
     ++icl_examples.{i}.num_samples=500 \
@@ -45,31 +45,31 @@ python {root_dir}/icl_reasoning/icl_reasoning.py \
     data_mode=default \
     icl_example_maxlength=6000 \
     test_data.dataset_name={dataset_name} \
-    test_data.label_flip_rate={label_flip_rate} \
-    test_data.noise_level={noise_level} \
+    test_data.label_noise={label_noise} \
+    test_data.feature_noise={feature_noise} \
     test_data.num_samples={num_samples} \
     test_data_examples.dataset_name={dataset_name} \
-    test_data_examples.label_flip_rate={label_flip_rate} \
-    test_data_examples.noise_level={noise_level} \
+    test_data_examples.label_noise={label_noise} \
+    test_data_examples.feature_noise={feature_noise} \
     test_data_examples.shot={shot} \
     +icl_examples=[] \
     {icl_examples_prompt}
         """
     else:
         if dataset_name == "blobs":
-            noise_level = 1.0 if noise_level is None else noise_level
+            feature_noise = 1.0 if feature_noise is None else feature_noise
         elif dataset_name in ["moons", "linear"]:
-            noise_level = 0.1 if noise_level is None else noise_level
+            feature_noise = 0.1 if feature_noise is None else feature_noise
         elif dataset_name == "circles":
-            noise_level = 0.01 if noise_level is None else noise_level
+            feature_noise = 0.01 if feature_noise is None else feature_noise
         command = f"""
 python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --template_type={template_type} \
     --num_samples={num_samples} \
     --n_shot={shot} \
-    --noise_level={noise_level} \
+    --feature_noise={feature_noise} \
     --test_ratio=0.2 \
-        --label_flip_rate={label_flip_rate} \
+        --label_noise={label_noise} \
         --data_mode={data_mode}
             """ 
     return command
@@ -97,8 +97,8 @@ def rl_train(
     prompt_length=256,
     response_length=1024,
     num_samples=10000,
-    noise_level=None,
-    label_flip_rate=0.0,
+    feature_noise=None,
+    label_noise=0.0,
     n_gpus=2,
     data_mode="default"
 ):
@@ -107,8 +107,8 @@ def rl_train(
         shot=shot,
         template_type=template_type,
         num_samples=num_samples,
-        noise_level=noise_level,
-        label_flip_rate=label_flip_rate,
+        feature_noise=feature_noise,
+        label_noise=label_noise,
         data_mode=data_mode
     )
     trained_model_name = get_model_name(
@@ -118,8 +118,8 @@ def rl_train(
         template_type=template_type,
         response_length=response_length,
         num_samples=num_samples,
-        noise_level=noise_level,
-        label_flip_rate=label_flip_rate,
+        feature_noise=feature_noise,
+        label_noise=label_noise,
         data_mode=data_mode
     )
     result_dir = get_result_dir(
@@ -129,8 +129,8 @@ def rl_train(
         template_type=template_type,
         response_length=response_length,
         num_samples=num_samples,
-        noise_level=noise_level,
-        label_flip_rate=label_flip_rate,
+        feature_noise=feature_noise,
+        label_noise=label_noise,
         data_mode=data_mode,
         train_step=0,
     )
@@ -189,8 +189,8 @@ def inference(
     prompt_length=256,
     response_length=1024,
     num_samples=10000,
-    noise_level=None,
-    label_flip_rate=0.0,
+    feature_noise=None,
+    label_noise=0.0,
     n_gpus=2,
     data_mode="default",
     train_step=0,
@@ -202,8 +202,8 @@ def inference(
         shot=shot,
         template_type=template_type,
         num_samples=num_samples,
-        noise_level=noise_level,
-        label_flip_rate=label_flip_rate,
+        feature_noise=feature_noise,
+        label_noise=label_noise,
         data_mode=data_mode
     )
     result_dir = get_result_dir(
@@ -213,8 +213,8 @@ def inference(
         template_type=template_type,
         response_length=response_length,
         num_samples=num_samples,
-        noise_level=noise_level,
-        label_flip_rate=label_flip_rate,
+        feature_noise=feature_noise,
+        label_noise=label_noise,
         data_mode=data_mode,
         train_step=train_step
     )

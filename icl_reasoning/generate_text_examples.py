@@ -37,34 +37,34 @@ def get_num_classes(task_type):
     }.get(task_type, 2)
 
 
-def generate_data(task_type, num_samples, noise_level, flip_rate, seed_value):
+def generate_data(task_type, num_samples, feature_noise, flip_rate, seed_value):
     """生成数据样本"""
     if task_type == "moons":
         samples = gen_moons_dataset(
             num_samples=num_samples,
-            noise_level=noise_level,
-            label_flip_rate=flip_rate,
+            feature_noise=feature_noise,
+            label_noise=flip_rate,
             seed_value=seed_value
         )
     elif task_type == "circles":
         samples = gen_circles_dataset(
             num_samples=num_samples,
-            noise_level=noise_level,
-            label_flip_rate=flip_rate,
+            feature_noise=feature_noise,
+            label_noise=flip_rate,
             seed_value=seed_value
         )
     elif task_type == "blobs":
         samples = gen_blobs_dataset(
             num_samples=num_samples,
-            noise_level=noise_level,
-            label_flip_rate=flip_rate,
+            feature_noise=feature_noise,
+            label_noise=flip_rate,
             seed_value=seed_value,
         )
     elif task_type == "linear":
         samples = gen_linear_dataset(
             num_samples=num_samples,
-            noise_level=noise_level,
-            label_flip_rate=flip_rate,
+            feature_noise=feature_noise,
+            label_noise=flip_rate,
             seed_value=seed_value
         )
     else:
@@ -190,7 +190,7 @@ def generate_reasoning(task_type, test_point, examples, num_classes):
     return reasoning
 
 
-def generate_example(task_type, num_context, num_shot, noise_level, flip_rate, seed):
+def generate_example(task_type, num_context, num_shot, feature_noise, flip_rate, seed):
     """生成单个示例文本"""
     # 设置随机种子
     random.seed(seed)
@@ -203,7 +203,7 @@ def generate_example(task_type, num_context, num_shot, noise_level, flip_rate, s
     context_samples = generate_data(
         task_type=task_type,
         num_samples=num_context,
-        noise_level=noise_level,
+        feature_noise=feature_noise,
         flip_rate=flip_rate,
         seed_value=seed
     )
@@ -212,7 +212,7 @@ def generate_example(task_type, num_context, num_shot, noise_level, flip_rate, s
     test_samples = generate_data(
         task_type=task_type,
         num_samples=num_shot + 1,  # 多生成一个作为测试点
-        noise_level=noise_level,
+        feature_noise=feature_noise,
         flip_rate=flip_rate,
         seed_value=seed + 100  # 不同的种子
     )
@@ -249,7 +249,7 @@ def main():
     parser.add_argument('--task_type', type=str, default='moons', choices=['moons', 'circles', 'blobs', 'linear'], help='任务类型')
     parser.add_argument('--num_context', type=int, default=20, help='上下文样本数量')
     parser.add_argument('--num_shot', type=int, default=5, help='示例样本数量')
-    parser.add_argument('--noise_level', type=float, default=0.1, help='噪声水平')
+    parser.add_argument('--feature_noise', type=float, default=0.1, help='噪声水平')
     parser.add_argument('--flip_rate', type=float, default=0.0, help='标签翻转率')
     parser.add_argument('--seed', type=int, default=42, help='随机种子')
     args = parser.parse_args()
@@ -266,7 +266,7 @@ def main():
             task_type=args.task_type,
             num_context=args.num_context,
             num_shot=args.num_shot,
-            noise_level=args.noise_level,
+            feature_noise=args.feature_noise,
             flip_rate=args.flip_rate,
             seed=example_seed
         )

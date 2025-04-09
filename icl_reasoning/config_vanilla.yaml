@@ -4,8 +4,8 @@
 icl_examples:
   # Example 1: Moons dataset with no flip rate
   - dataset_name: moons
-    label_flip_rate: 0.0
-    noise_level: 0.1
+    label_noise: 0.0
+    feature_noise: 0.1
     shot: 50
     response_length: 3046
     num_samples: 500
@@ -15,8 +15,8 @@ icl_examples:
 
   # Example 2: Moons dataset with 0.1 flip rate
   - dataset_name: linear
-    label_flip_rate: 0.0
-    noise_level: 0.1
+    label_noise: 0.0
+    feature_noise: 0.1
     shot: 50
     response_length: 3046
     num_samples: 500
@@ -25,8 +25,8 @@ icl_examples:
     data_mode: default
   
   - dataset_name: blobs
-    label_flip_rate: 0.0
-    noise_level: 1.0
+    label_noise: 0.0
+    feature_noise: 1.0
     shot: 50
     response_length: 3046
     num_samples: 500
@@ -36,14 +36,14 @@ icl_examples:
 
 test_data:
   dataset_name: circles
-  label_flip_rate: 0.0
-  noise_level: 0.0
+  label_noise: 0.0
+  feature_noise: 0.0
   num_samples: 2000
 
 test_data_examples:
   dataset_name: circles
-  label_flip_rate: 0.0
-  noise_level: 0.0
+  label_noise: 0.0
+  feature_noise: 0.0
   shot: 50
 
 # Random seeds for reproducibility

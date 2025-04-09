@@ -12,8 +12,8 @@ parser.add_argument("--dataset", type=str, nargs="+", default=["blobs"], choices
 parser.add_argument("--model", type=str, nargs="+", default=supported_model_list, choices=supported_model_list)
 parser.add_argument("--max_iterations", type=int, default=10)
 parser.add_argument("--num_responses", type=int, default=1)
-parser.add_argument("--label_flip_rate", type=float, default=0.0)
-parser.add_argument("--noise_level", type=float, default=1.0)
+parser.add_argument("--label_noise", type=float, default=0.0)
+parser.add_argument("--feature_noise", type=float, default=1.0)
 parser.add_argument("--train_set_temperature", type=float, default=0, help="Temperature for generating training responses")
 parser.add_argument("--test_set_temperature", type=float, default=0, help="Temperature for generating test responses")
 parser.add_argument("--train_set_top_k", type=int, default=-1, help="Top-k sampling parameter for training data")
@@ -35,8 +35,8 @@ max_iterations = args.max_iterations
 num_responses = args.num_responses
 shot = args.shot
 num_samples = args.num_samples
-label_flip_rate = args.label_flip_rate
-noise_level = args.noise_level
+label_noise = args.label_noise
+feature_noise = args.feature_noise
 total_epochs = args.total_epochs
 nproc_per_node = args.nproc_per_node
 n_gpus_per_node = args.n_gpus_per_node
@@ -58,8 +58,8 @@ def gen_dataset(
         python {root_dir}/examples/data_preprocess/{dataset_name}.py \\
             --template_type={template_type} \\
             --num_samples={num_samples} \\
-            --label_flip_rate={label_flip_rate} \\
-            --noise_level={noise_level} \\
+            --label_noise={label_noise} \\
+            --feature_noise={feature_noise} \\
             --test_ratio=0.2 \\
             --n_shot={shot}
         """
@@ -68,8 +68,8 @@ def gen_dataset(
         python {root_dir}/examples/data_preprocess/{dataset_name}.py \\
             --template_type={template_type} \\
             --num_samples={num_samples} \\
-            --label_flip_rate={label_flip_rate} \\
-            --noise_level={noise_level} \\
+            --label_noise={label_noise} \\
+            --feature_noise={feature_noise} \\
             --n_shot={shot}
         """
     else:

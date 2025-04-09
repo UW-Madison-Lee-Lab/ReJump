@@ -28,8 +28,8 @@ class BaseICLExampleConfig:
 @dataclass
 class ICLExampleConfig(BaseICLExampleConfig):
     dataset_name: str = MISSING  # blobs, circles, linear, moons
-    label_flip_rate: float = MISSING  # 0.0, 0.1, 0.2
-    noise_level: float = MISSING  # noise level like 0.1, 1.0
+    label_noise: float = MISSING  # 0.0, 0.1, 0.2
+    feature_noise: float = MISSING  # noise level like 0.1, 1.0
     shot: int = MISSING  # 50, 100
     response_length: int = MISSING  # 3046, 5686
     num_samples: int = MISSING  # 500
@@ -53,16 +53,16 @@ class TextDirectICLExampleConfig(BaseICLExampleConfig):
 @dataclass
 class TestDataConfig:
     dataset_name: str = MISSING  # blobs, circles, linear, moons
-    label_flip_rate: float = MISSING  # 0.0, 0.1, 0.2
-    noise_level: float = MISSING  # noise level like 0.1, 1.0
+    label_noise: float = MISSING  # 0.0, 0.1, 0.2
+    feature_noise: float = MISSING  # noise level like 0.1, 1.0
     num_samples: int = MISSING  # Number of test samples to use
 
 
 @dataclass
 class TestDataExampleConfig:
     dataset_name: str = MISSING  # blobs, circles, linear, moons
-    label_flip_rate: float = MISSING  # 0.0, 0.1, 0.2
-    noise_level: float = MISSING  # noise level like 0.1, 1.0
+    label_noise: float = MISSING  # 0.0, 0.1, 0.2
+    feature_noise: float = MISSING  # noise level like 0.1, 1.0
     shot: int = MISSING  # Number of examples to use
 
 
@@ -118,8 +118,8 @@ def load_deepseek_results(
     shot: int, 
     response_length: int, 
     num_samples: int, 
-    noise_level: float, 
-    label_flip_rate: float,
+    feature_noise: float, 
+    label_noise: float,
     train_step: int,
     data_mode: str
 ):
@@ -133,8 +133,8 @@ def load_deepseek_results(
         template_type = "reasoning_api",
         response_length = response_length,
         num_samples = num_samples,
-        noise_level = noise_level,
-        label_flip_rate = label_flip_rate,
+        feature_noise = feature_noise,
+        label_noise = label_noise,
         train_step = train_step,
         data_mode = data_mode
     )
@@ -150,8 +150,8 @@ def load_deepseek_results(
 def generate_test_data(
     dataset_name: str, 
     num_samples: int, 
-    noise_level: float, 
-    label_flip_rate: float, 
+    feature_noise: float, 
+    label_noise: float, 
     seed_value: int
 ) -> pd.DataFrame:
     """
@@ -160,8 +160,8 @@ def generate_test_data(
     Args:
         dataset_name: Type of task (moons, circles, blobs, linear)
         num_samples: Number of samples to generate
-        noise_level: Noise level for the generator
-        label_flip_rate: Label flip rate
+        feature_noise: Noise level for the generator
+        label_noise: Label flip rate
         seed_value: Random seed for reproducibility
         
     Returns:
@@ -170,29 +170,29 @@ def generate_test_data(
     if dataset_name == "moons":
         samples = gen_moons_dataset(
             num_samples=num_samples,
-            noise_level=noise_level,
-            label_flip_rate=label_flip_rate,
+            feature_noise=feature_noise,
+            label_noise=label_noise,
             seed_value=seed_value
         )
     elif dataset_name == "circles":
         samples = gen_circles_dataset(
             num_samples=num_samples,
-            noise_level=noise_level,
-            label_flip_rate=label_flip_rate,
+            feature_noise=feature_noise,
+            label_noise=label_noise,
             seed_value=seed_value
         )
     elif dataset_name == "blobs":
         samples = gen_blobs_dataset(
             num_samples=num_samples,
-            noise_level=noise_level,
-            label_flip_rate=label_flip_rate,
+            feature_noise=feature_noise,
+            label_noise=label_noise,
             seed_value=seed_value,
         )
     elif dataset_name == "linear":
         samples = gen_linear_dataset(
             num_samples=num_samples,
-            noise_level=noise_level,
-            label_flip_rate=label_flip_rate,
+            feature_noise=feature_noise,
+            label_noise=label_noise,
             seed_value=seed_value
         )
     else:
@@ -332,8 +332,8 @@ def sample_icl_examples(
         shot=config.shot,
         response_length=config.response_length,
         num_samples=config.num_samples,
-        noise_level=config.noise_level,
-        label_flip_rate=config.label_flip_rate,
+        feature_noise=config.feature_noise,
+        label_noise=config.label_noise,
         train_step=config.train_step,
         data_mode=config.data_mode
     )
@@ -366,8 +366,8 @@ def sample_icl_examples(
                 "shot": config.shot,
                 "response_length": config.response_length,
                 "num_samples": config.num_samples,
-                "noise_level": config.noise_level,
-                "label_flip_rate": config.label_flip_rate,
+                "feature_noise": config.feature_noise,
+                "label_noise": config.label_noise,
                 "token_length": token_length
             }
             sampled_examples.append(example)
@@ -597,8 +597,8 @@ def is_feature_duplicate(features, label, all_features_str_set, all_feature_vect
 def sample_non_duplicate_examples(
     dataset_name: str, 
     num_samples: int, 
-    noise_level: float, 
-    label_flip_rate: float, 
+    feature_noise: float, 
+    label_noise: float, 
     seed_value: int,
     all_features_str_set: set,
     all_feature_vectors: list,
@@ -612,8 +612,8 @@ def sample_non_duplicate_examples(
     Args:
         dataset_name: Type of task (blobs, circles, linear, moons)
         num_samples: Number of samples to find
-        noise_level: Noise level for data generation
-        label_flip_rate: Label flip rate
+        feature_noise: Noise level for data generation
+        label_noise: Label flip rate
         seed_value: Base seed value for reproducibility
         all_features_str_set: Set of existing feature string representations
         all_feature_vectors: List of existing feature vectors
@@ -641,8 +641,8 @@ def sample_non_duplicate_examples(
         examples_df = generate_test_data(
             dataset_name=dataset_name,
             num_samples=num_samples * 10,
-            noise_level=noise_level,
-            label_flip_rate=label_flip_rate,
+            feature_noise=feature_noise,
+            label_noise=label_noise,
             seed_value=current_seed
         )
         
@@ -836,8 +836,8 @@ def main(cfg: DictConfig) -> None:
         cfg.test_data_examples.shot, 
         template_type, 
         cfg.test_data.num_samples, 
-        cfg.test_data.noise_level, 
-        cfg.test_data.label_flip_rate, 
+        cfg.test_data.feature_noise, 
+        cfg.test_data.label_noise, 
         cfg.data_mode
     )
     output_path = Path(output_path)
@@ -911,7 +911,7 @@ def main(cfg: DictConfig) -> None:
             )
         else:
             # Regular mode - sample examples based on configuration
-            print(f"Sampling examples for {icl_config.dataset_name} with noise {icl_config.noise_level} and label flip rate {icl_config.label_flip_rate}")
+            print(f"Sampling examples for {icl_config.dataset_name} with noise {icl_config.feature_noise} and label flip rate {icl_config.label_noise}")
             examples = sample_icl_examples(
                 config=icl_config, 
                 rng=icl_rng, 
@@ -973,8 +973,8 @@ def main(cfg: DictConfig) -> None:
                     "shot": icl_config.shot,
                     "response_length": icl_config.response_length,
                     "num_samples": icl_config.num_samples,
-                    "noise_level": icl_config.noise_level,
-                    "label_flip_rate": icl_config.label_flip_rate,
+                    "feature_noise": icl_config.feature_noise,
+                    "label_noise": icl_config.label_noise,
                     "num_examples": len(examples),
                     "icl_example_maxlength": cfg.icl_example_maxlength
                 })
@@ -1000,8 +1000,8 @@ def main(cfg: DictConfig) -> None:
     test_data, all_feature_vectors, all_features_str_set = sample_non_duplicate_examples(
         dataset_name=cfg.test_data.dataset_name,
         num_samples=cfg.test_data.num_samples,
-        noise_level=cfg.test_data.noise_level,
-        label_flip_rate=cfg.test_data.label_flip_rate,
+        feature_noise=cfg.test_data.feature_noise,
+        label_noise=cfg.test_data.label_noise,
         seed_value=cfg.test_data_seed,
         all_features_str_set=all_features_str_set,
         all_feature_vectors=all_feature_vectors,
@@ -1018,8 +1018,8 @@ def main(cfg: DictConfig) -> None:
     test_examples, all_feature_vectors, all_features_str_set = sample_non_duplicate_examples(
         dataset_name=cfg.test_data_examples.dataset_name,
         num_samples=cfg.test_data_examples.shot,
-        noise_level=cfg.test_data_examples.noise_level,
-        label_flip_rate=cfg.test_data_examples.label_flip_rate,
+        feature_noise=cfg.test_data_examples.feature_noise,
+        label_noise=cfg.test_data_examples.label_noise,
         seed_value=cfg.test_data_seed + 100,  # Different seed base
         all_features_str_set=all_features_str_set,
         all_feature_vectors=all_feature_vectors,
@@ -1064,8 +1064,8 @@ def main(cfg: DictConfig) -> None:
             "test_data": convert_to_serializable({
                 "dataset_name": cfg.test_data.dataset_name,
                 "shot": cfg.test_data_examples.shot,
-                "noise_level": cfg.test_data.noise_level,
-                "label_flip_rate": cfg.test_data.label_flip_rate,
+                "feature_noise": cfg.test_data.feature_noise,
+                "label_noise": cfg.test_data.label_noise,
             }),
             "extra_info": {
                 'split': 'test',

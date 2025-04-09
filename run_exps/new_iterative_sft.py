@@ -20,8 +20,8 @@ def parse_args():
                        choices=supported_model_list)
     parser.add_argument("--max_iterations", type=int, default=10)
     parser.add_argument("--num_responses", type=int, default=1)
-    parser.add_argument("--label_flip_rate", type=float, default=0.0)
-    parser.add_argument("--noise_level", type=float, default=1.0)
+    parser.add_argument("--label_noise", type=float, default=0.0)
+    parser.add_argument("--feature_noise", type=float, default=1.0)
     parser.add_argument("--test_ratio", type=float, default=0.2)
     parser.add_argument("--train_set_temperature", type=float, default=0)
     parser.add_argument("--test_set_temperature", type=float, default=0)
@@ -73,8 +73,8 @@ def gen_dataset(dataset_name, shot, template_type, args):
         cmd = f"python {root_dir}/examples/data_preprocess/{dataset_name}.py " \
               f"--template_type={template_type} " \
               f"--num_samples={args.num_samples} " \
-              f"--label_flip_rate={args.label_flip_rate} " \
-              f"--noise_level={args.noise_level} " \
+              f"--label_noise={args.label_noise} " \
+              f"--feature_noise={args.feature_noise} " \
               f"--test_ratio={args.test_ratio} " \
               f"--n_shot={shot}"
     else:
@@ -188,7 +188,7 @@ def main():
             
             # Generate dataset
             gen_dataset(dataset, args.shot, template_type, args)
-            dataset_local_dir = get_dataset_dir(dataset, args.shot, template_type, args.num_samples, args.noise_level, args.label_flip_rate)
+            dataset_local_dir = get_dataset_dir(dataset, args.shot, template_type, args.num_samples, args.feature_noise, args.label_noise)
             
             # Start iterative training
             current_model = model
