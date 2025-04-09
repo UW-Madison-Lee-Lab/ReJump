@@ -11,6 +11,7 @@ import json
 from verl.utils.reward_score import gsm8k, math, multiply, countdown
 from google import genai 
 import httpx
+
 def _select_rm_score_fn(data_source):
     if data_source == 'openai/gsm8k':
         return gsm8k.compute_score
@@ -243,6 +244,10 @@ class LLMAPI:
                 
             except genai.errors.ServerError as e:
                 print(f"ServerError: {e}")
+                time.sleep(timeout)
+                
+            except genai.errors.ClientError as e:
+                print(f"ClientError: {e}")
                 time.sleep(timeout)
                 
             except Exception as e:
