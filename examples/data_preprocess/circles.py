@@ -13,19 +13,19 @@ from examples.data_preprocess.helper import save_data, classification_reward_fn,
 
 def gen_dataset(
     num_samples: int,
-    noise_level: float = 0.01,
+    feature_noise: float = 0.01,
     seed_value: int = 42,
-    label_flip_rate: float = 0.0,
+    label_noise: float = 0.0,
     random: bool = False,
 ) -> List[Tuple]:
     """Generate synthetic circles dataset for binary classification task.
     
     Args:
         num_samples: Number of samples to generate
-        noise_level: Standard deviation of Gaussian noise added to the data
+        feature_noise: Standard deviation of Gaussian noise added to the data
         factor: Scale factor between inner and outer circle
         seed_value: Random seed for reproducibility
-        label_flip_rate: Label flip rate
+        label_noise: Label flip rate
         
     Returns:
         List of tuples containing (features, label)
@@ -42,14 +42,14 @@ def gen_dataset(
     # The smaller the factor, the more difficult for KNN to classify
     X, y = make_circles(
         n_samples=num_samples,
-        noise=noise_level,
+        noise=feature_noise,
         factor=factor,  # Makes circles closer, harder for KNN
         random_state=seed_value
     )
     
     X = X * scale_factor
     # Optionally flip some labels to make it even harder
-    y = flip_label(y, label_flip_rate, 2)
+    y = flip_label(y, label_noise, 2)
     
     samples = []
     for i in tqdm(range(num_samples)):
@@ -64,11 +64,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--hdfs_dir', default=None)
     parser.add_argument('--num_samples', type=int, default=100)
-    parser.add_argument('--noise_level', type=float, default=0)
+    parser.add_argument('--feature_noise', type=float, default=0)
     parser.add_argument('--test_ratio', type=float, default=0.2)
     parser.add_argument('--n_shot', type=int, default=10)
     parser.add_argument('--template_type', type=str, default='base')
-    parser.add_argument('--label_flip_rate', type=float, default=0.0)
+    parser.add_argument('--label_noise', type=float, default=0.0)
     parser.add_argument('--data_mode', type=str, default="default", choices=["default", "grid", "mixed"])
     args = parser.parse_args()
     set_seed(42)

@@ -3,9 +3,11 @@ import os
 from verl.utils.hdfs_io import copy, makedirs
 import numpy as np
 import re
-from constants import get_dataset_dir, get_dataset_filename
+from constants import get_dataset_dir, get_dataset_filename, supported_datasets
 import pandas as pd
 import pdb
+from sklearn.metrics import r2_score
+
 
 def prepare_dataset(args, gen_dataset):
     if args.n_shot <= 0:
@@ -18,15 +20,15 @@ def prepare_dataset(args, gen_dataset):
         # Generate synthetic dataset
         samples = gen_dataset(
             num_samples=args.num_samples,
-            noise_level=args.noise_level,
+            feature_noise=args.feature_noise,
             random = False,
             seed_value=12
         )
         
         in_context_samples = gen_dataset(
             num_samples=args.num_samples,
-            noise_level=args.noise_level,
-            label_flip_rate=args.label_flip_rate,
+            feature_noise=args.feature_noise,
+            label_noise=args.label_noise,
             random = False,
             seed_value=34
         )
@@ -38,7 +40,7 @@ def prepare_dataset(args, gen_dataset):
         # Generate a small set of in-context examples
         in_context_samples = gen_dataset(
             num_samples=args.n_shot,
-            noise_level=args.noise_level,
+            feature_noise=args.feature_noise,
             seed_value=34,
             random = False
         )
@@ -48,8 +50,8 @@ def prepare_dataset(args, gen_dataset):
         for i in range(args.num_samples):
             data = gen_dataset(
                 num_samples=args.n_shot+1,
-                noise_level=args.noise_level,
-                label_flip_rate=args.label_flip_rate,
+                feature_noise=args.feature_noise,
+                label_noise=args.label_noise,
                 random = True,
                 seed_value=i
             )
@@ -106,9 +108,9 @@ def gen_grid_dataset(grid_size=100, x_range=(-10, 10), y_range=(-10, 10)):
 def format_features(features):
     return "[" + ", ".join([f"{x:.3f}" for x in features]) + "]"
 
-def flip_label(y, label_flip_rate, n_classes):
-    if label_flip_rate > 0:
-        num_flips = int(label_flip_rate * len(y))
+def flip_label(y, label_noise, n_classes):
+    if label_noise > 0:
+        num_flips = int(label_noise * len(y))
         flip_indices = np.random.choice(len(y), num_flips, replace=False)
         for i in flip_indices:
             possible_labels = list(range(n_classes))
@@ -116,7 +118,14 @@ def flip_label(y, label_flip_rate, n_classes):
             y[i] = np.random.choice(possible_labels)
     return y
 
-def make_prefix(dp, template_type, n_classes, n_shot=0, in_context_dataset=None, customized_prompt=None):
+def make_classification_prefix(
+    dp, 
+    template_type, 
+    n_classes, 
+    n_shot=0, 
+    in_context_dataset=None, 
+    customized_prompt=None,
+):
     features = dp['features']
     label = dp['label']
     
@@ -195,6 +204,121 @@ def make_prefix(dp, template_type, n_classes, n_shot=0, in_context_dataset=None,
     return prefix, in_context_samples
 
 
+def make_regression_prefix(
+    dp, 
+    template_type, 
+    n_classes = None, 
+    n_shot=0, 
+    in_context_dataset=None, 
+    customized_prompt=None,
+):
+    features = dp['features']
+    label = dp['label']
+    
+    # Add in-context examples if requested
+    in_context_examples, in_context_samples = "", []
+    if n_shot > 0 and in_context_dataset is not None:
+        in_context_examples = "We first provide you with some examples of how to predict values for data points.\n"
+        # Randomly select indices for in-context examples
+        random_indices = np.random.choice(len(in_context_dataset), n_shot, replace= len(in_context_dataset) < n_shot)
+        
+        
+        for i in random_indices:
+            example = in_context_dataset[i.item()]
+            example_features = example['features']
+            example_label = example['label']
+            
+            in_context_examples += f"Features: {format_features(example_features)}, target: {example_label:.3f}\n"
+            in_context_samples.append({"features": example_features, "target": example_label})
+    
+    if template_type == 'base':
+        """This works for any base model"""
+        prefix = f"""
+        A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
+
+        User: The dataset has {len(features)} features and 1 target attribute. {in_context_examples} Given the data point with features {format_features(features)}, predict the target value. Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer>42.535</answer>.
+        Assistant: Let me solve this step by step.
+        <think>
+        """
+    elif template_type == 'qwen-instruct':
+        """This works for Qwen Instruct Models"""
+        prefix = f"""
+        <|im_start|>system\nYou are a helpful assistant. You first think about the reasoning process in your mind and then provide the user with the answer.<|im_end|>\n
+        <|im_start|>user\n The dataset has {len(features)} features and 1 target attribute. {in_context_examples} Given the data point with features {format_features(features)}, predict the target value. Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer>42.535</answer>.<|im_end|>\n<|im_start|>assistant\nLet me solve this step by step.\n<think>
+        """
+    elif template_type == 'qwen-instruct_no_reasoning':
+        """This does not allow any reasoning"""
+        prefix = f"""
+        <|im_start|>system
+        You are a helpful assistant. You always provide the user directly with the answer without any reasoning.
+        <|im_end|>
+        <|im_start|>user
+        The dataset has {len(features)} features and 1 target attribute. {in_context_examples} Given the data point with features {format_features(features)}, predict the target value. Your response should be in <answer> </answer> tags without any other text, for example <answer>42.535</answer>.
+        <|im_end|>
+        <|im_start|>assistant
+        <answer>
+        """
+    elif template_type == 'base_no_reasoning':
+        """This works for any base model"""
+        prefix = f"""
+        A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
+
+        User: The dataset has {len(features)} features and 1 target attribute. {in_context_examples} Given the data point with features {format_features(features)}, predict the target value. Your response should be in <answer> </answer> tags without any other text, for example <answer>42.535</answer>.
+        Assistant: 
+        """
+        
+    elif template_type == 'reasoning_api':
+        prefix = f"""
+        The dataset has {len(features)} features and 1 target attribute. {in_context_examples} Given the data point with features {format_features(features)}, predict the target value. Your answer should be just the target value, without any other text or punctuation.
+        """
+    elif template_type == "reasoning_api_customized":
+        prefix = f"""
+        The dataset has {len(features)} features and 1 target attribute. {in_context_examples} Given the data point with features {format_features(features)}, predict the target value. \n{customized_prompt}\n Your answer should be just the target value, without any other text or punctuation.
+        """
+    elif template_type == "standard_api_no_reasoning":
+        prefix = f"""
+        The dataset has {len(features)} features and 1 target attribute. {in_context_examples} Given the data point with features {format_features(features)}, predict the target value. Your answer should be just the target value, without any other text or punctuation.
+        """
+    elif template_type == "standard_api":
+        prefix = f"""
+        The dataset has {len(features)} features and 1 target attribute. {in_context_examples} Given the data point with features {format_features(features)}, predict the target value.  
+        Let's think step by step. Please provide your thinking process in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer>42.535</answer>. Note that your final answer should be just the target value, without any other text or punctuation.
+        """
+    else:
+        raise ValueError(f"Invalid template type: {template_type}")
+    
+    return prefix, in_context_samples
+
+
+def make_prefix(
+    dp, 
+    template_type, 
+    n_classes, 
+    task_type,
+    n_shot=0, 
+    in_context_dataset=None, 
+    customized_prompt=None,
+):
+    if task_type == "classification":
+        return make_classification_prefix(
+            dp = dp, 
+            template_type = template_type, 
+            n_classes = n_classes, 
+            n_shot = n_shot, 
+            in_context_dataset = in_context_dataset, 
+            customized_prompt = customized_prompt
+        )
+    elif task_type == "regression":
+        return make_regression_prefix(
+            dp = dp, 
+            template_type = template_type, 
+            n_classes = n_classes, 
+            n_shot = n_shot, 
+            in_context_dataset = in_context_dataset, 
+            customized_prompt = customized_prompt)
+    else:
+        raise ValueError(f"Invalid task type: {task_type}")
+
 def make_map_fn(split, args, n_classes, in_context_dataset, data_source, data_mode, customized_prompt=None):
 
     
@@ -211,6 +335,7 @@ def make_map_fn(split, args, n_classes, in_context_dataset, data_source, data_mo
             example, 
             template_type=args.template_type, 
             n_classes=n_classes, 
+            task_type = supported_datasets[data_source]['type'],
             n_shot=args.n_shot, 
             in_context_dataset=in_context_dataset_,
             customized_prompt=customized_prompt
@@ -327,8 +452,8 @@ def save_data(
         shot=args.n_shot,
         template_type=args.template_type,
         num_samples=args.num_samples,
-        noise_level=args.noise_level,
-        label_flip_rate=args.label_flip_rate,
+        feature_noise=args.feature_noise,
+        label_noise=args.label_noise,
         data_mode=data_mode,
     )
 
@@ -405,6 +530,45 @@ def classification_reward_fn(solution_str, ground_truth):
             if answer.strip().isdigit():
                 response_class = int(answer.strip())
                 return response_class == ground_truth['label']
+    
+    return 0
+
+def regression_reward_fn(solution_str, ground_truth):
+    def criterion(solution_str, ground_truth):
+        return r2_score(solution_str, ground_truth['label'])
+    # Direct pattern to extract from cases like <answer>0.5</answer></answer>
+    # Try a direct match first for the most common patterns
+    direct_match = re.search(r'<answer>([-+]?\d*\.\d+|\d+)</answer>', solution_str)
+    if direct_match:
+        response_value = float(direct_match.group(1).strip())
+        return criterion(response_value, ground_truth['label'])
+    
+    # If direct match fails, try cleaning up malformed tags
+    # Handle escaped slashes and remove extra closing tags
+    cleaned_solution_str = solution_str
+    cleaned_solution_str = re.sub(r'<\\/answer>', '</answer>', cleaned_solution_str)
+    cleaned_solution_str = re.sub(r'</answer>(\s*</answer>)+', '</answer>', cleaned_solution_str)
+    
+    # Try again with the cleaned string
+    clean_match = re.search(r'<answer>([-+]?\d*\.\d+|\d+)</answer>', cleaned_solution_str)
+    if clean_match:
+        response_value = float(clean_match.group(1).strip())
+        return criterion(response_value, ground_truth['label'])
+    
+    # Use a more lenient pattern for other cases
+    # This handles partial or malformed tags
+    lenient_match = re.search(r'<answer[^>]*>([-+]?\d*\.\d+|\d+)[^<]*(?:</answer>|<\\/answer>|<?/?answer>)', cleaned_solution_str)
+    if lenient_match:
+        response_value = float(lenient_match.group(1).strip())
+        return criterion(response_value, ground_truth['label'])
+    
+    # Last resort - just look for numbers between any answer-like tags
+    fallback_matches = re.findall(r'<answer.*?>([-+]?\d*\.\d+|\d+).*?(?:</answer>|<\\/answer>|answer>)', solution_str, re.DOTALL)
+    if fallback_matches:
+        for answer in fallback_matches[::-1]:
+            if answer.strip().replace('.', '', 1).replace('-', '', 1).isdigit():
+                response_value = float(answer.strip())
+                return criterion(response_value, ground_truth['label'])
     
     return 0
     
