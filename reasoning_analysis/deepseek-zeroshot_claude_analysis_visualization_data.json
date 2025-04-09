@@ -1,7 +1,7 @@
 {
   "metadata": {
     "input_file": "/home/szhang967/liftr/reasoning_analysis/deepseek-zeroshot_claude_analysis.parquet",
-    "timestamp": "2025-04-08T18:15:14.859792",
+    "timestamp": "2025-04-08T19:19:52.024733",
     "total_samples": 100,
     "displayed_samples": 100,
     "accuracy": 87.0,
