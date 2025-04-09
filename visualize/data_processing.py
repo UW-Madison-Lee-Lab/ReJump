@@ -555,7 +555,8 @@ def extract_and_execute_model_functions(extracted_json: str, ground_truth: Dict[
                     # Most functions expect x, y as separate args
                     x, y = sample_features[0], sample_features[1]
                     #element in the list is a tuple with (x, y, label)
-                    all_samples = [(each.get('features')[0], each.get('features')[1], each.get('label')) for each in in_context_samples]
+                    all_samples = [(each.get('features')[0], each.get('features')[1], each.get('label')) for each in in_context_samples
+                                   if (each.get('features')[0]!=x and each.get('features')[1]!=y)]
                     pred = model_func(x, y, all_samples)
                     
                     # Ensure prediction is an integer
@@ -576,7 +577,8 @@ def extract_and_execute_model_functions(extracted_json: str, ground_truth: Dict[
                     # If the function fails, try alternate argument patterns
                     try:
                         # Try calling with features as a single arg
-                        all_samples = [(each.get('features')[0], each.get('features')[1], each.get('label')) for each in in_context_samples]
+                        all_samples = [(each.get('features')[0], each.get('features')[1], each.get('label')) for each in in_context_samples
+                                   if (each.get('features')[0]!=x and each.get('features')[1]!=y)]
                         pred = model_func(all_samples)
                         
                         # Ensure prediction is an integer

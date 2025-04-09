@@ -133,10 +133,6 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "html",
             except Exception as e:
                 print(f"Warning: Could not convert response to string: {e}")
                 response_text = str(response_text)  # Last resort
-        
-        # Filter out <|endoftext|> tags
-        response_text = response_text.replace("<|endoftext|>", "")
-        
         # Get input prompt content
         input_prompt = row.get('prompt')
         input_prompt_content = None
@@ -343,7 +339,23 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "html",
                 "refined_accuracy": refined_accuracy,
                 "parseable_accuracy": parseable_accuracy,
                 "parseable_predictions": parseable_predictions,
-                "unparseable_predictions": unparseable_predictions
+                "unparseable_predictions": unparseable_predictions,
+                "model_evaluation_table_info": {
+                    "description": "Each sample may contain a 'model_evaluation_table' field with model evaluation results.",
+                    "structure": {
+                        "order": "Model order number or identifier",
+                        "model": "Model description",
+                        "accuracy": "Accuracy percentage",
+                        "correct_count": "Number of correct predictions",
+                        "total_count": "Total number of predictions",
+                        "details": "Human-readable details string",
+                        "has_error": "Boolean indicating if the model had errors during execution",
+                        "error": "Error message (only present if has_error is true)",
+                        "model_code": "The model function code as a string",
+                        "model_type": "Type of the model (if available)",
+                        "predictions": "Array of the first 10 predictions, each containing features, true_label, predicted value, and whether it was correct"
+                    }
+                }
             },
             "samples": []
         }
@@ -456,6 +468,72 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "html",
             # Add additional data fields
             sample_data = add_sample_data_fields(sample_data, row)
             
+            # Extract model evaluation table data if available
+            if 'claude_analysis_extracted_json' in row and row['claude_analysis_extracted_json'] is not None and ground_truth is not None and 'in_context_samples' in ground_truth:
+                try:
+                    claude_json = row['claude_analysis_extracted_json']
+                    # Extract model functions and evaluate
+                    model_results = extract_and_execute_model_functions(claude_json, ground_truth)
+                    
+                    # Parse the JSON to get the original models data
+                    models_data = []
+                    try:
+                        if isinstance(claude_json, str):
+                            models_data = json.loads(claude_json)
+                        else:
+                            models_data = claude_json
+                        if not isinstance(models_data, list):
+                            models_data = []
+                    except Exception:
+                        models_data = []
+                    
+                    # Create model evaluation table data
+                    evaluation_table = []
+                    for idx, result in enumerate(model_results):
+                        model_desc = result.get('model_desc', f'Model {idx}')
+                        accuracy = result.get('accuracy', 0.0)
+                        correct_count = result.get('correct_count', 0)
+                        total_count = result.get('total_count', 0)
+                        has_error = 'error' in result
+                        
+                        # Get order directly from the original model object
+                        model_order = "ERROR: No order"
+                        original_model = None
+                        
+                        # Find the original model in models_data list
+                        for model in models_data:
+                            if isinstance(model, dict) and model.get('description') == model_desc:
+                                original_model = model
+                                break
+                        
+                        # Get the order from original model
+                        if original_model and 'order' in original_model:
+                            model_order = original_model['order']
+                        
+                        # Create table row data
+                        table_row = {
+                            "order": model_order,
+                            "model": model_desc,
+                            "accuracy": accuracy,
+                            "correct_count": correct_count,
+                            "total_count": total_count,
+                            "details": f"{correct_count} of {total_count} correct" if not has_error else "Error",
+                            "has_error": has_error,
+                            "model_code": result.get("model_func", ""),
+                            "model_type": result.get("model_type", "unknown"),
+                            "predictions": result.get("predictions", [])[:10]  # Include first 10 predictions
+                        }
+                        
+                        if has_error:
+                            table_row["error"] = result.get("error", "Unknown error")
+                        
+                        evaluation_table.append(table_row)
+                    
+                    # Add to sample data
+                    sample_data["model_evaluation_table"] = evaluation_table
+                except Exception as e:
+                    print(f"Error creating model evaluation table data: {e}")
+            
             # Add to samples list
             json_data["samples"].append(sample_data)
         
@@ -465,6 +543,7 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "html",
             with open(json_output_file, 'w', encoding='utf-8') as f:
                 json.dump(json_data, f, indent=2, default=str)
             print(f"JSON data saved to: {json_output_file}")
+            print(f"Model evaluation table data has been included for each applicable sample")
         except Exception as e:
             print(f"Error saving JSON data: {e}")
     
