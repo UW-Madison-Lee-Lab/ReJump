@@ -6,7 +6,6 @@ import re
 from constants import get_dataset_dir, get_dataset_filename, supported_datasets
 import pandas as pd
 import pdb
-from sklearn.metrics import r2_score
 
 
 def prepare_dataset(args, gen_dataset):
@@ -534,8 +533,8 @@ def classification_reward_fn(solution_str, ground_truth):
     return 0
 
 def regression_reward_fn(solution_str, ground_truth):
-    def criterion(solution_str, ground_truth):
-        return r2_score(solution_str, ground_truth['label'])
+    def criterion(y_pred, y_true):
+        return (y_true - y_pred) ** 2
     # Direct pattern to extract from cases like <answer>0.5</answer></answer>
     # Try a direct match first for the most common patterns
     direct_match = re.search(r'<answer>([-+]?\d*\.\d+|\d+)</answer>', solution_str)
