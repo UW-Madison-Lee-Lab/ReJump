@@ -1,0 +1,62 @@
+# Sample configuration for the ICL reasoning script
+
+# Define ICL examples configurations
+icl_examples:
+  # Example 1: Moons dataset with no flip rate
+  - dataset_name: moons
+    label_noise: 0.0
+    feature_noise: 0.1
+    shot: 50
+    response_length: 3046
+    num_samples: 500
+    num_examples: 1
+    train_step: 0
+    data_mode: default
+
+  # Example 2: Moons dataset with 0.1 flip rate
+  - dataset_name: linear
+    label_noise: 0.0
+    feature_noise: 0.1
+    shot: 50
+    response_length: 3046
+    num_samples: 500
+    num_examples: 1
+    train_step: 0
+    data_mode: default
+  
+  - dataset_name: blobs
+    label_noise: 0.0
+    feature_noise: 1.0
+    shot: 50
+    response_length: 3046
+    num_samples: 500
+    num_examples: 1
+    train_step: 0
+    data_mode: default
+
+test_data:
+  dataset_name: circles
+  label_noise: 0.0
+  feature_noise: 0.0
+  num_samples: 2000
+
+test_data_examples:
+  dataset_name: circles
+  label_noise: 0.0
+  feature_noise: 0.0
+  shot: 50
+
+# Random seeds for reproducibility
+icl_example_seed: 42
+test_data_seed: 42
+
+# Tokenizer name for length calculation
+tokenizer_name: Qwen/Qwen2.5-3B-Instruct
+template_type: qwen-instruct
+
+# Output path
+train_step: 0
+data_mode: default
+mode: reasoning
+
+icl_example_maxlength: 6000

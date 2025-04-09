@@ -8,7 +8,7 @@ import os
 from utils import set_seed
 from datasets import Dataset, concatenate_datasets
 from examples.data_preprocess.helper import classification_reward_fn, store_data
-from constants import get_dataset_dir, get_mixed_dataset_dir
+from constants import get_mixed_configs, get_dataset_filename, get_dataset_dir
 from typing import List
 from environment import root_dir
 
@@ -16,7 +16,8 @@ def combine_datasets(
     dataset_paths: List[str],
     dataset_ratios: List[float],
     num_samples: int,
-    seed_value: int = 42
+    seed_value: int = 42,
+    data_mode: str = "default"
 ):
     """Combine existing datasets based on specified ratios.
     
@@ -64,40 +65,38 @@ def combine_datasets(
         # Construct full path to the dataset
         
         # Load train and test datasets
-        try:
-            train_path = os.path.join(dataset_path, 'train.parquet')
-            test_path = os.path.join(dataset_path, 'test.parquet')
-            
-            train_dataset = Dataset.from_parquet(train_path)
-            test_dataset = Dataset.from_parquet(test_path)
-            
-            # Calculate number of samples to take
-            dataset_ratio = samples_count / num_samples
-            train_size = min(int(dataset_ratio * len(train_dataset)), len(train_dataset))
-            test_size = min(int(dataset_ratio * len(test_dataset)), len(test_dataset))
-            
-            # Sample from datasets
-            train_indices = np.random.choice(len(train_dataset), train_size, replace=False)
-            test_indices = np.random.choice(len(test_dataset), test_size, replace=False)
-            
-            sampled_train = train_dataset.select(train_indices)
-            sampled_test = test_dataset.select(test_indices)
-            
-            # Add task information
-            def add_task_info(example):
-                example['task'] = task_name
-                return example
-            
-            sampled_train = sampled_train.map(add_task_info)
-            sampled_test = sampled_test.map(add_task_info)
-            
-            train_datasets.append(sampled_train)
-            test_datasets.append(sampled_test)
-            
-            print(f"Added {train_size} training and {test_size} testing samples from {dataset_path}")
-            
-        except Exception as e:
-            print(f"Error loading dataset {dataset_path}: {e}")
+        train_path = os.path.join(dataset_path, get_dataset_filename(split="train", data_mode=data_mode))
+        test_path = os.path.join(dataset_path, get_dataset_filename(split="test", data_mode=data_mode))
+        
+        train_dataset = Dataset.from_parquet(train_path)
+        test_dataset = Dataset.from_parquet(test_path)
+        
+        # Calculate number of samples to take
+        dataset_ratio = samples_count / num_samples
+        train_size = min(int(dataset_ratio * len(train_dataset)), len(train_dataset))
+        test_size = min(int(dataset_ratio * len(test_dataset)), len(test_dataset))
+        
+        # Sample from datasets
+        train_indices = np.random.choice(len(train_dataset), train_size, replace=False)
+        test_indices = np.random.choice(len(test_dataset), test_size, replace=False)
+        
+        sampled_train = train_dataset.select(train_indices)
+        sampled_test = test_dataset.select(test_indices)
+        
+        # Add task information
+        def add_task_info(example):
+            example['task'] = task_name
+            return example
+        
+        sampled_train = sampled_train.map(add_task_info)
+        sampled_test = sampled_test.map(add_task_info)
+        
+        train_datasets.append(sampled_train)
+        test_datasets.append(sampled_test)
+        
+        print(f"Added {train_size} training and {test_size} testing samples from {dataset_path}")
+        
+
     
     # Combine all datasets
     if train_datasets and test_datasets:
@@ -121,6 +120,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_samples', type=int, default=10000)
     parser.add_argument('--dataset_path', type=str, nargs='+', default=[f'{root_dir}/datasets/blobs/50_shot/qwen-instruct/10000_samples_3.0_noise'])
     parser.add_argument('--dataset_ratio', type=str, nargs='+', default=['1.0'])
+    parser.add_argument('--data_mode', type=str, default="default")
 
     args = parser.parse_args()
     set_seed(42)
@@ -134,21 +134,25 @@ if __name__ == '__main__':
         dataset_paths=args.dataset_path,
         dataset_ratios=args.dataset_ratio,
         num_samples=args.num_samples,
-        seed_value=42
+        seed_value=42,
+        data_mode=args.data_mode
     )
     
     # Create directory if it doesn't exist
-    output_dir = get_mixed_dataset_dir(
+    mixed_configs = get_mixed_configs(
         dataset_paths=args.dataset_path,
         dataset_ratios=args.dataset_ratio,
-        num_samples=args.num_samples
+        num_samples=args.num_samples,
     )
+    
+    output_dir = get_dataset_dir(**mixed_configs)
     
     store_data(
         train_dataset=combined_train,
         test_dataset=combined_test,
         local_dir=output_dir,
-        args=args
+        args=args,
+        data_mode=args.data_mode
     )
 
 def multitask_reward_fn(solution_str, ground_truth):

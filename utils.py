@@ -6,7 +6,7 @@ import random
 import pandas as pd
 from constants import get_result_dir
 from omegaconf import DictConfig
-
+import re
 def set_seed(seed):
     np.random.seed(seed)
     random.seed(seed)
@@ -44,8 +44,8 @@ def check_results(
     template_type,
     response_length,
     num_samples,
-    noise_level,
-    label_flip_rate
+    feature_noise,
+    label_noise
 ):
     local_dir = get_result_dir(
         dataset_name=dataset_name,
@@ -54,8 +54,8 @@ def check_results(
         template_type=template_type,
         response_length=response_length,
         num_samples=num_samples,
-        noise_level=noise_level,
-        label_flip_rate=label_flip_rate
+        feature_noise=feature_noise,
+        label_noise=label_noise
     )
     test_dataset = pd.read_parquet(os.path.join(local_dir, 'test.parquet'))
     while True:

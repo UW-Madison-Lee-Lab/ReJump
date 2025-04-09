@@ -17,9 +17,6 @@ Note that we don't combine the main with ray_trainer as ray_trainer is used by o
 
 from verl.trainer.ppo.ray_trainer import RayPPOTrainer
 import wandb
-from utils import flatten_dict
-from constants import get_configs_via_dataset_dir
-from environment import WANDB_INFO
 import os
 from ray.util import pdb
 from verl.trainer.ppo.helper import RewardManager
@@ -29,14 +26,7 @@ import hydra
 
 @hydra.main(config_path='config', config_name='ppo_trainer', version_base=None)
 def main(config):
-    if 'wandb' in config.trainer.logger[0]:
-        wandb_configs = flatten_dict(config)
-        wandb_configs.update(get_configs_via_dataset_dir(os.path.dirname(config.data.train_files)))
-        wandb.init(
-            project=f"{WANDB_INFO['project']}-rl",
-            entity=WANDB_INFO['entity'],
-            config=wandb_configs
-        )
+    
     if not ray.is_initialized():
         # this is for local ray cluster
         ray.init(runtime_env={'env_vars': {'TOKENIZERS_PARALLELISM': 'true', 'NCCL_DEBUG': 'WARN'}})
@@ -118,7 +108,7 @@ def main_task(config):
     reward_fn = RewardManager(tokenizer=tokenizer, num_examine=0)
 
     # Note that we always use function-based RM for validation
-    val_reward_fn = RewardManager(tokenizer=tokenizer, num_examine=1)
+    val_reward_fn = RewardManager(tokenizer=tokenizer, num_examine=1, return_dict=True)
 
     resource_pool_manager = ResourcePoolManager(resource_pool_spec=resource_pool_spec, mapping=mapping)
 

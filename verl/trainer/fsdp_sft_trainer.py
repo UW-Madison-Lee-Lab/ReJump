@@ -33,7 +33,8 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, PreTrainedModel, A
 from verl.utils.torch_functional import get_cosine_schedule_with_warmup
 from tensordict import TensorDict
 from torch.utils.data import DataLoader, DistributedSampler
-
+from huggingface_hub import HfApi, create_repo
+from tqdm import tqdm
 from verl.utils.fsdp_utils import get_fsdp_wrap_policy, init_fn, get_init_weight_context_manager
 from verl.utils.dataset import SFTDataset
 from verl.utils.fs import copy_local_path_from_hdfs
@@ -50,11 +51,92 @@ logger = logging.getLogger(__file__)
 logger.setLevel(os.getenv('VERL_SFT_LOGGING_LEVEL', 'WARN'))
 
 
+def get_huggingface_token():
+    """
+    Get Hugging Face token from various sources with priority:
+    1. Environment variable HUGGING_FACE_HUB_TOKEN
+    2. ~/.huggingface file
+    3. Return None if not found
+    """
+    # First check environment variable
+    env_token = os.environ.get("HUGGING_FACE_HUB_TOKEN")
+    if env_token:
+        return env_token
+    
+    # Then check ~/.huggingface file
+    hf_config_path = os.path.expanduser("~/.huggingface")
+    if os.path.exists(hf_config_path):
+        try:
+            with open(hf_config_path, 'r') as f:
+                for line in f:
+                    if line.strip().startswith("HUGGING_FACE_HUB_TOKEN="):
+                        token = line.strip().split("=", 1)[1]
+                        # Remove quotes if present
+                        token = token.strip('"\'')
+                        return token
+        except Exception as e:
+            logger.warning(f"Error reading ~/.huggingface file: {e}")
+    
+    return None
+
+
 def extract_step(path):
     match = re.search(r'global_step_(\d+)', path)
     if match:
         return int(match.group(1))
-    return None
+    raise ValueError(f"No valid step found in {path}")
+
+def process_model_name_for_repo(model_path):
+    """Process model path to create a valid repo name."""
+    # Handle both file paths and model names
+    if '/' in model_path:
+        # If it's a path, get the last three non-empty components
+        parts = [p for p in model_path.split('/') if p]
+        if len(parts) >= 4:
+            # Take the last three parts and join them
+            base_name = '-'.join(parts[-4:])
+        else:
+            # If less than 3 parts, use all parts
+            base_name = '-'.join(parts)
+    else:
+        base_name = model_path
+    
+    # Remove any special characters and replace spaces with hyphens
+    repo_name = re.sub(r'[^a-zA-Z0-9-]', '-', base_name)
+    
+    # Remove multiple consecutive hyphens
+    repo_name = re.sub(r'-+', '-', repo_name)
+    
+    # Remove leading/trailing hyphens
+    repo_name = repo_name.strip('-')
+    
+    # Convert to lowercase
+    repo_name = repo_name.lower()
+    
+    # Ensure the name is not too long (Hugging Face has a limit)
+    if len(repo_name) > 100:
+        repo_name = repo_name[:100]
+    
+    return repo_name
+
+from constants import supported_llms
+def extract_model_name(local_model_path):
+    #find the pathloc that has the maximum gloable step number 
+    if local_model_path in supported_llms.keys():
+        return local_model_path
+    paths = os.listdir(local_model_path)
+    max_step = -1
+    max_step_path = None
+    for path in paths:
+        step = extract_step(path)
+        if step > max_step:
+            max_step = step
+            max_step_path = path
+
+    if max_step_path is None:
+        raise ValueError(f"No valid model path found in {local_model_path}")
+    else:
+        return os.path.join(local_model_path, max_step_path)
 
 
 class FSDPSFTTrainer(object):
@@ -65,7 +147,7 @@ class FSDPSFTTrainer(object):
         # build tokenizer first
         local_model_path = copy_local_path_from_hdfs(src=self.config.model.partial_pretrain, verbose=True)
         from verl.utils import hf_tokenizer
-        self.tokenizer = hf_tokenizer(local_model_path, trust_remote_code=self.config.model.trust_remote_code)
+        self.tokenizer = hf_tokenizer(extract_model_name(local_model_path), trust_remote_code=self.config.model.trust_remote_code)
         if self.config.data.chat_template is not None:
             raise ValueError('Apply Chat template from config is not supported yet.')
 
@@ -102,6 +184,11 @@ class FSDPSFTTrainer(object):
                                         response_dict_keys=config.data.get('response_dict_keys', None),
                                         max_length=config.data.max_length,
                                         truncation=config.data.truncation)
+        # input("Press Enter to continue...")
+        # print(self.train_dataset)
+        # print(len(self.train_dataset))
+        # print(self.train_dataset[1])
+        # input("Press Enter to continue1...")
         self.val_dataset = SFTDataset(parquet_files=config.data.val_files,
                                       tokenizer=self.tokenizer,
                                       prompt_key=config.data.prompt_key,
@@ -153,13 +240,13 @@ class FSDPSFTTrainer(object):
 
         trust_remote_code = self.config.model.trust_remote_code
         # load config first
-        config = AutoConfig.from_pretrained(local_model_path, trust_remote_code=trust_remote_code)
+        config = AutoConfig.from_pretrained(extract_model_name(local_model_path), trust_remote_code=trust_remote_code)
 
         # This may be very large
         init_context = get_init_weight_context_manager(use_meta_tensor=not config.tie_word_embeddings)
 
         with init_context():
-            self.model: PreTrainedModel = AutoModelForCausalLM.from_pretrained(local_model_path,
+            self.model: PreTrainedModel = AutoModelForCausalLM.from_pretrained(extract_model_name(local_model_path),
                                                                                config=config,
                                                                                torch_dtype=torch.float32,
                                                                                attn_implementation='flash_attention_2',
@@ -220,7 +307,11 @@ class FSDPSFTTrainer(object):
         log_gpu_memory_usage('After initialize optimizer', logger=logger)
 
         steps_per_epoch = len(self.train_dataloader)
+        # print(steps_per_epoch)
+        # input("Press Enter to continue2...")
         total_steps = steps_per_epoch * self.config.trainer.total_epochs
+        # print(total_steps)
+        # input("Press Enter to continue3...")
 
         if self.device_mesh.get_rank() == 0:
             print(
@@ -323,9 +414,51 @@ class FSDPSFTTrainer(object):
             os.makedirs(path, exist_ok=True)
             self.model.save_pretrained(path, state_dict=state_dict)
             self.tokenizer.save_pretrained(path)
+            
+            # Push to HDFS if configured
             if self.config.trainer.default_hdfs_dir:
                 hdfs_io.makedirs(self.config.trainer.default_hdfs_dir, exist_ok=True)
                 hdfs_io.copy(src=path, dst=self.config.trainer.default_hdfs_dir, dirs_exist_ok=True)
+            
+            # Push to Hugging Face Hub if configured
+            if hasattr(self.config.trainer, 'hub') and self.config.trainer.hub:
+                hub_config = self.config.trainer.hub
+                if hub_config.get('push_to_hub', False):
+                    # Get the original model path
+                    
+                    # Process model name for repo
+                    processed_name = process_model_name_for_repo(path)
+                    
+                    # Get username from token or use default
+                    username = hub_config.get('username', 'default-user')
+                    repo_id = f"{username}/{processed_name}"
+                    
+                    # Get token with priority: env var > ~/.huggingface file > config file
+                    hf_token = get_huggingface_token() or hub_config.get('token')
+                    
+                    # Create repo if it doesn't exist
+                    api = HfApi()
+                    try:
+                        create_repo(repo_id, exist_ok=True, token=hf_token)
+                    except Exception as e:
+                        logger.warning(f"Failed to create repo {repo_id}: {e}")
+                    
+                    # Push to hub
+                    try:
+                        self.model.push_to_hub(
+                            repo_id,
+                            commit_message=f"Checkpoint at step {step}",
+                            token=hf_token
+                        )
+                        self.tokenizer.push_to_hub(
+                            repo_id,
+                            commit_message=f"Tokenizer at step {step}",
+                            token=hf_token
+                        )
+                        logger.info(f"Successfully pushed checkpoint to {repo_id}")
+                    except Exception as e:
+                        logger.warning(f"Failed to push to hub: {e}")
+        
         torch.distributed.barrier()
 
     def fit(self):
@@ -343,26 +476,40 @@ class FSDPSFTTrainer(object):
 
         for epoch in range(self.config.trainer.total_epochs):
             self.train_sampler.set_epoch(epoch=epoch)
+            
+            # Add tqdm progress bar on rank 0
+            if rank == 0:
+                pbar = tqdm(total=len(self.train_dataloader), desc=f"Epoch {epoch+1}/{self.config.trainer.total_epochs}")
+            
             for data in self.train_dataloader:
                 data = TensorDict(data, batch_size=self.config.data.train_batch_size).cuda()
                 metric = self.training_step(data)
+                
+                # Update progress bar on rank 0
                 if rank == 0:
+                    pbar.set_description(f"Epoch {epoch+1}/{self.config.trainer.total_epochs} | Step {global_step}")
+                    pbar.update(1)
                     tracking.log(data=metric, step=global_step)
+                
                 global_step += 1
 
             # validation
-            val_losses = []
-            for data in self.val_dataloader:
-                data = TensorDict(data, batch_size=self.config.data.micro_batch_size).cuda()
-                val_loss = self.validation_step(data)
-                val_losses.append(val_loss)
+            # val_losses = []
+            # for data in self.val_dataloader:
+            #     data = TensorDict(data, batch_size=self.config.data.micro_batch_size).cuda()
+            #     val_loss = self.validation_step(data)
+            #     val_losses.append(val_loss)
+            # if rank == 0:
+            #     val_loss = torch.mean(torch.stack(val_losses))
+            #     metric = {'val/loss': val_loss.detach().item()}
+            #     tracking.log(data=metric, step=global_step)
+            # torch.distributed.barrier()
             if rank == 0:
-                val_loss = torch.mean(torch.stack(val_losses))
-                metric = {'val/loss': val_loss.detach().item()}
-                tracking.log(data=metric, step=global_step)
-            torch.distributed.barrier()
+                pbar.close()
 
-            # save checkpoint
+            # save checkpoint at the end of each epoch
+            if rank == 0:
+                logger.info(f"Saving checkpoint at epoch {epoch}, step {global_step}")
             self.save_checkpoint(step=global_step)
 
 

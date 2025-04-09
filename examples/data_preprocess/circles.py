@@ -9,40 +9,47 @@ from typing import List, Tuple
 from tqdm import tqdm
 import argparse
 from utils import set_seed
-from examples.data_preprocess.helper import save_data, classification_reward_fn, flip_label
+from examples.data_preprocess.helper import save_data, flip_label, prepare_dataset
 
 def gen_dataset(
     num_samples: int,
-    noise: float = 0.0,
+    feature_noise: float = 0.01,
     seed_value: int = 42,
-    label_flip_rate: float = 0.0,
+    label_noise: float = 0.0,
+    random: bool = False,
 ) -> List[Tuple]:
     """Generate synthetic circles dataset for binary classification task.
     
     Args:
         num_samples: Number of samples to generate
-        noise: Standard deviation of Gaussian noise added to the data
+        feature_noise: Standard deviation of Gaussian noise added to the data
         factor: Scale factor between inner and outer circle
         seed_value: Random seed for reproducibility
-        label_flip_rate: Label flip rate
+        label_noise: Label flip rate
         
     Returns:
         List of tuples containing (features, label)
     """
     np.random.seed(seed_value)
-    factor = 0.9
-    
+    if random:
+        factor = np.random.uniform(0.1, 0.9)
+        scale_factor = np.random.uniform(10,20)
+    else:
+        factor = 0.9
+        scale_factor = 10
+        
     # Generate synthetic data with concentric circles
     # The smaller the factor, the more difficult for KNN to classify
     X, y = make_circles(
         n_samples=num_samples,
-        noise=noise,
+        noise=feature_noise,
         factor=factor,  # Makes circles closer, harder for KNN
         random_state=seed_value
     )
     
+    X = X * scale_factor
     # Optionally flip some labels to make it even harder
-    y = flip_label(y, label_flip_rate, 2)
+    y = flip_label(y, label_noise, 2)
     
     samples = []
     for i in tqdm(range(num_samples)):
@@ -56,53 +63,29 @@ def gen_dataset(
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--hdfs_dir', default=None)
-    parser.add_argument('--num_samples', type=int, default=100000)
-    parser.add_argument('--noise_level', type=float, default=0.05)
+    parser.add_argument('--num_samples', type=int, default=100)
+    parser.add_argument('--feature_noise', type=float, default=0)
     parser.add_argument('--test_ratio', type=float, default=0.2)
-    parser.add_argument('--n_shot', type=int, default=0)
+    parser.add_argument('--n_shot', type=int, default=10)
     parser.add_argument('--template_type', type=str, default='base')
-    parser.add_argument('--label_flip_rate', type=float, default=0.0)
+    parser.add_argument('--label_noise', type=float, default=0.0)
+    parser.add_argument('--data_mode', type=str, default="default", choices=["default", "grid", "mixed"])
     args = parser.parse_args()
     set_seed(42)
     
     data_source = 'circles'
-    TEST_SIZE = int(args.num_samples * args.test_ratio)
-    TRAIN_SIZE = args.num_samples - TEST_SIZE
+    n_classes = 2
     
-    # Generate synthetic dataset
-    samples = gen_dataset(
-        num_samples=args.num_samples,
-        noise=args.noise_level,
-        seed_value=12
-    )
-    
-    in_context_samples = gen_dataset(
-        num_samples=args.num_samples,
-        noise=args.noise_level,
-        label_flip_rate=args.label_flip_rate,
-        seed_value=34
-    )
-    
-    dataset_dict = {
-        'features': [sample[0] for sample in samples],
-        'label': [sample[1] for sample in samples]
-    }
-    
-    in_context_dataset_dict = {
-        'features': [sample[0] for sample in in_context_samples],
-        'label': [sample[1] for sample in in_context_samples]
-    }
+    datasets = prepare_dataset(args, gen_dataset)
     
     save_data(
-        dataset_dict,
-        in_context_dataset_dict,
+        datasets['dataset_dict'],
+        datasets['in_context_dataset_dict'],
         data_source,
         args,
-        2,  # Number of classes for circles dataset is 2
-        TRAIN_SIZE,
-        TEST_SIZE,
+        n_classes,
+        datasets['TRAIN_SIZE'],
+        datasets['TEST_SIZE'],
+        data_mode = args.data_mode,
     )
-    
 
-def circles_reward_fn(solution_str, ground_truth):
-    return classification_reward_fn(solution_str, ground_truth)
