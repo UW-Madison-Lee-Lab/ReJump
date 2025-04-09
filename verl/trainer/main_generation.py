@@ -142,11 +142,16 @@ def main(config):
         wg.init_model()
 
     # Use RLHFDataset for both API and non-API modes
+    if use_api:
+        max_prompt_length = 40_000
+    else:
+        max_prompt_length = config.rollout.prompt_length
+        
     rlhf_dataset = RLHFDataset(
         parquet_files=config.data.path,
         tokenizer=tokenizer,
         prompt_key=config.data.prompt_key,
-        max_prompt_length=config.rollout.prompt_length,
+        max_prompt_length=max_prompt_length,
         filter_prompts=True,
         return_raw_chat=config.data.get('return_raw_chat', False),
         truncation='error'

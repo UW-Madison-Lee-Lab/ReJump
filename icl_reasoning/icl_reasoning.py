@@ -115,9 +115,7 @@ def calculate_token_length(text: str, tokenizer) -> int:
 
 def load_deepseek_results(
     dataset_name: str,
-    model_name: str,
     shot: int, 
-    template_type: str, 
     response_length: int, 
     num_samples: int, 
     noise_level: float, 
@@ -130,9 +128,9 @@ def load_deepseek_results(
     """
     result_dir = get_result_dir(
         dataset_name=dataset_name,
-        model_name = model_name,
+        model_name = "deepseek-ai/deepseek-reasoner",
         shot = shot,
-        template_type = template_type,
+        template_type = "reasoning_api",
         response_length = response_length,
         num_samples = num_samples,
         noise_level = noise_level,
@@ -313,8 +311,6 @@ def extract_features_from_prompt(prompt_content):
 
 def sample_icl_examples(
     config: ICLExampleConfig, 
-    model_name: str,
-    template_type: str,
     rng: np.random.RandomState, 
     tokenizer,
     icl_example_maxlength: int
@@ -333,9 +329,7 @@ def sample_icl_examples(
     # Load all available examples from the specified configuration
     results = load_deepseek_results(
         dataset_name=config.dataset_name,
-        model_name=model_name,
         shot=config.shot,
-        template_type=template_type,
         response_length=config.response_length,
         num_samples=config.num_samples,
         noise_level=config.noise_level,
@@ -827,23 +821,20 @@ def extract_text_file_content(example: Dict[str, Any]) -> str:
     return ""
 
 
-@hydra.main(config_path=f"{root_dir}/icl_reasoning", config_name="config", version_base=None)
+@hydra.main(config_path=f"{root_dir}/icl_reasoning", config_name="config_vanilla", version_base=None)
 def main(cfg: DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
-    if cfg.mode == "reasoning":
-        template_type = supported_llms[cfg.model_name]["template_type"]
-    else:
-        raise ValueError(f"Unsupported mode: {cfg.mode}")
+    template_type = cfg.template_type
     
     shot = 0
     for icl_config in cfg.icl_examples:
-        shot += icl_config.shot
+        shot += 1
         
     # Create output directory if it doesn't exist
     output_path = get_dataset_dir(
         cfg.test_data.dataset_name, 
-        f"{shot}*{cfg.test_data_examples.shot}", 
-        template_type + "_ricl", 
+        cfg.test_data_examples.shot, 
+        template_type, 
         cfg.test_data.num_samples, 
         cfg.test_data.noise_level, 
         cfg.test_data.label_flip_rate, 
@@ -923,8 +914,6 @@ def main(cfg: DictConfig) -> None:
             print(f"Sampling examples for {icl_config.dataset_name} with noise {icl_config.noise_level} and label flip rate {icl_config.label_flip_rate}")
             examples = sample_icl_examples(
                 config=icl_config, 
-                model_name=cfg.model_name,
-                template_type=template_type,
                 rng=icl_rng, 
                 tokenizer=tokenizer,
                 icl_example_maxlength=cfg.icl_example_maxlength
@@ -1090,11 +1079,11 @@ def main(cfg: DictConfig) -> None:
     # Create a descriptive filename
     mode_suffix = ""
     if is_direct_path:
-        mode_suffix = "_direct_path"
+        mode_suffix = ""
     elif is_text_direct:
         mode_suffix = "_text_direct"
     
-    filename = f"{cfg.test_data.dataset_name}_shot{cfg.test_data_examples.shot}_n{cfg.test_data.noise_level}_f{cfg.test_data.label_flip_rate}_test{cfg.test_data.num_samples}_icl{len(cfg.icl_examples)}_seed{cfg.icl_example_seed}{mode_suffix}.parquet"
+    filename = f"test_{cfg.data_mode}{mode_suffix}.parquet"
     output_file = output_path / filename
     
     # Pre-process the dataset to ensure all elements are serializable

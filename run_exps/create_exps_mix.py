@@ -1,6 +1,6 @@
 import pandas as pd
 import os
-from constants import supported_llms, get_dataset_dir, get_model_name, get_model_dir, get_mixed_configs
+from constants import supported_llms, get_dataset_dir, get_model_name, get_model_dir, get_mixed_configs, supported_datasets
 from environment import root_dir
 from run_exps.helper import gen_dataset, inference, rl_train, mix_dataset
 import argparse
@@ -71,12 +71,7 @@ for model in model_list:
                 prompt_length = int((24 * shot + 185) * 1.1)
             
                 if noise_level is None:
-                    if dataset == "blobs":
-                        noise_level = 1.0
-                    elif dataset in ["moons", "linear"]:
-                        noise_level = 0.1
-                    else:
-                        noise_level = 0.01
+                    noise_level = supported_datasets[dataset]["noise_level"]
                 if mode == "reasoning":
                     template_type = supported_llms[model]["template_type"]
                     response_length = int(prompt_length * args.response_length_thinking_factor)
@@ -94,7 +89,7 @@ for model in model_list:
                     num_samples=n_samples,
                     noise_level=noise_level,
                     label_flip_rate=label_flip_rate,
-                    data_mode=args.data_mode
+                    data_mode=args.data_mode,
                 )   
                 dataset_path = get_dataset_dir(
                     dataset_name=dataset,

@@ -1,9 +1,10 @@
 import pandas as pd
 import os
-from constants import supported_llms, get_model_name, get_model_dir
+from constants import supported_llms, get_model_name, get_model_dir, supported_datasets
 from environment import root_dir
 import argparse
 from run_exps.helper import gen_dataset, inference, rl_train
+import pdb
 
 model_size_upper_limit = 10_000_000_000
 
@@ -14,7 +15,7 @@ shot_list = [10, 50, 100, 200]
 parser = argparse.ArgumentParser()
 parser.add_argument("--dataset", type=str, nargs="+", default=["blobs", "moons", "linear", "circles"], choices=["blobs", "moons", "linear", "circles"])
 parser.add_argument("--model", type=str, nargs="+", default=supported_model_list, choices=supported_model_list)
-parser.add_argument("--mode", type=str, nargs="+", default=["reasoning", "no_reasoning", "customized"], choices=["reasoning", "no_reasoning", "customized", "ricl"])
+parser.add_argument("--mode", type=str, nargs="+", default=["reasoning", "no_reasoning"], choices=["reasoning", "no_reasoning", "customized", "ricl"])
 parser.add_argument("--shot", type=int, nargs="+", default=shot_list)
 parser.add_argument("--train", action="store_true")
 parser.add_argument("--n_gpus", type=int, default=2)
@@ -26,6 +27,7 @@ parser.add_argument("--label_flip_rate", type=float, default=0.0)
 parser.add_argument("--data_mode", type=str, default="default", choices=["default", "grid", "mixed"])
 parser.add_argument("--wandb", type=int, default=2, choices=[0, 1, 2])
 parser.add_argument("--api_workers", type=int, default=16)
+parser.add_argument("--experiment_name", type=str, default="")
 args = parser.parse_args()
 
 if args.load_train_step:
@@ -68,21 +70,15 @@ for dataset in dataset_list:
                             response_length = 100
                         elif mode == "ricl":
                             template_type = supported_llms[model]["template_type"] + "_ricl"
-                            response_length = 100
+                            response_length = int(prompt_length * args.response_length_thinking_factor)
                         else:
                             raise ValueError(f"Mode {mode} not supported, should be in [reasoning, no_reasoning, customized, ricl]")
                         
                         if noise_level is None:
-                            if dataset == "blobs":
-                                noise_level = 1.0
-                            elif dataset in ["moons", "linear"]:
-                                noise_level = 0.1
-                            else:
-                                noise_level = 0.01
+                            noise_level = supported_datasets[dataset]["noise_level"]
                         
                         
                         command_list = []
-                        
                         gen_command = gen_dataset(
                             dataset_name=dataset,
                             shot=shot,
@@ -90,7 +86,7 @@ for dataset in dataset_list:
                             num_samples=n_samples,
                             noise_level=noise_level,
                             label_flip_rate=args.label_flip_rate,
-                            data_mode=args.data_mode
+                            data_mode=args.data_mode,
                         )
                         command_list.append(gen_command)
                         if args.train:
@@ -163,5 +159,7 @@ for dataset in dataset_list:
 
 run_all_scripts = "\n".join([f"bash {script_path}" for script_path in script_paths])
 
-with open(f"{root_dir}/run_exps/auto/run_all.sh", "w") as f:
+experiment_name = args.experiment_name
+if experiment_name: experiment_name = f"_{experiment_name}"
+with open(f"{root_dir}/run_exps/auto/run_all{experiment_name}.sh", "w") as f:
     f.write(run_all_scripts)
