@@ -19,6 +19,15 @@ model:
   external_lib: null
   enable_gradient_checkpointing: False
   trust_remote_code: False
+  lora:
+    r: 16
+    lora_alpha: 32
+    lora_dropout: 0.1
+    target_modules:
+      - q_proj
+      - v_proj
+      - k_proj
+      - o_proj
 optim:
   lr: 1e-5
   betas: [0.9, 0.95]

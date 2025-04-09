@@ -44,6 +44,8 @@ from torch.distributed.device_mesh import DeviceMesh
 import verl.utils.hdfs_io as hdfs_io
 from verl.utils.debug import log_gpu_memory_usage
 
+from peft import get_peft_model, LoraConfig, TaskType
+
 logger = logging.getLogger(__file__)
 logger.setLevel(os.getenv('VERL_SFT_LOGGING_LEVEL', 'WARN'))
 
@@ -167,6 +169,22 @@ class FSDPSFTTrainer(object):
             self.model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={'use_reentrant': False})
 
         log_gpu_memory_usage('After model allocation', logger=logger)
+        # Apply LoRA
+        lora_config = LoraConfig(
+            task_type=TaskType.CAUSAL_LM,
+            r=self.config.lora.r,
+            lora_alpha=self.config.lora.alpha,
+            target_modules=self.config.lora.target_modules,
+            lora_dropout=self.config.lora.dropout,
+            bias="none"
+        )
+        self.model = get_peft_model(self.model, lora_config)
+
+        # Freeze base model parameters. Only LoRA parameters will be updated
+        for param in self.model.base_model.parameters():
+            param.requires_grad = False
+
+        log_gpu_memory_usage('After applying LoRA', logger=logger)
 
         mixed_precision = MixedPrecision(param_dtype=torch.bfloat16,
                                          reduce_dtype=torch.float32,
