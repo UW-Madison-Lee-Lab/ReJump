@@ -1,5 +1,5 @@
 from environment import root_dir
-from constants import get_dataset_dir, get_model_name, get_result_dir, get_dataset_filename
+from constants import get_dataset_dir, get_model_name, get_result_dir, get_dataset_filename, supported_datasets
 import pdb
 
 def gen_dataset(
@@ -9,24 +9,67 @@ def gen_dataset(
     num_samples=10000,
     noise_level=None,
     label_flip_rate=0.0,
-    data_mode="default"
+    data_mode="default",
 ):
-    if dataset_name == "blobs":
-        noise_level = 1.0 if noise_level is None else noise_level
-    elif dataset_name in ["moons", "linear"]:
-        noise_level = 0.1 if noise_level is None else noise_level
-    elif dataset_name == "circles":
-        noise_level = 0.01 if noise_level is None else noise_level
-    return f"""
+    if "ricl" in template_type:
+        example_datasets = ["moons", "linear", "blobs", "circles"]
+        example_datasets.remove(dataset_name)
+        
+        icl_examples = []
+        for i, example_dataset in enumerate(example_datasets):
+            icl_example_prompt = f"""
+    ++icl_examples.{i}.dataset_name={example_dataset} \
+    ++icl_examples.{i}.label_flip_rate={label_flip_rate} \
+    ++icl_examples.{i}.noise_level={supported_datasets[example_dataset]["noise_level"]} \
+    ++icl_examples.{i}.shot=50 \
+    ++icl_examples.{i}.response_length=3046 \
+    ++icl_examples.{i}.num_samples=500 \
+    ++icl_examples.{i}.num_examples=1 \
+    ++icl_examples.{i}.train_step=0 \
+    ++icl_examples.{i}.data_mode={data_mode}
+        """
+            icl_examples.append(icl_example_prompt)
+            
+        icl_examples_prompt = ''.join(icl_examples).replace('\n', '')
+        command = f"""
+python {root_dir}/icl_reasoning/icl_reasoning.py \
+    mode=reasoning \
+    template_type={template_type} \
+    tokenizer_name=Qwen/Qwen2.5-3B-Instruct \
+    icl_example_seed=42 \
+    test_data_seed=42 \
+    train_step=0 \
+    data_mode=default \
+    icl_example_maxlength=6000 \
+    test_data.dataset_name={dataset_name} \
+    test_data.label_flip_rate={label_flip_rate} \
+    test_data.noise_level={noise_level} \
+    test_data.num_samples={num_samples} \
+    test_data_examples.dataset_name={dataset_name} \
+    test_data_examples.label_flip_rate={label_flip_rate} \
+    test_data_examples.noise_level={noise_level} \
+    test_data_examples.shot={shot} \
+    +icl_examples=[] \
+    {icl_examples_prompt}
+        """
+    else:
+        if dataset_name == "blobs":
+            noise_level = 1.0 if noise_level is None else noise_level
+        elif dataset_name in ["moons", "linear"]:
+            noise_level = 0.1 if noise_level is None else noise_level
+        elif dataset_name == "circles":
+            noise_level = 0.01 if noise_level is None else noise_level
+        command = f"""
 python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --template_type={template_type} \
     --num_samples={num_samples} \
     --n_shot={shot} \
     --noise_level={noise_level} \
     --test_ratio=0.2 \
-    --label_flip_rate={label_flip_rate} \
-    --data_mode={data_mode}
-    """ 
+        --label_flip_rate={label_flip_rate} \
+        --data_mode={data_mode}
+            """ 
+    return command
 
 
 def mix_dataset(

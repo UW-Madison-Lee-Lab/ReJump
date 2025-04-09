@@ -23,15 +23,6 @@ icl_examples:
     num_examples: 1
     train_step: 0
     data_mode: default
-
-  # Example 3: Circles dataset
-  # - task_type: circles
-  #   flip_rate: 0.0
-  #   noise_type: 0.0
-  #   shot_type: 50
-  #   reslen_type: 3046
-  #   nsamples_type: 500
-  #   num_examples: 1
   
   - dataset_name: blobs
     label_flip_rate: 0.0
@@ -61,8 +52,7 @@ test_data_seed: 42
 
 # Tokenizer name for length calculation
 tokenizer_name: Qwen/Qwen2.5-3B-Instruct
-model_name: deepseek-ai/deepseek-reasoner
-
+template_type: qwen-instruct
 
 # Output path
 train_step: 0

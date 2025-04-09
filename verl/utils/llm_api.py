@@ -10,7 +10,7 @@ import re
 import json
 from verl.utils.reward_score import gsm8k, math, multiply, countdown
 from google import genai 
-
+import httpx
 def _select_rm_score_fn(data_source):
     if data_source == 'openai/gsm8k':
         return gsm8k.compute_score
@@ -236,6 +236,13 @@ class LLMAPI:
             except IndexError as e:
                 print(f"IndexError: {e}")
                 return "", "", ""
+            
+            except httpx.ReadError as e:
+                print(f"ReadError: {e}")
+                time.sleep(timeout)
+                
+            except Exception as e:
+                pdb.set_trace()
                 
             print(f"Failed to generate response after {attempt} attempts, max_retries: {max_retries}")
             

@@ -111,6 +111,8 @@ def get_dataset_dir(
     label_flip_rate = 0,
     data_mode = "default",
 ):
+    if "ricl" in template_type:
+        shot = f"3*{shot}"
     return os.path.join(root_dir, 'datasets', dataset_name, f"{shot}_shot", template_type, f"{num_samples}_samples_{noise_level}_noise_{label_flip_rate}_flip_rate_{data_mode}_mode")
 def get_configs_via_dataset_dir(dataset_dir):
 
@@ -334,4 +336,32 @@ supported_llms = {
         "type": "api",
         "api_key": ANTHROPIC_API_KEY,
     }
+}
+
+supported_datasets = {
+    "blobs": {
+        "num_classes": 3,
+        "num_features": 2,
+        "noise_level": 1.0,
+        "label_flip_rate": 0.0,
+    },
+    "moons": {
+        "num_classes": 2,
+        "num_features": 2,
+        "noise_level": 0.1,
+        "label_flip_rate": 0.0,
+    },
+    "linear": {
+        "num_classes": 2,
+        "num_features": 2,
+        "noise_level": 0.1,
+        "label_flip_rate": 0.0,
+    },  
+    "circles": {
+        "num_classes": 2,
+        "num_features": 2,
+        "noise_level": 0.1,
+        "label_flip_rate": 0.0,
+    },
+    
 }
