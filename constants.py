@@ -360,8 +360,8 @@ supported_datasets = {
     "circles": {
         "num_classes": 2,
         "num_features": 2,
-        "noise_level": 0.1,
-        "label_flip_rate": 0.0,
+        "noise_level": 0.01,
+        "label_flip_rate": 0.01,
     },
     
 }

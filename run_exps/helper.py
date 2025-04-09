@@ -1,6 +1,7 @@
 from environment import root_dir
 from constants import get_dataset_dir, get_model_name, get_result_dir, get_dataset_filename, supported_datasets
 import pdb
+import re
 
 def gen_dataset(
     dataset_name, 
@@ -14,6 +15,8 @@ def gen_dataset(
     if "ricl" in template_type:
         example_datasets = ["moons", "linear", "blobs", "circles"]
         example_datasets.remove(dataset_name)
+        ricl_shot = int(re.match(r".*?ricl_(\d+)", template_type).group(1))
+        example_datasets = example_datasets[:ricl_shot]
         
         icl_examples = []
         for i, example_dataset in enumerate(example_datasets):
