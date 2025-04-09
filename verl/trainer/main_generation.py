@@ -82,10 +82,8 @@ def main(config):
         
         wandb_configs.update(get_configs_via_result_dir(os.path.dirname(config.data.output_path)))
         wandb.init(
-            project=f"{WANDB_INFO['project']}-{config.trainer.project_name}",
+            project=f"{WANDB_INFO['project']}-generation",
             entity=WANDB_INFO['entity'],
-
-            name=run_name,
             config=wandb_configs
         )
     
