@@ -52,7 +52,7 @@ python {root_dir}/icl_reasoning/icl_reasoning.py \
     test_data_examples.label_noise={label_noise} \
     test_data_examples.feature_noise={feature_noise} \
     test_data_examples.shot={shot} \
-    +icl_examples=[] \
+    "+icl_examples.icl_examples=[]" \
     {icl_examples_prompt}
         """
     else:

@@ -571,3 +571,24 @@ def regression_reward_fn(solution_str, ground_truth):
     
     return 0
     
+def _select_rm_score_fn(data_source):
+    if data_source == 'openai/gsm8k':
+        from verl.utils.reward_score import gsm8k
+        return gsm8k.compute_score
+    elif data_source == 'lighteval/MATH':
+        from verl.utils.reward_score import math
+        return math.compute_score
+    elif "multiply" in data_source or "arithmetic" in data_source:
+        from verl.utils.reward_score import multiply
+        return multiply.compute_score
+    elif "countdown" in data_source:
+        from verl.utils.reward_score import countdown
+        return countdown.compute_score
+    elif data_source in supported_datasets:
+        task_type = supported_datasets[data_source]['type']
+        if task_type == 'classification':
+            return classification_reward_fn
+        elif task_type == 'regression':
+            return regression_reward_fn
+    else:
+        raise NotImplementedError
