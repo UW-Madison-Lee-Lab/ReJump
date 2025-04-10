@@ -12,12 +12,9 @@ from omegaconf import MISSING, DictConfig, OmegaConf
 from transformers import AutoTokenizer
 import pdb
 # Import data generation functions from data_preprocess
-from examples.data_preprocess.moons import gen_dataset as gen_moons_dataset
-from examples.data_preprocess.circles import gen_dataset as gen_circles_dataset
-from examples.data_preprocess.blobs import gen_dataset as gen_blobs_dataset
-from examples.data_preprocess.linear import gen_dataset as gen_linear_dataset
 from environment import root_dir
-from constants import get_result_dir, supported_llms, get_dataset_dir
+from constants import get_result_dir, get_dataset_dir, supported_datasets
+import importlib
 
 @dataclass
 class BaseICLExampleConfig:
@@ -167,36 +164,18 @@ def generate_test_data(
     Returns:
         DataFrame containing generated test data
     """
-    if dataset_name == "moons":
-        samples = gen_moons_dataset(
-            num_samples=num_samples,
-            feature_noise=feature_noise,
-            label_noise=label_noise,
-            seed_value=seed_value
-        )
-    elif dataset_name == "circles":
-        samples = gen_circles_dataset(
-            num_samples=num_samples,
-            feature_noise=feature_noise,
-            label_noise=label_noise,
-            seed_value=seed_value
-        )
-    elif dataset_name == "blobs":
-        samples = gen_blobs_dataset(
-            num_samples=num_samples,
-            feature_noise=feature_noise,
-            label_noise=label_noise,
-            seed_value=seed_value,
-        )
-    elif dataset_name == "linear":
-        samples = gen_linear_dataset(
-            num_samples=num_samples,
-            feature_noise=feature_noise,
-            label_noise=label_noise,
-            seed_value=seed_value
-        )
-    else:
-        raise ValueError(f"Unknown task type: {dataset_name}")
+    
+    if dataset_name not in supported_datasets:
+        raise ValueError(f"Unknown dataset: {dataset_name}")
+    
+    dataset_module = importlib.import_module(f"examples.data_preprocess.{dataset_name}")
+    gen_dataset = getattr(dataset_module, "gen_dataset")
+    samples = gen_dataset(
+        num_samples=num_samples,
+        feature_noise=feature_noise,
+        label_noise=label_noise,
+        seed_value=seed_value
+    )
     
     # Convert to DataFrame
     df = pd.DataFrame({
@@ -212,18 +191,23 @@ def create_instruction(dataset_name: str) -> str:
     Create a task instruction based on the task type.
     This instruction should be generic enough to not reveal specific task settings.
     """
-    valid_dataset_names = ["blobs", "circles", "linear", "moons"]
-    if dataset_name not in valid_dataset_names:
-        raise ValueError(f"Invalid task type: {dataset_name}. Must be one of {valid_dataset_names}")
+    
+    if dataset_name not in supported_datasets:
+        raise ValueError(f"Invalid task type: {dataset_name}. Must be one of {supported_datasets.keys()}")
+    
+    task_type = supported_datasets[dataset_name]["type"]
+    
+    word_3 = "predicts" if task_type == "regression" else "classifies"
+    word = "predict" if task_type == "regression" else "classify"
     
     # Use the same instruction for all task types
     instruction = (
-        "This is a classification task. You will be provided with examples of how "
-        "a skilled reasoner classifies data points based on their features. "
+        f"This is a {task_type} task. You will be provided with examples of how "
+        f"a skilled reasoner {word_3} data points based on their features. "
         "Study the examples carefully to understand the reasoning process. "
         "⚠️ **DO NOT DIRECTLY USE THE ALGORITHM USED IN THE EXAMPLES TO SOLVE THE TASK** ⚠️ "
         "**ONLY LEARN HOW THE SKILLED REASONER THINKS.** "
-        "Then, classify the new data point following a similar reasoning approach. "
+        f"Then, {word} the new data point following a similar reasoning approach. "
         "First work through your reasoning step by step in <think></think> tags, "
         "then provide your final answer in <answer></answer> tags."
     )
@@ -432,17 +416,26 @@ def create_prompt(instruction: str, icl_examples: List[Dict], test_examples: Lis
     if not test_examples:
         raise ValueError("No test examples provided. Test examples are required for the prompt.")
         
-    prompt += f"The dataset has {num_classes} classes: {list(range(num_classes))}. We first provide you with some examples of how to classify data points.\n"
+    if num_classes is None:
+        prompt += "We first provide you with some examples of how to predict the target value.\n"
+    else:
+        prompt += f"The dataset has {num_classes} classes: {list(range(num_classes))}. We first provide you with some examples of how to classify data points.\n"
     
     for features, label in test_examples:
         # Format with 3 decimal places without brackets to match example format
-        formatted_features = f"{features[0]:.3f}, {features[1]:.3f}"
-        prompt += f"Features: {formatted_features}, Label: {label}\n"
+        formatted_features = f"[{features[0]:.3f}, {features[1]:.3f}]"
+        if num_classes is None:
+            prompt += f"Features: {formatted_features}, Target: {label:.3f}\n"
+        else:
+            prompt += f"Features: {formatted_features}, Label: {label}\n"
     
     prompt += "\n"
     
     # Add the test problem
-    test_prompt = f"Given the data point with features {test_features[0]:.3f}, {test_features[1]:.3f}, classify it into one of the possible classes. Show your work in <think></think> tags. And return the final answer in <answer></answer> tags, for example <answer>1</answer>."
+    if num_classes is None:
+        test_prompt = f"Given the data point with features [{test_features[0]:.3f}, {test_features[1]:.3f}], predict the target value. Show your work in <think></think> tags. And return the final answer in <answer></answer> tags, for example <answer>0.126</answer>."
+    else:
+        test_prompt = f"Given the data point with features [{test_features[0]:.3f}, {test_features[1]:.3f}], classify it into one of the possible classes. Show your work in <think></think> tags. And return the final answer in <answer></answer> tags, for example <answer>1</answer>."
     
     prompt += f"Now, solve this problem:\n{test_prompt}"
     
@@ -508,22 +501,6 @@ def create_prompt(instruction: str, icl_examples: List[Dict], test_examples: Lis
 #     prompt += f"Now, solve this problem:\n{test_prompt}"
     
 #     return prompt
-
-def get_num_classes(dataset_name: str) -> int:
-    """
-    Return the number of classes for each task type
-    """
-    num_classes = {
-        "blobs": 3,
-        "circles": 2,
-        "linear": 2,
-        "moons": 2
-    }
-    if dataset_name not in num_classes:
-        raise ValueError(f"Unknown task type: {dataset_name}")
-    
-    return num_classes[dataset_name]
-
 
 def is_duplicate(features, existing_features_list, tolerance=1e-5):
     """
@@ -821,13 +798,13 @@ def extract_text_file_content(example: Dict[str, Any]) -> str:
     return ""
 
 
-@hydra.main(config_path=f"{root_dir}/icl_reasoning", config_name="config_vanilla", version_base=None)
+@hydra.main(config_path=None, config_name=None, version_base=None)
 def main(cfg: DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
     template_type = cfg.template_type
     
     shot = 0
-    for icl_config in cfg.icl_examples:
+    for icl_config in cfg.icl_examples.values():
         shot += 1
         
     # Create output directory if it doesn't exist
@@ -867,10 +844,9 @@ def main(cfg: DictConfig) -> None:
     icl_prompt_contents = set()  # To store prompt contents for string matching
     
     # Check if using direct path mode or text direct mode
-    is_direct_path = any("DirectPathICLExampleConfig" in str(icl_config.get("_target_", "")) for icl_config in cfg.icl_examples)
-    is_text_direct = any("TextDirectICLExampleConfig" in str(icl_config.get("_target_", "")) for icl_config in cfg.icl_examples)
-    
-    for icl_config in cfg.icl_examples:
+    is_direct_path = any("DirectPathICLExampleConfig" in str(icl_config.get("_target_", "")) for icl_config in cfg.icl_examples.values())
+    is_text_direct = any("TextDirectICLExampleConfig" in str(icl_config.get("_target_", "")) for icl_config in cfg.icl_examples.values())
+    for icl_config in cfg.icl_examples.values():
         examples = []
         
         # Determine if this is a regular config or direct path config
@@ -1031,7 +1007,7 @@ def main(cfg: DictConfig) -> None:
     instruction = create_instruction(cfg.test_data.dataset_name)
     
     # Get number of classes for the test task
-    num_classes = get_num_classes(cfg.test_data.dataset_name)
+    num_classes = supported_datasets[cfg.test_data.dataset_name]["num_classes"]
     
     # For each test data point, create a prompt using the same shuffled ICL examples and test examples
     for idx, (test_features, test_label) in enumerate(zip(test_data_features, test_data_labels)):

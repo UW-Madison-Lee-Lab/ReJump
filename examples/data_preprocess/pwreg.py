@@ -1,5 +1,5 @@
 """
-Preprocess dataset for linear regression task - a synthetic regression task with n-dimensional data points
+Preprocess dataset for piecewise regression task - a synthetic regression task with n-dimensional data points
 """
 
 import numpy as np
@@ -17,7 +17,7 @@ def gen_dataset(
     label_noise: float = 0.0,
     random: bool = False,
 ) -> List[Tuple]:
-    """Generate synthetic regression dataset.
+    """Generate synthetic piecewise regression dataset.
     
     Args:
         num_samples: Number of samples to generate
@@ -32,20 +32,29 @@ def gen_dataset(
     np.random.seed(seed_value)
     
     if random:
-        # Generate random coefficients between -2 and 2
-        coef = np.random.uniform(-2, 2, n_features)
-        intercept = np.random.uniform(-2, 2)
+        coef = np.random.uniform(-1, 1, n_features)
     else:
-        if n_features != 2: raise ValueError(f"n_features must be 2 for default coefficients, got {n_features}")
-        # default coefficients for 2D case
-        coef = np.ones(2)/2
-        intercept = 0.0
+        coef = np.ones(n_features) / n_features
     
     # Generate random feature matrix
     X = np.random.uniform(-1, 1, (num_samples, n_features))
     
-    # Generate target values using linear combination of features plus intercept
-    y = np.dot(X, coef) + intercept
+    # Apply piecewise function to each feature
+    def piecewise_func(x, j):
+        if x < -coef[j]:
+            return x - coef[j]
+        elif x < coef[j]:
+            return 0
+        else:
+            return x + coef[j]
+    
+    # Apply the piecewise function to each feature and sum them
+    y = np.zeros(num_samples)
+    for i in range(num_samples):
+        feature_sum = 0
+        for j in range(n_features):
+            feature_sum += piecewise_func(X[i, j], j)
+        y[i] = feature_sum / n_features  # Normalize by number of features
     
     # Add noise to features if specified
     if feature_noise > 0:
@@ -73,7 +82,6 @@ if __name__ == '__main__':
     parser.add_argument('--feature_noise', type=float, default=1.0)
     parser.add_argument('--test_ratio', type=float, default=0.2)
     parser.add_argument('--n_shot', type=int, default=10)
-    parser.add_argument('--n_query', type=int, default=10)
     parser.add_argument('--template_type', type=str, default='base')
     parser.add_argument('--n_features', type=int, default=2)
     parser.add_argument('--data_mode', type=str, default="default", choices=["default", "grid", "mixed"])
@@ -81,7 +89,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     set_seed(42)
     
-    data_source = 'linreg'
+    data_source = 'pwreg'
     n_classes = None  # Not applicable for regression
     
     datasets = prepare_dataset(args, gen_dataset)
@@ -96,4 +104,3 @@ if __name__ == '__main__':
         datasets['TEST_SIZE'],
         data_mode=args.data_mode
     )
-
