@@ -13,7 +13,14 @@ def gen_dataset(
     data_mode="default",
 ):
     if "ricl" in template_type:
-        example_datasets = ["moons", "linear", "blobs", "circles"]
+        datasets = {"regression": [], "classification": []}
+        for dataset in supported_datasets:
+            datasets[supported_datasets[dataset]["type"]].append(dataset)
+            
+        for dataset_type in datasets:
+            datasets[dataset_type].sort(key=lambda x: supported_datasets[x]["difficulty"], reverse=True)
+            
+        example_datasets = datasets[supported_datasets[dataset_name]["type"]]
         example_datasets.remove(dataset_name)
         ricl_shot = int(re.match(r".*?ricl_(\d+)", template_type).group(1))
         example_datasets = example_datasets[:ricl_shot]
@@ -45,7 +52,7 @@ python -m icl_reasoning.icl_reasoning \
     "+test_data_seed=42" \
     "+train_step=0" \
     "+data_mode=default" \
-    "+icl_example_maxlength=6000" \
+    "+icl_example_maxlength=10000" \
     "+test_data.dataset_name={dataset_name}" \
     "+test_data.label_noise={label_noise}" \
     "+test_data.feature_noise={feature_noise}" \
