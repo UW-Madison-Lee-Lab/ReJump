@@ -534,7 +534,7 @@ def classification_reward_fn(solution_str, ground_truth):
 
 def regression_reward_fn(solution_str, ground_truth):
     def criterion(y_pred, y_true):
-        return (y_true - y_pred) ** 2
+        return -(y_true - y_pred) ** 2
     # Direct pattern to extract from cases like <answer>0.5</answer></answer>
     # Try a direct match first for the most common patterns
     direct_match = re.search(r'<answer>([-+]?\d*\.\d+|\d+)</answer>', solution_str)
@@ -569,7 +569,7 @@ def regression_reward_fn(solution_str, ground_truth):
                 response_value = float(answer.strip())
                 return criterion(response_value, ground_truth['label'])
     
-    return 0
+    return -10000
     
 def _select_rm_score_fn(data_source):
     if data_source == 'openai/gsm8k':
