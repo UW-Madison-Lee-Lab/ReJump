@@ -143,7 +143,6 @@ def make_classification_prefix(
     in_context_examples, in_context_samples = "", []
     if n_shot > 0 and in_context_dataset is not None:
         in_context_examples = "We first provide you with some examples of how to classify data points.\n"
-        # 随机选择 n_shot 个示例
         random_indices = np.random.choice(len(in_context_dataset), n_shot, replace= len(in_context_dataset) < n_shot)
         
         for i in random_indices:
