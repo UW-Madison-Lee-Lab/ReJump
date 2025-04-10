@@ -38,11 +38,11 @@ def gen_dataset(
     else:
         if n_features != 2: raise ValueError(f"n_features must be 2 for default coefficients, got {n_features}")
         # default coefficients for 2D case
-        coef = np.array([2.0, -1.5])
-        intercept = 1.0
+        coef = np.ones(2)/2
+        intercept = 0.0
     
     # Generate random feature matrix
-    X = np.random.randn(num_samples, n_features)
+    X = np.random.uniform(-1, 1, (num_samples, n_features))
     
     # Generate target values using linear combination of features plus intercept
     y = np.dot(X, coef) + intercept

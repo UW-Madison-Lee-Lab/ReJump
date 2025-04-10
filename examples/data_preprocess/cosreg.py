@@ -1,5 +1,5 @@
 """
-Preprocess dataset for exponential regression task - a synthetic regression task with n-dimensional data points
+Preprocess dataset for cosine regression task - a synthetic regression task with n-dimensional data points
 """
 
 import numpy as np
@@ -17,7 +17,7 @@ def gen_dataset(
     label_noise: float = 0.0,
     random: bool = False,
 ) -> List[Tuple]:
-    """Generate synthetic exponential regression dataset.
+    """Generate synthetic cosine regression dataset.
     
     Args:
         num_samples: Number of samples to generate
@@ -40,13 +40,14 @@ def gen_dataset(
         if n_features != 2: raise ValueError(f"n_features must be 2 for default coefficients, got {n_features}")
         # default coefficients for 2D case
         coef = np.ones(2)
-        intercept = -1
+        intercept = 0.0
         p = n_features
     
     # Generate random feature matrix
     X = np.random.uniform(-1, 1, (num_samples, n_features))
     
-    y = np.sum(coef * np.exp(X * np.log(2)), axis=1) / p + intercept
+    # Generate target values using cosine function
+    y = np.sum(coef * np.cos(2 * np.pi * X), axis=1) / p + intercept
     
     # Add noise to features if specified
     if feature_noise > 0:
@@ -81,7 +82,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     set_seed(42)
     
-    data_source = 'expreg'
+    data_source = 'cosreg'
     n_classes = None  # Not applicable for regression
     
     datasets = prepare_dataset(args, gen_dataset)

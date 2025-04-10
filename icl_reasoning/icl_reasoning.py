@@ -869,7 +869,6 @@ def main(cfg: DictConfig) -> None:
     # Check if using direct path mode or text direct mode
     is_direct_path = any("DirectPathICLExampleConfig" in str(icl_config.get("_target_", "")) for icl_config in cfg.icl_examples.values())
     is_text_direct = any("TextDirectICLExampleConfig" in str(icl_config.get("_target_", "")) for icl_config in cfg.icl_examples.values())
-    pdb.set_trace()
     for icl_config in cfg.icl_examples.values():
         examples = []
         

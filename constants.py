@@ -387,5 +387,26 @@ supported_datasets = {
         "feature_noise": 0.1,
         "label_noise": 0.0,
         "type": "regression",
+    },
+    "cosreg": {
+        "num_classes": None,
+        "num_features": 2,
+        "feature_noise": 0.02,
+        "label_noise": 0.0,
+        "type": "regression",
+    },
+    "l1normreg": {
+        "num_classes": None,
+        "num_features": 2,
+        "feature_noise": 0.1,
+        "label_noise": 0.0,
+        "type": "regression",
+    },
+    "pwreg": {
+        "num_classes": None,
+        "num_features": 2,
+        "feature_noise": 0.1,
+        "label_noise": 0.0,
+        "type": "regression",
     }
 }

@@ -123,7 +123,7 @@ class LLMAPI:
             self.thinking = "cot"
         
 
-    def generate(self, messages: List[Dict[str, str]], max_tokens: int = 8000, temperature: float = 0.7) -> str:
+    def generate(self, messages: List[Dict[str, str]], max_tokens: int = 8000, temperature: float = 0.1) -> str:
         max_retries = 1000  # Increased retry count
         if max_retries <= 0: raise ValueError("max_retries must be greater than 0")
         timeout = 120  # Increased timeout to 120 seconds
