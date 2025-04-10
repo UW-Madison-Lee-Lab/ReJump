@@ -152,7 +152,7 @@ def plot_model_accuracy(data, output_file=None, title=None):
     plt.ylabel('Accuracy (%)')
     plt.title(title or 'Model Accuracy vs Normalized Order Across Samples')
     plt.grid(True, linestyle='--', alpha=0.6)
-    plt.ylim(-5, 105)
+    plt.ylim(50, 90)
     
     # if len(unique_samples) <= 20:
     #     plt.legend(loc='lower right')
