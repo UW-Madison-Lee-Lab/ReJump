@@ -827,7 +827,7 @@ def main(cfg: DictConfig) -> None:
     template_type = cfg.template_type
     
     shot = 0
-    for icl_config in cfg.icl_examples:
+    for icl_config in cfg.icl_examples.values():
         shot += 1
         
     # Create output directory if it doesn't exist
@@ -867,10 +867,10 @@ def main(cfg: DictConfig) -> None:
     icl_prompt_contents = set()  # To store prompt contents for string matching
     
     # Check if using direct path mode or text direct mode
-    is_direct_path = any("DirectPathICLExampleConfig" in str(icl_config.get("_target_", "")) for icl_config in cfg.icl_examples)
-    is_text_direct = any("TextDirectICLExampleConfig" in str(icl_config.get("_target_", "")) for icl_config in cfg.icl_examples)
-    
-    for icl_config in cfg.icl_examples:
+    is_direct_path = any("DirectPathICLExampleConfig" in str(icl_config.get("_target_", "")) for icl_config in cfg.icl_examples.values())
+    is_text_direct = any("TextDirectICLExampleConfig" in str(icl_config.get("_target_", "")) for icl_config in cfg.icl_examples.values())
+    pdb.set_trace()
+    for icl_config in cfg.icl_examples.values():
         examples = []
         
         # Determine if this is a regular config or direct path config
