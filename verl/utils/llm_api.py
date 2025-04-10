@@ -6,7 +6,7 @@ import time
 import numpy as np
 import torch
 import pdb
-import re
+import re, openai
 import json
 
 from examples.data_preprocess.helper import _select_rm_score_fn

@@ -345,6 +345,7 @@ supported_datasets = {
         "feature_noise": 1.0,
         "label_noise": 0.0,
         "type": "classification",
+        "difficulty": 1,
     },
     "moons": {
         "num_classes": 2,
@@ -352,6 +353,7 @@ supported_datasets = {
         "feature_noise": 0.1,
         "label_noise": 0.0,
         "type": "classification",
+        "difficulty": 2,
     },
     "linear": {
         "num_classes": 2,
@@ -359,6 +361,7 @@ supported_datasets = {
         "feature_noise": 0.1,
         "label_noise": 0.0,
         "type": "classification",
+        "difficulty": 1,
     },  
     "circles": {
         "num_classes": 2,
@@ -366,6 +369,7 @@ supported_datasets = {
         "feature_noise": 0.01,
         "label_noise": 0.01,
         "type": "classification",
+        "difficulty": 3,
     },
     "linreg": {
         "num_classes": None,
@@ -373,6 +377,7 @@ supported_datasets = {
         "feature_noise": 0.1,
         "label_noise": 0.0,
         "type": "regression",
+        "difficulty": 1,
     },
     "quadreg": {
         "num_classes": None,
@@ -380,6 +385,7 @@ supported_datasets = {
         "feature_noise": 0.1,
         "label_noise": 0.0,
         "type": "regression",
+        "difficulty": 2,
     },
     "expreg": {
         "num_classes": None,
@@ -387,6 +393,7 @@ supported_datasets = {
         "feature_noise": 0.1,
         "label_noise": 0.0,
         "type": "regression",
+        "difficulty": 1,
     },
     "cosreg": {
         "num_classes": None,
@@ -394,6 +401,7 @@ supported_datasets = {
         "feature_noise": 0.02,
         "label_noise": 0.0,
         "type": "regression",
+        "difficulty": 3,
     },
     "l1normreg": {
         "num_classes": None,
@@ -401,6 +409,7 @@ supported_datasets = {
         "feature_noise": 0.1,
         "label_noise": 0.0,
         "type": "regression",
+        "difficulty": 2,
     },
     "pwreg": {
         "num_classes": None,
@@ -408,5 +417,6 @@ supported_datasets = {
         "feature_noise": 0.1,
         "label_noise": 0.0,
         "type": "regression",
+        "difficulty": 2,
     }
 }
