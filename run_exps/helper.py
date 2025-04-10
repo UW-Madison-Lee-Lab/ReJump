@@ -8,6 +8,7 @@ def gen_dataset(
     shot,
     template_type="qwen-instruct",
     num_samples=10000,
+    n_query=10,
     feature_noise=None,
     label_noise=0.0,
     data_mode="default",
@@ -67,6 +68,7 @@ python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --template_type={template_type} \
     --num_samples={num_samples} \
     --n_shot={shot} \
+    --n_query={n_query} \
     --feature_noise={feature_noise} \
     --test_ratio=0.2 \
         --label_noise={label_noise} \

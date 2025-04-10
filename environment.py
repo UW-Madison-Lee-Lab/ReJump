@@ -13,8 +13,8 @@ TRANSFORMERS_CACHE = "/data/yzeng58/.cache/huggingface/hub"
 TRITON_CACHE_DIR="/data/yzeng58/cache/triton"
  
 WANDB_INFO = {
-    'project': 'liftr',
-    'entity': 'lee-lab-uw-madison'
+    'project': 'run_Lee_project-generation',
+    'entity': 'qzou24-university-of-wisconsin-madison'
 }
  
 CONDA_PATH = f"{os.path.dirname(root_dir)}/anaconda3/bin/conda"
