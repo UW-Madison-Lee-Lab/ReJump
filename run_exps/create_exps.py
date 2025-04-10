@@ -27,7 +27,7 @@ parser.add_argument("--label_noise", type=float, default=0.0)
 parser.add_argument("--data_mode", type=str, default="default", choices=["default", "grid", "mixed"])
 parser.add_argument("--wandb", type=int, default=2, choices=[0, 1, 2])
 parser.add_argument("--api_workers", type=int, default=16)
-parser.add_argument("--experiment_name", type=str, default="")
+parser.add_argument("--exp_name", type=str, default="")
 args = parser.parse_args()
 
 if args.load_train_step:
@@ -159,7 +159,7 @@ for dataset in dataset_list:
 
 run_all_scripts = "\n".join([f"bash {script_path}" for script_path in script_paths])
 
-experiment_name = args.experiment_name
-if experiment_name: experiment_name = f"_{experiment_name}"
-with open(f"{root_dir}/run_exps/auto/run_all{experiment_name}.sh", "w") as f:
+exp_name = args.exp_name
+if exp_name: exp_name = f"_{exp_name}"
+with open(f"{root_dir}/run_exps/auto/run_all{exp_name}.sh", "w") as f:
     f.write(run_all_scripts)

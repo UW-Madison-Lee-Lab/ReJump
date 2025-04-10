@@ -821,12 +821,11 @@ def extract_text_file_content(example: Dict[str, Any]) -> str:
     return ""
 
 
-@hydra.main(config_path=f"configs", config_name="config_vanilla", version_base=None)
+@hydra.main(config_path=None, config_name=None, version_base=None)
 def main(cfg: DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
     template_type = cfg.template_type
     
-    pdb.set_trace()
     shot = 0
     for icl_config in cfg.icl_examples:
         shot += 1

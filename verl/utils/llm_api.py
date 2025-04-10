@@ -228,6 +228,7 @@ class LLMAPI:
                 time.sleep(timeout)
                 
             except Exception as e:
+                print(type(e))
                 pdb.set_trace()
                 
             print(f"Failed to generate response after {attempt} attempts, max_retries: {max_retries}")
