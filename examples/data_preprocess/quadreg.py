@@ -39,12 +39,12 @@ def gen_dataset(
     else:
         if n_features != 2: raise ValueError(f"n_features must be 2 for default coefficients, got {n_features}")
         # default coefficients for 2D case
-        linear_coef = np.array([2.0, -1.5])
-        quad_coef = np.array([1.0, 0.5])
-        intercept = 1.0
+        linear_coef = np.zeros(2)
+        quad_coef = np.ones(2) 
+        intercept = -1
     
     # Generate random feature matrix
-    X = np.random.randn(num_samples, n_features)
+    X = np.random.uniform(-1, 1, (num_samples, n_features))
     
     # Generate target values using quadratic model: y = linear_terms + quadratic_terms + intercept
     y = np.dot(X, linear_coef) + np.sum(quad_coef * X**2, axis=1) + intercept

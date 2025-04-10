@@ -333,8 +333,8 @@ def main(config):
         
         if config.trainer.wandb:
             wandb.log({
-                f'mse': mse,
-                f'r2': r2,
+                f'mse@{k}': mse,
+                f'r2@{k}': r2,
             })
     else:
         # eval
