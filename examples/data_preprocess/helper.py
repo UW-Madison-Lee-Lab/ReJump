@@ -235,7 +235,7 @@ def make_regression_prefix(
         prefix = f"""
         A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
 
-        User: The dataset has {len(features)} features and 1 target attribute. {in_context_examples} Given the data point with features {format_features(features)}, predict the target value. Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer>42.535</answer>.
+        User: The dataset has {len(features)} features and 1 target attribute. {in_context_examples} Given the data point with features {format_features(features)}, predict the target value. Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer>0.535</answer>.
         Assistant: Let me solve this step by step.
         <think>
         """
@@ -243,7 +243,7 @@ def make_regression_prefix(
         """This works for Qwen Instruct Models"""
         prefix = f"""
         <|im_start|>system\nYou are a helpful assistant. You first think about the reasoning process in your mind and then provide the user with the answer.<|im_end|>\n
-        <|im_start|>user\n The dataset has {len(features)} features and 1 target attribute. {in_context_examples} Given the data point with features {format_features(features)}, predict the target value. Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer>42.535</answer>.<|im_end|>\n<|im_start|>assistant\nLet me solve this step by step.\n<think>
+        <|im_start|>user\n The dataset has {len(features)} features and 1 target attribute. {in_context_examples} Given the data point with features {format_features(features)}, predict the target value. Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer>0.535</answer>.<|im_end|>\n<|im_start|>assistant\nLet me solve this step by step.\n<think>
         """
     elif template_type == 'qwen-instruct_no_reasoning':
         """This does not allow any reasoning"""
@@ -252,7 +252,7 @@ def make_regression_prefix(
         You are a helpful assistant. You always provide the user directly with the answer without any reasoning.
         <|im_end|>
         <|im_start|>user
-        The dataset has {len(features)} features and 1 target attribute. {in_context_examples} Given the data point with features {format_features(features)}, predict the target value. Your response should be in <answer> </answer> tags without any other text, for example <answer>42.535</answer>.
+        The dataset has {len(features)} features and 1 target attribute. {in_context_examples} Given the data point with features {format_features(features)}, predict the target value. Your response should be in <answer> </answer> tags without any other text, for example <answer>0.535</answer>.
         <|im_end|>
         <|im_start|>assistant
         <answer>
@@ -262,7 +262,7 @@ def make_regression_prefix(
         prefix = f"""
         A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
 
-        User: The dataset has {len(features)} features and 1 target attribute. {in_context_examples} Given the data point with features {format_features(features)}, predict the target value. Your response should be in <answer> </answer> tags without any other text, for example <answer>42.535</answer>.
+        User: The dataset has {len(features)} features and 1 target attribute. {in_context_examples} Given the data point with features {format_features(features)}, predict the target value. Your response should be in <answer> </answer> tags without any other text, for example <answer>0.535</answer>.
         Assistant: 
         """
         
@@ -281,7 +281,7 @@ def make_regression_prefix(
     elif template_type == "standard_api":
         prefix = f"""
         The dataset has {len(features)} features and 1 target attribute. {in_context_examples} Given the data point with features {format_features(features)}, predict the target value.  
-        Let's think step by step. Please provide your thinking process in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer>42.535</answer>. Note that your final answer should be just the target value, without any other text or punctuation.
+        Let's think step by step. Please provide your thinking process in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer>0.535</answer>. Note that your final answer should be just the target value, without any other text or punctuation.
         """
     else:
         raise ValueError(f"Invalid template type: {template_type}")

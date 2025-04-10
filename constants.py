@@ -373,5 +373,19 @@ supported_datasets = {
         "feature_noise": 0.1,
         "label_noise": 0.0,
         "type": "regression",
+    },
+    "quadreg": {
+        "num_classes": None,
+        "num_features": 2,
+        "feature_noise": 0.1,
+        "label_noise": 0.0,
+        "type": "regression",
+    },
+    "expreg": {
+        "num_classes": None,
+        "num_features": 2,
+        "feature_noise": 0.1,
+        "label_noise": 0.0,
+        "type": "regression",
     }
 }

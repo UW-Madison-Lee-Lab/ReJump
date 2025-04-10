@@ -1,5 +1,5 @@
 """
-Preprocess dataset for linear regression task - a synthetic regression task with n-dimensional data points
+Preprocess dataset for exponential regression task - a synthetic regression task with n-dimensional data points
 """
 
 import numpy as np
@@ -17,7 +17,7 @@ def gen_dataset(
     label_noise: float = 0.0,
     random: bool = False,
 ) -> List[Tuple]:
-    """Generate synthetic regression dataset.
+    """Generate synthetic exponential regression dataset.
     
     Args:
         num_samples: Number of samples to generate
@@ -34,18 +34,19 @@ def gen_dataset(
     if random:
         # Generate random coefficients between -2 and 2
         coef = np.random.uniform(-2, 2, n_features)
-        intercept = np.random.uniform(-2, 2)
+        p = n_features
     else:
         if n_features != 2: raise ValueError(f"n_features must be 2 for default coefficients, got {n_features}")
         # default coefficients for 2D case
-        coef = np.array([2.0, -1.5])
-        intercept = 1.0
+        coef = np.array([1.0, 1.0])
+        p = n_features
     
     # Generate random feature matrix
     X = np.random.randn(num_samples, n_features)
     
-    # Generate target values using linear combination of features plus intercept
-    y = np.dot(X, coef) + intercept
+    # Generate target values using exponential model: y = sum(e^(0.2*x_i))/p
+    # With coefficients: y = sum(coef_i * e^(0.2*x_i))/p
+    y = np.sum(coef * np.exp(0.2 * X), axis=1) / p
     
     # Add noise to features if specified
     if feature_noise > 0:
@@ -80,7 +81,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     set_seed(42)
     
-    data_source = 'linreg'
+    data_source = 'expreg'
     n_classes = None  # Not applicable for regression
     
     datasets = prepare_dataset(args, gen_dataset)
@@ -95,4 +96,3 @@ if __name__ == '__main__':
         datasets['TEST_SIZE'],
         data_mode=args.data_mode
     )
-
