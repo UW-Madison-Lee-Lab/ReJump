@@ -17,9 +17,11 @@ def prepare_dataset(args, gen_dataset):
         TRAIN_SIZE = args.num_samples - TEST_SIZE
         
         # Generate synthetic dataset
-        samples = gen_dataset(
-            num_samples=args.num_samples,
-            feature_noise=args.feature_noise,
+
+        raw_samples = gen_dataset(
+            num_samples=args.num_samples, #int(args.num_samples*args.n_query)
+            noise_level=args.noise_level,
+
             random = False,
             seed_value=12
         )
@@ -31,6 +33,16 @@ def prepare_dataset(args, gen_dataset):
             random = False,
             seed_value=34
         )
+
+        samples = []
+        for i in range(args.num_samples):
+            random_indices = np.random.choice(args.num_samples, args.n_query, replace= args.n_query>args.num_samples)
+            batchs = []
+            for j in random_indices:
+                batchs.append(raw_samples[j])
+            samples.append(batchs)
+        ##samples = [raw_samples[i:i+args.n_query] for i in range(0, len(samples), args.n_query)] if we don't want repeated test samples
+
     elif args.data_mode == "grid":
         samples = gen_grid_dataset(grid_size = int(args.num_samples ** 0.5))
         TEST_SIZE = len(samples)
@@ -60,10 +72,9 @@ def prepare_dataset(args, gen_dataset):
         raise ValueError(f"Invalid data mode: {args.data_mode}")
     
     dataset_dict = {
-        'features': [sample[0] for sample in samples],
-        'label': [sample[1] for sample in samples]
+        'features': [[sample_tuple[0] for sample_tuple in batch] for batch in samples],
+        'label': [[sample_tuple[1] for sample_tuple in batch] for batch in samples]
     }
-    
     if args.data_mode == "mixed":
         in_context_dataset_dict = in_context_samples
     else:
@@ -122,9 +133,11 @@ def make_classification_prefix(
     template_type, 
     n_classes, 
     n_shot=0, 
+    n_query=1,
     in_context_dataset=None, 
     customized_prompt=None,
 ):
+
     features = dp['features']
     label = dp['label']
     
@@ -144,12 +157,23 @@ def make_classification_prefix(
             in_context_examples += f"Features: {format_features(example_features)}, Label: {example_label}\n"
             in_context_samples.append({"features": example_features, "label": example_label})
     
+    if n_query > 1:
+        query = f"Given the following data points:\n"
+        for i in range(n_query):
+            query += f"{i+1}. Features: {format_features(features[i])}\n"
+        query += f"Classify each of them into one of the possible classes. "
+
+    else:
+        query = f"Given the data point with features {format_features(features [0])}, classify it into one of the possible classes. "
+
+    answer_example_number = np.random.choice(range(n_classes), n_query, replace=True)
+    answer_example = f"<answer>{', '.join([str(x) for x in answer_example_number])}</answer>"
     if template_type == 'base':
         """This works for any base model"""
         prefix = f"""
         A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
 
-        User: The dataset has {len(features)} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer>1</answer>.
+        User: The dataset has {len(features)} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} {query} Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example {answer_example}.
         Assistant: Let me solve this step by step.
         <think>
         """
@@ -157,32 +181,23 @@ def make_classification_prefix(
         """This works for Qwen Instruct Models"""
         prefix = f"""
         <|im_start|>system\nYou are a helpful assistant. You first think about the reasoning process in your mind and then provide the user with the answer.<|im_end|>\n
-        <|im_start|>user\n The dataset has {len(features)} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer>1</answer>.<|im_end|>\n<|im_start|>assistant\nLet me solve this step by step.\n<think>
-        """
-    elif template_type == 'qwen-instruct_no_reasoning':
-        """This does not allow any reasoning"""
-        prefix = f"""
-        <|im_start|>system
-        You are a helpful assistant. You always provide the user directly with the answer without any reasoning.
-        <|im_end|>
-        <|im_start|>user
-        The dataset has {len(features)} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. Your response should be in <answer> </answer> tags without any other text, for example <answer>1</answer>.
-        <|im_end|>
-        <|im_start|>assistant
-        <answer>
+        <|im_start|>user\n The dataset has {len(features)} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} {query} Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example {answer_example}.<|im_end|>\n<|im_start|>assistant\nLet me solve this step by step.\n<think>
         """
     elif template_type == 'base_no_reasoning':
         """This works for any base model"""
         prefix = f"""
         A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
 
-        User: The dataset has {len(features)} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. Your response should be in <answer> </answer> tags without any other text, for example <answer>1</answer>.
+        User: The dataset has {len(features)} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} {query} Your response should be in <answer> </answer> tags without any other text, for example <answer>1</answer>.
         Assistant: 
         """
-        
     elif template_type == 'reasoning_api':
         prefix = f"""
-        The dataset has {len(features)} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. Your answer should be just the class label, without any other text or punctuation.
+        The dataset has {len(features)} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} {query} Your answer should be just the class label, without any other text or punctuation.
+        """
+    elif template_type == "reasoning_api_customized":
+        prefix = f"""
+        The dataset has {len(features)} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} {query} {customized_prompt}Your answer should be just the class label, without any other text or punctuation.
         """
     elif template_type == "reasoning_api_customized":
         prefix = f"""
@@ -190,17 +205,18 @@ def make_classification_prefix(
         """
     elif template_type == "standard_api_no_reasoning":
         prefix = f"""
-        The dataset has {len(features)} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. Your answer should be just the class label, without any other text or punctuation.
+        The dataset has {len(features)} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} {query} Your answer should be just the class label, without any other text or punctuation.
         """
     elif template_type == "standard_api":
         prefix = f"""
-        The dataset has {len(features)} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes.  
+        The dataset has {len(features)} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} {query}
         Let's think step by step. Please provide your thinking process in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer>1</answer>. Note that your final answer should be just the class label, without any other text or punctuation.
         """
     else:
         raise ValueError(f"Invalid template type: {template_type}")
     
     return prefix, in_context_samples
+
 
 
 def make_regression_prefix(
@@ -329,13 +345,14 @@ def make_map_fn(split, args, n_classes, in_context_dataset, data_source, data_mo
                 "features": [in_context_dataset[split][idx][i][0] for i in range(len(in_context_dataset[split][idx]))],
                 "label": [in_context_dataset[split][idx][i][1] for i in range(len(in_context_dataset[split][idx]))]
             })
-        
         question, in_context_samples = make_prefix(
             example, 
             template_type=args.template_type, 
             n_classes=n_classes, 
             task_type = supported_datasets[data_source]['type'],
             n_shot=args.n_shot, 
+
+            n_query=args.n_query,
             in_context_dataset=in_context_dataset_,
             customized_prompt=customized_prompt
         )
