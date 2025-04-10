@@ -1,27 +1,6 @@
-from verl.utils.reward_score import gsm8k, math, multiply, countdown
 from verl import DataProto
 import torch, re
-from constants import supported_datasets
-from examples.data_preprocess.helper import classification_reward_fn, regression_reward_fn
-
-def _select_rm_score_fn(data_source):
-    if data_source == 'openai/gsm8k':
-        return gsm8k.compute_score
-    elif data_source == 'lighteval/MATH':
-        return math.compute_score
-    elif "multiply" in data_source or "arithmetic" in data_source:
-        return multiply.compute_score
-    elif "countdown" in data_source:
-        return countdown.compute_score
-    elif data_source in supported_datasets:
-        task_type = supported_datasets[data_source]['type']
-        if task_type == 'classification':
-            return classification_reward_fn
-        elif task_type == 'regression':
-            return regression_reward_fn
-    else:
-        raise NotImplementedError
-
+from examples.data_preprocess.helper import _select_rm_score_fn
 
 
 class RewardManager():
