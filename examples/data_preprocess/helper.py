@@ -193,7 +193,7 @@ def make_classification_prefix(
         """
     elif template_type == 'reasoning_api':
         prefix = f"""
-        The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} {query} Your answer should be just the class label, without any other text or punctuation.
+        The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} {query} Your answer should be just the class label, without any other text or punctuation. And return the final answer in <answer> </answer> tags, for example {answer_example}
         """
     elif template_type == "reasoning_api_customized":
         prefix = f"""
@@ -524,41 +524,41 @@ def store_data(
             
 
 def classification_reward_fn(solution_str, ground_truth):
-    # Direct pattern to extract from cases like <answer>0</answer></answer>
-    # Try a direct match first for the most common patterns
-    direct_match = re.search(r'<answer>(\d+)</answer>', solution_str)
+
+    direct_match = re.search(r'<answer>(.*?)</answer>', solution_str, re.DOTALL)
     if direct_match:
-        response_class = int(direct_match.group(1).strip())
-        return response_class == ground_truth['label']
-    
-    # If direct match fails, try cleaning up malformed tags
-    # Handle escaped slashes and remove extra closing tags
+        answer_content = direct_match.group(1).strip()
+        try:
+            answers = [int(val.strip()) for val in answer_content.split(',') if val.strip().isdigit()]
+        except ValueError:
+            answers = []
+        if answers:
+            return answers == ground_truth['label']
+
     cleaned_solution_str = solution_str
     cleaned_solution_str = re.sub(r'<\\/answer>', '</answer>', cleaned_solution_str)
     cleaned_solution_str = re.sub(r'</answer>(\s*</answer>)+', '</answer>', cleaned_solution_str)
     
-    # Try again with the cleaned string
-    clean_match = re.search(r'<answer>(\d+)</answer>', cleaned_solution_str)
+    clean_match = re.search(r'<answer>(.*?)</answer>', cleaned_solution_str, re.DOTALL)
     if clean_match:
-        response_class = int(clean_match.group(1).strip())
-        return response_class == ground_truth['label']
+        answer_content = clean_match.group(1).strip()
+        try:
+            answers = [int(val.strip()) for val in answer_content.split(',') if val.strip().isdigit()]
+        except ValueError:
+            answers = []
+        if answers:
+            return answers == ground_truth['label']
     
-    # Use a more lenient pattern for other cases
-    # This handles partial or malformed tags
-    lenient_match = re.search(r'<answer[^>]*>(\d+)[^<]*(?:</answer>|<\\/answer>|<?/?answer>)', cleaned_solution_str)
-    if lenient_match:
-        response_class = int(lenient_match.group(1).strip())
-        return response_class == ground_truth['label']
+    lenient_matches = re.findall(r'<answer[^>]*>(\d+)', cleaned_solution_str)
+    if lenient_matches:
+        try:
+            answers = [int(val.strip()) for val in lenient_matches if val.strip().isdigit()]
+        except ValueError:
+            answers = []
+        if answers:
+            return answers == ground_truth['label']
     
-    # Last resort - just look for digits between any answer-like tags
-    fallback_matches = re.findall(r'<answer.*?>(\d+).*?(?:</answer>|<\\/answer>|answer>)', solution_str, re.DOTALL)
-    if fallback_matches:
-        for answer in fallback_matches[::-1]:
-            if answer.strip().isdigit():
-                response_class = int(answer.strip())
-                return response_class == ground_truth['label']
-    
-    return 0
+    return False
 
 def regression_reward_fn(solution_str, ground_truth):
     def criterion(y_pred, y_true):
