@@ -16,11 +16,12 @@ Generate responses given a dataset of prompts
 """
 import ray
 import numpy as np
+from sklearn.metrics import r2_score
 import pdb
 import hydra
 import os
 import time
-
+import re
 from datetime import datetime
 
 
@@ -310,17 +311,30 @@ def main(config):
     if supported_datasets[config_dict['dataset_name']]['type'] == 'regression':
         sum_square_error = 0
         
+        y_pred, y_true = [], []
         k = None
         for i in range(total_samples):
             if k is None: k = len(reward_tensor_lst[i])
-            sum_square_error += np.min(reward_tensor_lst[i])
+            best_i = np.argmax(reward_tensor_lst[i])
+            sum_square_error += reward_tensor_lst[i][best_i]
+            # Check if the answer can be converted to float without using try/except
+            answer = dataset["answers"][i][best_i]
+            # Check if string represents a valid float (handles digits, decimal point, and signs)
+            try:
+                y_pred.append(float(answer))
+            except ValueError:
+                y_pred.append(0)
+            y_true.append(dataset["label"][i])
         
         mse = sum_square_error / total_samples
+        r2 = r2_score(np.array(y_true), np.array(y_pred))
         print(f'mse@{k}: {mse}')
+        print(f'r2@{k}: {r2}')
         
         if config.trainer.wandb:
             wandb.log({
-                f'mse': mse,
+                f'mse@{k}': mse,
+                f'r2@{k}': r2,
             })
     else:
         # eval

@@ -14,7 +14,14 @@ def gen_dataset(
     data_mode="default",
 ):
     if "ricl" in template_type:
-        example_datasets = ["moons", "linear", "blobs", "circles"]
+        datasets = {"regression": [], "classification": []}
+        for dataset in supported_datasets:
+            datasets[supported_datasets[dataset]["type"]].append(dataset)
+            
+        for dataset_type in datasets:
+            datasets[dataset_type].sort(key=lambda x: supported_datasets[x]["difficulty"], reverse=True)
+            
+        example_datasets = datasets[supported_datasets[dataset_name]["type"]]
         example_datasets.remove(dataset_name)
         ricl_shot = int(re.match(r".*?ricl_(\d+)", template_type).group(1))
         example_datasets = example_datasets[:ricl_shot]
@@ -22,39 +29,39 @@ def gen_dataset(
         icl_examples = []
         for i, example_dataset in enumerate(example_datasets):
             icl_example_prompt = f"""
-    ++icl_examples.{i}.dataset_name={example_dataset} \
-    ++icl_examples.{i}.label_noise={label_noise} \
-    ++icl_examples.{i}.feature_noise={supported_datasets[example_dataset]["feature_noise"]} \
-    ++icl_examples.{i}.shot=50 \
-    ++icl_examples.{i}.response_length=3046 \
-    ++icl_examples.{i}.num_samples=500 \
-    ++icl_examples.{i}.num_examples=1 \
-    ++icl_examples.{i}.train_step=0 \
-    ++icl_examples.{i}.data_mode={data_mode}
+    "+icl_examples.{i}.dataset_name={example_dataset}" \
+    "+icl_examples.{i}.label_noise={label_noise}" \
+    "+icl_examples.{i}.feature_noise={supported_datasets[example_dataset]['feature_noise']}" \
+    "+icl_examples.{i}.shot=50" \
+    "+icl_examples.{i}.response_length=3046" \
+    "+icl_examples.{i}.num_samples=500" \
+    "+icl_examples.{i}.num_examples=1" \
+    "+icl_examples.{i}.train_step=0" \
+    "+icl_examples.{i}.data_mode={data_mode}"
         """
             icl_examples.append(icl_example_prompt)
             
         icl_examples_prompt = ''.join(icl_examples).replace('\n', '')
         command = f"""
-python {root_dir}/icl_reasoning/icl_reasoning.py \
-    mode=reasoning \
-    template_type={template_type} \
-    tokenizer_name=Qwen/Qwen2.5-3B-Instruct \
-    icl_example_seed=42 \
-    test_data_seed=42 \
-    train_step=0 \
-    data_mode=default \
-    icl_example_maxlength=6000 \
-    test_data.dataset_name={dataset_name} \
-    test_data.label_noise={label_noise} \
-    test_data.feature_noise={feature_noise} \
-    test_data.num_samples={num_samples} \
-    test_data_examples.dataset_name={dataset_name} \
-    test_data_examples.label_noise={label_noise} \
-    test_data_examples.feature_noise={feature_noise} \
-    test_data_examples.shot={shot} \
-    +icl_examples=[] \
-    {icl_examples_prompt}
+python -m icl_reasoning.icl_reasoning \
+    "+icl_examples=[]" \
+    {icl_examples_prompt} \
+    "+mode=reasoning" \
+    "+template_type={template_type}" \
+    "+tokenizer_name=Qwen/Qwen2.5-3B-Instruct" \
+    "+icl_example_seed=42" \
+    "+test_data_seed=42" \
+    "+train_step=0" \
+    "+data_mode=default" \
+    "+icl_example_maxlength=10000" \
+    "+test_data.dataset_name={dataset_name}" \
+    "+test_data.label_noise={label_noise}" \
+    "+test_data.feature_noise={feature_noise}" \
+    "+test_data.num_samples={num_samples}" \
+    "+test_data_examples.dataset_name={dataset_name}" \
+    "+test_data_examples.label_noise={label_noise}" \
+    "+test_data_examples.feature_noise={feature_noise}" \
+    "+test_data_examples.shot={shot}"
         """
     else:
         if dataset_name == "blobs":

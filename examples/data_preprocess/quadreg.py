@@ -1,5 +1,5 @@
 """
-Preprocess dataset for linear regression task - a synthetic regression task with n-dimensional data points
+Preprocess dataset for quadratic regression task - a synthetic regression task with n-dimensional data points
 """
 
 import numpy as np
@@ -17,7 +17,7 @@ def gen_dataset(
     label_noise: float = 0.0,
     random: bool = False,
 ) -> List[Tuple]:
-    """Generate synthetic regression dataset.
+    """Generate synthetic quadratic regression dataset.
     
     Args:
         num_samples: Number of samples to generate
@@ -33,19 +33,21 @@ def gen_dataset(
     
     if random:
         # Generate random coefficients between -2 and 2
-        coef = np.random.uniform(-2, 2, n_features)
+        linear_coef = np.random.uniform(-2, 2, n_features)
+        quad_coef = np.random.uniform(-2, 2, n_features)
         intercept = np.random.uniform(-2, 2)
     else:
         if n_features != 2: raise ValueError(f"n_features must be 2 for default coefficients, got {n_features}")
         # default coefficients for 2D case
-        coef = np.ones(2)/2
-        intercept = 0.0
+        linear_coef = np.zeros(2)
+        quad_coef = np.ones(2) 
+        intercept = -1
     
     # Generate random feature matrix
     X = np.random.uniform(-1, 1, (num_samples, n_features))
     
-    # Generate target values using linear combination of features plus intercept
-    y = np.dot(X, coef) + intercept
+    # Generate target values using quadratic model: y = linear_terms + quadratic_terms + intercept
+    y = np.dot(X, linear_coef) + np.sum(quad_coef * X**2, axis=1) + intercept
     
     # Add noise to features if specified
     if feature_noise > 0:
@@ -73,7 +75,6 @@ if __name__ == '__main__':
     parser.add_argument('--feature_noise', type=float, default=1.0)
     parser.add_argument('--test_ratio', type=float, default=0.2)
     parser.add_argument('--n_shot', type=int, default=10)
-    parser.add_argument('--n_query', type=int, default=10)
     parser.add_argument('--template_type', type=str, default='base')
     parser.add_argument('--n_features', type=int, default=2)
     parser.add_argument('--data_mode', type=str, default="default", choices=["default", "grid", "mixed"])
@@ -81,7 +82,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     set_seed(42)
     
-    data_source = 'linreg'
+    data_source = 'quadreg'
     n_classes = None  # Not applicable for regression
     
     datasets = prepare_dataset(args, gen_dataset)
