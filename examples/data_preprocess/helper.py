@@ -17,16 +17,15 @@ def prepare_dataset(args, gen_dataset):
         TRAIN_SIZE = args.num_samples - TEST_SIZE
         
         # Generate synthetic dataset
-
         raw_samples = gen_dataset(
-            num_samples=args.num_samples, #int(args.num_samples*args.n_query)
+            num_samples=args.num_samples*args.n_query,
             feature_noise=args.feature_noise,
             random = False,
             seed_value=12
         )
         
         in_context_samples = gen_dataset(
-            num_samples=args.num_samples,
+            num_samples=args.num_samples*args.n_shot,
             feature_noise=args.feature_noise,
             label_noise=args.label_noise,
             random = False,
@@ -35,11 +34,12 @@ def prepare_dataset(args, gen_dataset):
 
         samples = []
         for i in range(args.num_samples):
-            random_indices = np.random.choice(args.num_samples, args.n_query, replace= args.n_query>args.num_samples)
+            random_indices = np.random.choice(args.num_samples*args.n_query, args.n_query, replace= args.n_query>=args.num_samples)
             batchs = []
             for j in random_indices:
                 batchs.append(raw_samples[j])
             samples.append(batchs)
+
         ##samples = [raw_samples[i:i+args.n_query] for i in range(0, len(samples), args.n_query)] if we don't want repeated test samples
 
     elif args.data_mode == "grid":
@@ -138,13 +138,12 @@ def make_classification_prefix(
 ):
     features = dp['features']
     label = dp['label']
-    
+
     # Add in-context examples if requested
     in_context_examples, in_context_samples = "", []
     if n_shot > 0 and in_context_dataset is not None:
         in_context_examples = "We first provide you with some examples of how to classify data points.\n"
         random_indices = np.random.choice(len(in_context_dataset), n_shot, replace= len(in_context_dataset) < n_shot)
-        
         for i in random_indices:
             example = in_context_dataset[i.item()]
             example_features = example['features']
@@ -224,6 +223,7 @@ def make_regression_prefix(
 ):
     features = dp['features']
     label = dp['label']
+
     
     # Add in-context examples if requested
     in_context_examples, in_context_samples = "", []
@@ -352,6 +352,7 @@ def make_map_fn(split, args, n_classes, in_context_dataset, data_source, data_mo
     def process_fn(example, idx):
         if data_mode in ["grid", "default"]:
             in_context_dataset_ = in_context_dataset[split]
+            print("in_context_dataset_", in_context_dataset)
         else:
             in_context_dataset_ = Dataset.from_dict({
                 "features": [in_context_dataset[split][idx][i][0] for i in range(len(in_context_dataset[split][idx]))],
@@ -405,7 +406,8 @@ def save_data(
     raw_dataset = Dataset.from_dict(dataset_dict)
     
     
-    assert len(raw_dataset) >= TRAIN_SIZE + TEST_SIZE
+    #assert len(raw_dataset) >= TRAIN_SIZE + TEST_SIZE
+
     # Create non-overlapping train and test sets
     all_indices = np.arange(len(raw_dataset))
     train_indices = np.random.choice(all_indices, TRAIN_SIZE, replace=False)
@@ -415,15 +417,20 @@ def save_data(
     
     train_dataset = raw_dataset.select(train_indices)
     test_dataset = raw_dataset.select(test_indices)
-    
 
+    all_indices = np.arange(args.num_samples*args.n_shot)
+    train_indices = np.random.choice(all_indices, int((1-args.test_ratio)*args.num_samples*args.n_shot), replace=False)
+    remaining_indices = np.setdiff1d(all_indices, train_indices)
+    test_indices = np.random.choice(remaining_indices, int(args.test_ratio*args.num_samples*args.n_shot), replace=False)
     
     if data_mode == "default":
         raw_in_context_dataset = Dataset.from_dict(in_context_dataset_dict)
+        print("raw_in_context_dataset", raw_in_context_dataset)
         in_context_dataset = {
             "train": raw_in_context_dataset.select(train_indices),
             "test": raw_in_context_dataset.select(test_indices)
         }
+        print("in_context_dataset", in_context_dataset)
     elif data_mode == "grid":
         raw_in_context_dataset = Dataset.from_dict(in_context_dataset_dict)
         in_context_dataset = {
@@ -453,6 +460,7 @@ def save_data(
                 print("Please enter a valid prompt")
     else:
         customized_prompt = None
+    print(in_context_dataset)
 
     train_dataset = train_dataset.map(function=make_map_fn(
         split='train', 
@@ -525,7 +533,7 @@ def store_data(
 
 def classification_reward_fn(solution_str, ground_truth):
 
-    direct_match = re.search(r'<answer>(.*?)</answer>', solution_str, re.DOTALL)
+    direct_match = re.search(r'<answer><answer>(.*?)</answer></answer>', solution_str, re.DOTALL)
     if direct_match:
         answer_content = direct_match.group(1).strip()
         try:
@@ -533,7 +541,11 @@ def classification_reward_fn(solution_str, ground_truth):
         except ValueError:
             answers = []
         if answers:
-            return answers == ground_truth['label']
+            gt_labels = ground_truth['label'] if isinstance(ground_truth['label'], list) else list(ground_truth['label'])
+            print("answers", gt_labels)
+            if len(answers) != len(gt_labels):
+                return False
+            return answers == gt_labels
 
     cleaned_solution_str = solution_str
     cleaned_solution_str = re.sub(r'<\\/answer>', '</answer>', cleaned_solution_str)
@@ -547,7 +559,10 @@ def classification_reward_fn(solution_str, ground_truth):
         except ValueError:
             answers = []
         if answers:
-            return answers == ground_truth['label']
+            gt_labels = ground_truth['label'] if isinstance(ground_truth['label'], list) else list(ground_truth['label'])
+            if len(answers) != len(gt_labels):
+                return False
+            return answers == gt_labels
     
     lenient_matches = re.findall(r'<answer[^>]*>(\d+)', cleaned_solution_str)
     if lenient_matches:
@@ -556,7 +571,10 @@ def classification_reward_fn(solution_str, ground_truth):
         except ValueError:
             answers = []
         if answers:
-            return answers == ground_truth['label']
+            gt_labels = ground_truth['label'] if isinstance(ground_truth['label'], list) else list(ground_truth['label'])
+            if len(answers) != len(gt_labels):
+                return False
+            return answers == gt_labels
     
     return False
 
