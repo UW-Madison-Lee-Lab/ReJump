@@ -29,6 +29,7 @@ validation_original_text: (string) Exact original text where the rule was tested
 
 Output Format Example:
 
+```json
 [
   {
     "order": 0,
@@ -68,6 +69,7 @@ Remember:
 - Be FAITHFUL to original rules.
 - Extract PARAMETERS explicitly.
 - Function name must ALWAYS be: def model(x, y, data)
+```
 
 ---
 

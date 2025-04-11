@@ -120,3 +120,5 @@ environment.py
 
 
 analyze_deepseek/
+
+reasoning_analysis/deepseek-r1-cosreg_claude_analysis.parquet
