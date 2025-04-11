@@ -327,7 +327,11 @@ def main(config):
             y_true.append(dataset["label"][i])
         
         mse = sum_square_error / total_samples
-        r2 = r2_score(np.array(y_true), np.array(y_pred))
+        print(f'y_pred: {y_pred}')
+        try:
+            r2 = r2_score(np.array(y_true), np.array(y_pred))
+        except ValueError:
+            r2 = 0
         print(f'mse@{k}: {mse}')
         print(f'r2@{k}: {r2}')
         

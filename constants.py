@@ -418,5 +418,15 @@ supported_datasets = {
         "label_noise": 0.0,
         "type": "regression",
         "difficulty": 2,
-    }
+    },
+    "regression": {
+        "num_classes": None,
+        "num_features": 2,
+        "feature_noise": 0.1,
+        "label_noise": 0.0,
+        "type": "regression",
+        "difficulty": 2,
+    },
+    "classification": {
+    },
 }
