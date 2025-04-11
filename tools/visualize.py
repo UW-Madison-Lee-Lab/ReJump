@@ -168,6 +168,7 @@ def get_prediction_result(response_text: Optional[str], ground_truth, task_type:
             response_extract = None
             for match in all_matches[::-1]:  # Check from last to first
                 match_content = match.group(1).strip()
+
                 # Match comma-separated integers or floats
                 if ',' in match_content:
                     try:
@@ -179,6 +180,7 @@ def get_prediction_result(response_text: Optional[str], ground_truth, task_type:
                             return prediction, metric
                         except ValueError:
                             continue
+
                 # Match integers and floats (including negative numbers)
                 if re.match(r'^-?\d+(\.\d+)?$', match_content):
                     response_extract = match
@@ -474,9 +476,11 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
         if metric != -10000:
             full_correct_predictions += metric
             full_refined_correct += metric
+
         if can_parse_prediction: parseable_correct += metric
         if can_parse_prediction: parseable_predictions += 1
         if not can_parse_prediction and ground_truth is not None and 'label' in ground_truth and task_type == "classification":
+
             # For samples with unparseable predictions, calculate refined accuracy
             unparseable_predictions += 1
             
