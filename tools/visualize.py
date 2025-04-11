@@ -1112,7 +1112,9 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
                     result_class = "correct" if metric else "incorrect"
                     html_content.append(f'<div class="{result_class}">Predicted: {prediction} ({("CORRECT" if metric else "INCORRECT")})</div>')
                 else:
-                    html_content.append(f'<div class="correct">Predicted: {prediction}</div>')
+                    result_class = "correct" if -metric < 0.001 else "incorrect"
+                    html_content.append(f'<div class="{result_class}">Predicted: {prediction}</div>')
+                    html_content.append(f'<div style="margin-top: 5px;">Squared Error: {-metric:.6f}</div>')                    
             else:
                 html_content.append(f'<div class="incorrect">Unable to parse prediction</div>')
             
