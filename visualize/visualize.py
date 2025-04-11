@@ -469,19 +469,19 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "html",
             sample_data = add_sample_data_fields(sample_data, row)
             
             # Extract model evaluation table data if available
-            if 'claude_analysis_extracted_json' in row and row['claude_analysis_extracted_json'] is not None and ground_truth is not None and 'in_context_samples' in ground_truth:
+            if 'llm_analysis_extracted_json' in row and row['llm_analysis_extracted_json'] is not None and ground_truth is not None and 'in_context_samples' in ground_truth:
                 try:
-                    claude_json = row['claude_analysis_extracted_json']
+                    llm_json = row['llm_analysis_extracted_json']
                     # Extract model functions and evaluate
-                    model_results = extract_and_execute_model_functions(claude_json, ground_truth)
+                    model_results = extract_and_execute_model_functions(llm_json, ground_truth)
                     
                     # Parse the JSON to get the original models data
                     models_data = []
                     try:
-                        if isinstance(claude_json, str):
-                            models_data = json.loads(claude_json)
+                        if isinstance(llm_json, str):
+                            models_data = json.loads(llm_json)
                         else:
-                            models_data = claude_json
+                            models_data = llm_json
                         if not isinstance(models_data, list):
                             models_data = []
                     except Exception:
@@ -1062,43 +1062,43 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "html",
             html_content.append(f'</div>')
             
             # Add Claude raw output section if available
-            if 'claude_analysis_raw_output' in row and row['claude_analysis_raw_output'] is not None:
+            if 'llm_analysis_raw_output' in row and row['llm_analysis_raw_output'] is not None:
                 html_content.append(f'<div class="section">')
                 html_content.append(f'<div class="section-title">Claude Analysis Raw Output</div>')
                 html_content.append(f'<details>')
                 html_content.append(f'<summary>Show Claude Analysis Raw Output</summary>')
-                claude_raw = row['claude_analysis_raw_output']
-                if not isinstance(claude_raw, str):
-                    claude_raw = str(claude_raw)
+                llm_raw = row['llm_analysis_raw_output']
+                if not isinstance(llm_raw, str):
+                    llm_raw = str(llm_raw)
                 # Escape HTML content
-                escaped_claude_raw = html.escape(claude_raw)
-                html_content.append(f'<div class="response" style="white-space: pre-wrap; font-family: monospace; max-height: 400px; overflow-y: auto;">{escaped_claude_raw}</div>')
+                escaped_llm_raw = html.escape(llm_raw)
+                html_content.append(f'<div class="response" style="white-space: pre-wrap; font-family: monospace; max-height: 400px; overflow-y: auto;">{escaped_llm_raw}</div>')
                 html_content.append(f'</details>')
                 html_content.append(f'</div>')
             
             # Add Claude extracted JSON section if available
-            if 'claude_analysis_extracted_json' in row and row['claude_analysis_extracted_json'] is not None:
+            if 'llm_analysis_extracted_json' in row and row['llm_analysis_extracted_json'] is not None:
                 html_content.append(f'<div class="section">')
                 html_content.append(f'<div class="section-title">Claude Analysis Extracted JSON</div>')
                 html_content.append(f'<details>')
                 html_content.append(f'<summary>Show Claude Analysis Extracted JSON</summary>')
-                claude_json = row['claude_analysis_extracted_json']
-                if isinstance(claude_json, str):
+                llm_json = row['llm_analysis_extracted_json']
+                if isinstance(llm_json, str):
                     try:
                         # Try to parse and prettify if it's a JSON string
-                        parsed_json = json.loads(claude_json)
+                        parsed_json = json.loads(llm_json)
                         pretty_json = json.dumps(parsed_json, indent=2)
-                        claude_json = pretty_json
+                        llm_json = pretty_json
                     except:
                         pass  # Keep as is if not valid JSON
-                elif isinstance(claude_json, (dict, list)):
+                elif isinstance(llm_json, (dict, list)):
                     # Convert to pretty JSON string if it's already a dict or list
-                    claude_json = json.dumps(claude_json, indent=2)
+                    llm_json = json.dumps(llm_json, indent=2)
                 else:
-                    claude_json = str(claude_json)
+                    llm_json = str(llm_json)
                 # Escape HTML content
-                escaped_claude_json = html.escape(claude_json)
-                html_content.append(f'<div class="response" style="white-space: pre-wrap; font-family: monospace; max-height: 400px; overflow-y: auto;">{escaped_claude_json}</div>')
+                escaped_llm_json = html.escape(llm_json)
+                html_content.append(f'<div class="response" style="white-space: pre-wrap; font-family: monospace; max-height: 400px; overflow-y: auto;">{escaped_llm_json}</div>')
                 html_content.append(f'</details>')
                 
                 # Add Model Function Evaluation section
@@ -1107,14 +1107,14 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "html",
                     html_content.append(f'<div class="section-title">Model Function Evaluation</div>')
                     
                     # Extract and evaluate model functions
-                    model_results = extract_and_execute_model_functions(claude_json, ground_truth)
+                    model_results = extract_and_execute_model_functions(llm_json, ground_truth)
                     
                     # Parse the JSON to get the original models data
                     try:
-                        if isinstance(claude_json, str):
-                            models_data = json.loads(claude_json)
+                        if isinstance(llm_json, str):
+                            models_data = json.loads(llm_json)
                         else:
-                            models_data = claude_json
+                            models_data = llm_json
                         if not isinstance(models_data, list):
                             models_data = []
                     except Exception:

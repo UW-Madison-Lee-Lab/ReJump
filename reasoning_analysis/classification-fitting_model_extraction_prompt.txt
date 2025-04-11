@@ -162,7 +162,7 @@ Each fitting model must include:
 ---
 
 ### ℹ️ Notes on `data` format:
-- `data` is always passed into the function as a list of `(xi, yi)` or `(xi, yi, label)` tuples
+- `data` is always passed into the function as a list of `(xi, yi, label)` tuples
 - Even if unused, the parameter must be present in the function signature
 
 ---

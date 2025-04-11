@@ -126,7 +126,7 @@ def process_file(
     input_file: str,
     output_file: str,
     instruction_file: str,
-    llm_type: str = "openai",
+    llm_type: str = "claude",
     temperature: float = 0.8,
     max_tokens: int = 40000,
     max_retries: int = 5,
@@ -158,7 +158,8 @@ def process_file(
     analyzer = ResponseAnalyzer(llm_type, temperature, max_tokens, max_retries)
     
     # Create new columns for analysis results
-    column_prefix = f"{llm_type}_analysis"
+    column_prefix = "llm_analysis"
+    df[f'{column_prefix}_llm_type'] = llm_type
     df[f'{column_prefix}_raw_output'] = None
     df[f'{column_prefix}_extracted_json'] = None
     
@@ -216,12 +217,13 @@ def parse_arguments():
                         help='Path to output parquet file (default: auto-generated)')
     
     parser.add_argument('--instruction', '-p', type=str, 
-                        default="/home/szhang967/liftr/reasoning_analysis/fitting_model_extraction_prompt.txt",
+                        # default="classification-fitting_model_extraction_prompt.txt",
+                        default="regression-fitting_model_extraction_prompt.txt",
                         help='Path to instruction file')
     
-    parser.add_argument('--llm', '-l', type=str, default='openai',
+    parser.add_argument('--llm', '-l', type=str, default='claude',
                         choices=get_available_llm_types(),
-                        help=f'LLM API to use for analysis (default: openai)')
+                        help=f'LLM API to use for analysis')
     
     parser.add_argument('--temperature', '-t', type=float, default=0.3,
                         help='Temperature for LLM generation (default: 0.3)')

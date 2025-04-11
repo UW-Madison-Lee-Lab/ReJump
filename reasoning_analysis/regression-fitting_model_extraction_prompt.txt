@@ -1,0 +1,75 @@
+
+You are given a transcript of a model performing reasoning to predict a target value for a new data point in a regression task, based on provided labeled examples.
+
+Your job is to extract ALL fitting models the model proposed or considered in the reasoning process, in the EXACT ORDER they appeared in the transcript, with FULL FIDELITY to the original output.
+
+DO NOT be influenced by the content or structure of the example output below. The example is ONLY for illustrating the output format. The models proposed in your case may look completely different.
+
+Definition of Fitting Model:
+- Any explicit or implicit proposal for how to predict the target value from the input features.
+- Extract the model EVEN IF it is later rejected or replaced.
+- Strictly follow the order of appearance.
+- The extracted rule MUST faithfully reflect the original logic.
+
+For each fitting model, extract the following fields:
+
+order: (integer) Order of appearance, starting from 0.
+description: (string) Short summary of the model's idea in your own words.
+rule: (string) Verbatim or near-verbatim mathematical rule from original reasoning.
+model_family: (string) Best-matching sklearn-style model family (choose from below or 'custom'):
+    - sklearn.linear_model.LinearRegression
+    - sklearn.preprocessing.PolynomialFeatures
+    - sklearn.neighbors.KNeighborsRegressor
+    - sklearn.tree.DecisionTreeRegressor
+    - custom (if none fit)
+function: (string) Python implementation of the model logic. The function name MUST always be 'def model(x, y, data)', even if 'data' is not used in the function.
+extracted_parameter: (list of strings) All constant parameters used in function, excluding input features. If none, use [].
+rule_original_text: (string) Exact original text where the rule was proposed.
+validation_original_text: (string) Exact original text where the rule was tested or validated. Leave "" if absent.
+
+Output Format Example:
+
+[
+  {
+    "order": 0,
+    "description": "Linear model with weights estimated from 3 examples",
+    "rule": "target = w1 * feature1 + w2 * feature2 + b (w1≈0.4187, w2≈0.3765, b≈0.0632)",
+    "model_family": "sklearn.linear_model.LinearRegression",
+    "function": "def model(x, y, data, w1=0.4187, w2=0.3765, b=0.0632):\n    return w1 * x + w2 * y + b",
+    "extracted_parameter": ["w1=0.4187", "w2=0.3765", "b=0.0632"],
+    "rule_original_text": "Let me try to hypothesize a linear model...",
+    "validation_original_text": "Tested on [-0.552, 0.332], predicted -0.0431 vs actual -0.048."
+  },
+  {
+    "order": 1,
+    "description": "Average of k nearest neighbors' targets (k=3)",
+    "rule": "Find k nearest neighbors based on Euclidean distance and return their average target value.",
+    "model_family": "sklearn.neighbors.KNeighborsRegressor",
+    "function": "def model(x, y, data, k=3):\n    from math import sqrt\n    distances = sorted([(sqrt((x - xi)**2 + (y - yi)**2), target) for xi, yi, target in data])\n    top_k = [target for _, target in distances[:k]]\n    return sum(top_k) / len(top_k)",
+    "extracted_parameter": ["k=3"],
+    "rule_original_text": "Alternatively, maybe a nearest neighbor approach...",
+    "validation_original_text": "Nearest three points' targets: -0.835, -0.768, -0.929."
+  },
+  {
+    "order": 2,
+    "description": "Half sum of features as target",
+    "rule": "target = (feature1 + feature2) / 2",
+    "model_family": "sklearn.linear_model.LinearRegression",
+    "function": "def model(x, y, data):\n    return (x + y) / 2",
+    "extracted_parameter": [],
+    "rule_original_text": "Looks like target is roughly the average of feature1 and feature2.",
+    "validation_original_text": "Sum of features is -1.85, divide by 2 is -0.925."
+  }
+]
+
+Remember:
+- Extract ALL models.
+- Follow EXACT order.
+- Be FAITHFUL to original rules.
+- Extract PARAMETERS explicitly.
+- Function name must ALWAYS be: def model(x, y, data)
+
+---
+
+Now extract the fitting models from the following transcript:  
+<INSERT MODEL OUTPUT TRANSCRIPT HERE>

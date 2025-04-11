@@ -68,11 +68,11 @@ def add_sample_data_fields(sample_data: Dict[str, Any], row: Dict[str, Any]) -> 
         Updated sample data dictionary with additional fields
     """
     # Add additional columns if available
-    if 'claude_analysis_raw_output' in row and row['claude_analysis_raw_output'] is not None:
-        sample_data["claude_analysis_raw_output"] = row['claude_analysis_raw_output']
+    if 'llm_analysis_raw_output' in row and row['llm_analysis_raw_output'] is not None:
+        sample_data["llm_analysis_raw_output"] = row['llm_analysis_raw_output']
     
-    if 'claude_analysis_extracted_json' in row and row['claude_analysis_extracted_json'] is not None:
-        sample_data["claude_analysis_extracted_json"] = row['claude_analysis_extracted_json']
+    if 'llm_analysis_extracted_json' in row and row['llm_analysis_extracted_json'] is not None:
+        sample_data["llm_analysis_extracted_json"] = row['llm_analysis_extracted_json']
     
     # Add extra data fields if available
     if 'icl_examples' in row:

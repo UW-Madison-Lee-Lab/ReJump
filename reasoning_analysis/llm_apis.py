@@ -2,6 +2,7 @@
 import os
 import logging
 import time
+import threading
 from typing import Dict, Any, List, Optional
 
 # LLM API clients
@@ -39,6 +40,10 @@ class ResponseAnalyzer:
         self.max_tokens = max_tokens
         self.max_retries = max_retries
         self.client = self._initialize_client()
+        # Add a lock to control API call rate across threads
+        self.api_lock = threading.Lock()
+        self.last_call_time = 0
+        self.rate_limit_delay = 0.5  # Default delay between API calls (in seconds)
         
     def _initialize_client(self):
         """Initialize the appropriate LLM client based on llm_type"""
@@ -49,13 +54,19 @@ class ResponseAnalyzer:
             return OpenAI(api_key=api_key)
             
         elif self.llm_type == "claude":
-            api_key = os.getenv("ANTHROPIC_API_KEY")
+            # api_key = os.getenv("ANTHROPIC_API_KEY")
+            from environment import ANTHROPIC_API_KEY
+            api_key = ANTHROPIC_API_KEY
             if not api_key:
                 raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
             return anthropic.Anthropic(api_key=api_key)
             
         elif self.llm_type == "gemini":
-            api_key = os.getenv("GOOGLE_API_KEY")
+            # api_key = os.getenv("GOOGLE_API_KEY")
+            #key is in environment.py
+            from environment import GEMINI_API_KEY
+            api_key = GEMINI_API_KEY['yz']
+            
             if not api_key:
                 raise ValueError("GOOGLE_API_KEY environment variable is not set")
             genai.configure(api_key=api_key)
@@ -69,6 +80,32 @@ class ResponseAnalyzer:
             
         else:
             raise ValueError(f"Unsupported LLM type: {self.llm_type}")
+    
+    def set_rate_limit(self, delay_seconds: float) -> None:
+        """
+        Set the rate limit delay between API calls
+        
+        Args:
+            delay_seconds: Delay in seconds between API calls
+        """
+        self.rate_limit_delay = max(0, delay_seconds)
+        logger.info(f"Rate limit for {self.llm_type} API set to {self.rate_limit_delay} seconds")
+    
+    def _enforce_rate_limit(self) -> None:
+        """
+        Enforce rate limiting between API calls
+        This method is thread-safe and will ensure proper spacing between API calls
+        """
+        with self.api_lock:
+            current_time = time.time()
+            time_since_last_call = current_time - self.last_call_time
+            
+            if time_since_last_call < self.rate_limit_delay:
+                sleep_time = self.rate_limit_delay - time_since_last_call
+                logger.debug(f"Rate limiting: sleeping for {sleep_time:.2f} seconds")
+                time.sleep(sleep_time)
+            
+            self.last_call_time = time.time()
     
     def analyze_response(self, prompt: str) -> str:
         """
@@ -87,6 +124,9 @@ class ResponseAnalyzer:
         last_error = None
         
         while retry_count < self.max_retries:
+            # Apply rate limiting before making the API call
+            self._enforce_rate_limit()
+            
             try:
                 if self.llm_type == "openai":
                     return self._analyze_with_openai(prompt)
@@ -143,7 +183,7 @@ class ResponseAnalyzer:
     
     def _analyze_with_gemini(self, prompt: str) -> str:
         """Use Google's Gemini API with full prompt"""
-        model = self.client.GenerativeModel('gemini-2.5-pro-preview-03-25,')
+        model = self.client.GenerativeModel('gemini-2.5-pro-preview-03-25')
         result = model.generate_content(
             f"System: You are a helpful assistant that extracts information from model outputs.\n\nUser: {prompt}"
         )
@@ -187,7 +227,10 @@ def test_openai_client() -> bool:
 def test_claude_client() -> bool:
     """Test if the Claude client can be initialized"""
     try:
-        api_key = os.getenv("ANTHROPIC_API_KEY")
+        # api_key = os.getenv("ANTHROPIC_API_KEY")
+        from environment import ANTHROPIC_API_KEY
+        api_key = ANTHROPIC_API_KEY
+        # import pdb; pdb.set_trace()
         if not api_key:
             logger.error("ANTHROPIC_API_KEY environment variable is not set.")
             return False
