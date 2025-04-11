@@ -530,9 +530,8 @@ def store_data(
             makedirs(hdfs_dir)
             copy(src=local_dir, dst=hdfs_dir)
             
-
-def classification_reward_fn(solution_str, ground_truth):
-
+def classification_extract_solution(solution_str):
+    # Extract the answer from the solution string
     direct_match = re.search(r'<answer><answer>(.*?)</answer></answer>', solution_str, re.DOTALL)
     if direct_match:
         answer_content = direct_match.group(1).strip()
@@ -540,15 +539,10 @@ def classification_reward_fn(solution_str, ground_truth):
             answers = [int(val.strip()) for val in answer_content.split(',') if val.strip().isdigit()]
         except ValueError:
             answers = []
-        if answers:
-            gt_labels = ground_truth['label'] if isinstance(ground_truth['label'], list) else list(ground_truth['label'])
-            print("answers", gt_labels)
-            if len(answers) != len(gt_labels):
-                return False
-            return answers == gt_labels
+        return answers
 
     cleaned_solution_str = solution_str
-    cleaned_solution_str = re.sub(r'<\\/answer>', '</answer>', cleaned_solution_str)
+    cleaned_solution_str = re.sub(r'</answer>(\s*</answer>)+', '</answer>', cleaned_solution_str)
     cleaned_solution_str = re.sub(r'</answer>(\s*</answer>)+', '</answer>', cleaned_solution_str)
     
     clean_match = re.search(r'<answer>(.*?)</answer>', cleaned_solution_str, re.DOTALL)
@@ -558,11 +552,7 @@ def classification_reward_fn(solution_str, ground_truth):
             answers = [int(val.strip()) for val in answer_content.split(',') if val.strip().isdigit()]
         except ValueError:
             answers = []
-        if answers:
-            gt_labels = ground_truth['label'] if isinstance(ground_truth['label'], list) else list(ground_truth['label'])
-            if len(answers) != len(gt_labels):
-                return False
-            return answers == gt_labels
+        return answers
     
     lenient_matches = re.findall(r'<answer[^>]*>(\d+)', cleaned_solution_str)
     if lenient_matches:
@@ -570,52 +560,86 @@ def classification_reward_fn(solution_str, ground_truth):
             answers = [int(val.strip()) for val in lenient_matches if val.strip().isdigit()]
         except ValueError:
             answers = []
-        if answers:
-            gt_labels = ground_truth['label'] if isinstance(ground_truth['label'], list) else list(ground_truth['label'])
-            if len(answers) != len(gt_labels):
-                return False
-            return answers == gt_labels
+        return answers
+    return []
+
+def classification_reward_fn(solution_str, ground_truth):
+    # Extract the answer from the solution string
+    extracted_answers = classification_extract_solution(solution_str)
+    # Check if the extracted answers match the ground truth
+    if extracted_answers:
+        gt_labels = ground_truth['label'] if isinstance(ground_truth['label'], list) else list(ground_truth['label'])
+        if len(extracted_answers) != len(gt_labels):
+            return -100
+        return sum(a == b for a, b in zip(extracted_answers, gt_labels))/ len(gt_labels)
     
-    return False
+    return -10000
+
+def regression_extract_solution(solution_str):
+    # Extract the answer from the solution string
+    direct_match = re.search(r'<answer><answer>(.*?)</answer></answer>', solution_str, re.DOTALL)
+
+    if direct_match:
+        answer_content = direct_match.group(1).strip()
+        try:
+            answers = [float(val.strip()) for val in answer_content.split(',') if val.strip() != '']
+            return answers
+        except ValueError:
+            answers = []
+
+
+    direct_match2 = re.search(r'<answer>(.*?)</answer>', solution_str, re.DOTALL)
+    if direct_match2:
+        answer_content = direct_match.group(1).strip()
+        try:
+            answers = [float(val.strip()) for val in answer_content.split(',') if val.strip().isdigit()]
+            return answers
+        except ValueError:
+            answers = []
+
+    cleaned_solution_str = solution_str
+    cleaned_solution_str = re.sub(r'<answer>(\s*<answer>)+', '</answer>', cleaned_solution_str)
+    cleaned_solution_str = re.sub(r'</answer>(\s*</answer>)+', '</answer>', cleaned_solution_str)
+    
+    clean_match = re.search(r'<answer>(.*?)</answer>', cleaned_solution_str, re.DOTALL)
+    if clean_match:
+        answer_content = clean_match.group(1).strip()
+        try:
+            answers = [float(val.strip()) for val in answer_content.split(',') if val.strip().isdigit()]
+            return answers
+        except ValueError:
+            answers = []
+
+    
+    lenient_matches = re.findall(r'<answer[^>]*>(\d+)', cleaned_solution_str)
+    if lenient_matches:
+        try:
+            answers = [float(val.strip()) for val in lenient_matches if val.strip().isdigit()]
+            return answers
+        except ValueError:
+            answers = []
+
+    return []
 
 def regression_reward_fn(solution_str, ground_truth):
     def criterion(y_pred, y_true):
         return -(y_true - y_pred) ** 2
-    # Direct pattern to extract from cases like <answer>0.5</answer></answer>
-    # Try a direct match first for the most common patterns
-    direct_match = re.search(r'<answer>([-+]?\d*\.\d+|\d+)</answer>', solution_str)
-    if direct_match:
-        response_value = float(direct_match.group(1).strip())
-        return criterion(response_value, ground_truth['label'])
-    
-    # If direct match fails, try cleaning up malformed tags
-    # Handle escaped slashes and remove extra closing tags
-    cleaned_solution_str = solution_str
-    cleaned_solution_str = re.sub(r'<\\/answer>', '</answer>', cleaned_solution_str)
-    cleaned_solution_str = re.sub(r'</answer>(\s*</answer>)+', '</answer>', cleaned_solution_str)
-    
-    # Try again with the cleaned string
-    clean_match = re.search(r'<answer>([-+]?\d*\.\d+|\d+)</answer>', cleaned_solution_str)
-    if clean_match:
-        response_value = float(clean_match.group(1).strip())
-        return criterion(response_value, ground_truth['label'])
-    
-    # Use a more lenient pattern for other cases
-    # This handles partial or malformed tags
-    lenient_match = re.search(r'<answer[^>]*>([-+]?\d*\.\d+|\d+)[^<]*(?:</answer>|<\\/answer>|<?/?answer>)', cleaned_solution_str)
-    if lenient_match:
-        response_value = float(lenient_match.group(1).strip())
-        return criterion(response_value, ground_truth['label'])
-    
-    # Last resort - just look for numbers between any answer-like tags
-    fallback_matches = re.findall(r'<answer.*?>([-+]?\d*\.\d+|\d+).*?(?:</answer>|<\\/answer>|answer>)', solution_str, re.DOTALL)
-    if fallback_matches:
-        for answer in fallback_matches[::-1]:
-            if answer.strip().replace('.', '', 1).replace('-', '', 1).isdigit():
-                response_value = float(answer.strip())
-                return criterion(response_value, ground_truth['label'])
+
+    answers = regression_extract_solution(solution_str)
+    if answers:
+        gt_labels = ground_truth['label']
+        # Convert numpy array to list if needed.
+        if hasattr(gt_labels, 'tolist'):
+            gt_labels = gt_labels.tolist()
+        elif not isinstance(gt_labels, list):
+            gt_labels = [gt_labels]
+        if len(answers) != len(gt_labels):
+            return -100
+        scores = [criterion(y_pred, y_true) for y_pred, y_true in zip(answers, gt_labels)]
+        return sum(scores) / len(scores)
     
     return -10000
+
     
 def _select_rm_score_fn(data_source):
     if data_source == 'openai/gsm8k':
@@ -636,5 +660,27 @@ def _select_rm_score_fn(data_source):
             return classification_reward_fn
         elif task_type == 'regression':
             return regression_reward_fn
+    else:
+        raise NotImplementedError
+    
+def _select_parse_fn(data_source):
+    if data_source == 'openai/gsm8k':
+        from verl.utils.reward_score import gsm8k
+        return gsm8k.extract_solution
+    elif data_source == 'lighteval/MATH':
+        from verl.utils.reward_score import math
+        return math.extract_solution
+    elif "multiply" in data_source or "arithmetic" in data_source:
+        from verl.utils.reward_score import multiply
+        return multiply.extract_solution
+    elif "countdown" in data_source:
+        from verl.utils.reward_score import countdown
+        return countdown.extract_solution
+    elif data_source in supported_datasets:
+        task_type = supported_datasets[data_source]['type']
+        if task_type == 'classification':
+            return classification_extract_solution
+        elif task_type == 'regression':
+            return regression_extract_solution
     else:
         raise NotImplementedError

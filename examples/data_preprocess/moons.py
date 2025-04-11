@@ -62,13 +62,13 @@ if __name__ == '__main__':
     parser.add_argument('--feature_noise', type=float, default=0.1)
     parser.add_argument('--test_ratio', type=float, default=0.2)
     parser.add_argument('--n_shot', type=int, default=10)
+    parser.add_argument('--n_query', type=int, default=10)
     parser.add_argument('--num_classes', type=int, default=2)
     parser.add_argument('--template_type', type=str, default='base')
     parser.add_argument('--label_noise', type=float, default=0.0)
     parser.add_argument('--data_mode', type=str, default="default", choices=["default", "grid", "mixed"])
     args = parser.parse_args()
     set_seed(42)
-    
     data_source = 'moons'
 
     n_classes = 2  # Moons dataset always has 2 classes
