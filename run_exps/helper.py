@@ -13,15 +13,13 @@ def gen_dataset(
     data_mode="default",
 ):
     if "ricl" in template_type:
-        datasets = {"regression": [], "classification": []}
-        for dataset in supported_datasets:
-            datasets[supported_datasets[dataset]["type"]].append(dataset)
+        if supported_datasets[dataset_name]["type"] == "regression":
+            example_datasets = ["l1normreg", "cosreg", "quadreg", "expreg"]
+        else:
+            example_datasets = ["circles", "moons", "linear", "blobs"]
             
-        for dataset_type in datasets:
-            datasets[dataset_type].sort(key=lambda x: supported_datasets[x]["difficulty"], reverse=True)
-            
-        example_datasets = datasets[supported_datasets[dataset_name]["type"]]
-        example_datasets.remove(dataset_name)
+        if dataset_name in example_datasets:
+            example_datasets.remove(dataset_name)
         ricl_shot = int(re.match(r".*?ricl_(\d+)", template_type).group(1))
         example_datasets = example_datasets[:ricl_shot]
         
@@ -40,6 +38,7 @@ def gen_dataset(
         """
             icl_examples.append(icl_example_prompt)
             
+        max_length = 20000 if supported_datasets[dataset_name]["type"] == "regression" else 10000
         icl_examples_prompt = ''.join(icl_examples).replace('\n', '')
         command = f"""
 python -m icl_reasoning.icl_reasoning \
@@ -52,7 +51,7 @@ python -m icl_reasoning.icl_reasoning \
     "+test_data_seed=42" \
     "+train_step=0" \
     "+data_mode=default" \
-    "+icl_example_maxlength=10000" \
+    "+icl_example_maxlength={max_length}" \
     "+test_data.dataset_name={dataset_name}" \
     "+test_data.label_noise={label_noise}" \
     "+test_data.feature_noise={feature_noise}" \
