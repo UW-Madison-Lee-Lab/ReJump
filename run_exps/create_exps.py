@@ -1,9 +1,10 @@
 import pandas as pd
 import os
-from constants import supported_llms, get_model_name, get_model_dir
+from constants import supported_llms, get_model_name, get_model_dir, supported_datasets
 from environment import root_dir
 import argparse
 from run_exps.helper import gen_dataset, inference, rl_train
+import pdb
 
 model_size_upper_limit = 10_000_000_000
 
@@ -12,20 +13,21 @@ supported_model_list = [model for model in supported_llms.keys() if supported_ll
 shot_list = [10, 50, 100, 200]
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--dataset", type=str, nargs="+", default=["blobs", "moons", "linear", "circles"], choices=["blobs", "moons", "linear", "circles"])
+parser.add_argument("--dataset", type=str, nargs="+", default=["blobs", "moons", "linear", "circles"], choices=supported_datasets.keys())
 parser.add_argument("--model", type=str, nargs="+", default=supported_model_list, choices=supported_model_list)
-parser.add_argument("--mode", type=str, nargs="+", default=["reasoning", "no_reasoning", "customized"], choices=["reasoning", "no_reasoning", "customized"])
+parser.add_argument("--mode", type=str, nargs="+", default=["reasoning", "no_reasoning"], choices=["reasoning", "no_reasoning", "customized", "ricl_1", "ricl_2", "ricl_3"])
 parser.add_argument("--shot", type=int, nargs="+", default=shot_list)
 parser.add_argument("--train", action="store_true")
 parser.add_argument("--n_gpus", type=int, default=2)
 parser.add_argument("--response_length_thinking_factor", type=float, default=2.0)
 parser.add_argument("--load_train_step", type=int, default=0)
 parser.add_argument("--n_samples", type=int, nargs="+", default=[10000])
-parser.add_argument("--noise_level", type=float, nargs="+", default=[None])
-parser.add_argument("--label_flip_rate", type=float, default=0.0)
+parser.add_argument("--feature_noise", type=float, nargs="+", default=[None])
+parser.add_argument("--label_noise", type=float, default=0.0)
 parser.add_argument("--data_mode", type=str, default="default", choices=["default", "grid", "mixed"])
 parser.add_argument("--wandb", type=int, default=2, choices=[0, 1, 2])
 parser.add_argument("--api_workers", type=int, default=16)
+parser.add_argument("--exp_name", type=str, default="")
 args = parser.parse_args()
 
 if args.load_train_step:
@@ -44,7 +46,7 @@ model_list = args.model
 mode_list = args.mode
 shot_list = args.shot
 n_samples_list = args.n_samples
-noise_level_list = args.noise_level
+feature_noise_list = args.feature_noise
 
 
 os.makedirs(f"{root_dir}/run_exps/auto", exist_ok=True)
@@ -56,7 +58,7 @@ for dataset in dataset_list:
         for model in model_list:
             for mode in mode_list:
                 for n_samples in n_samples_list:
-                    for noise_level in noise_level_list:
+                    for feature_noise in feature_noise_list:
                         if mode == "reasoning":
                             template_type = supported_llms[model]["template_type"]
                             response_length = int(prompt_length * args.response_length_thinking_factor)
@@ -66,28 +68,25 @@ for dataset in dataset_list:
                         elif mode == "customized":
                             template_type = supported_llms[model]["template_type"] + "_customized"
                             response_length = 100
+                        elif "ricl" in mode:
+                            template_type = supported_llms[model]["template_type"] + "_" + mode
+                            response_length = int(prompt_length * args.response_length_thinking_factor)
                         else:
-                            raise ValueError(f"Mode {mode} not supported, should be in [reasoning, no_reasoning, customized]")
+                            raise ValueError(f"Mode {mode} not supported, should be in [reasoning, no_reasoning, customized, ricl]")
                         
-                        if noise_level is None:
-                            if dataset == "blobs":
-                                noise_level = 1.0
-                            elif dataset in ["moons", "linear"]:
-                                noise_level = 0.1
-                            else:
-                                noise_level = 0.01
+                        if feature_noise is None:
+                            feature_noise = supported_datasets[dataset]["feature_noise"]
                         
                         
                         command_list = []
-                        
                         gen_command = gen_dataset(
                             dataset_name=dataset,
                             shot=shot,
                             template_type=template_type,
                             num_samples=n_samples,
-                            noise_level=noise_level,
-                            label_flip_rate=args.label_flip_rate,
-                            data_mode=args.data_mode
+                            feature_noise=feature_noise,
+                            label_noise=args.label_noise,
+                            data_mode=args.data_mode,
                         )
                         command_list.append(gen_command)
                         if args.train:
@@ -99,8 +98,8 @@ for dataset in dataset_list:
                                 prompt_length=prompt_length,
                                 response_length=response_length,
                                 num_samples=n_samples,
-                                noise_level=noise_level,
-                                label_flip_rate=args.label_flip_rate,
+                                feature_noise=feature_noise,
+                                label_noise=args.label_noise,
                                 n_gpus=args.n_gpus,
                                 data_mode=args.data_mode
                             )
@@ -114,8 +113,8 @@ for dataset in dataset_list:
                                     template_type=template_type,
                                     response_length=response_length,
                                     num_samples=n_samples,
-                                    noise_level=noise_level,
-                                    label_flip_rate=args.label_flip_rate,
+                                    feature_noise=feature_noise,
+                                    label_noise=args.label_noise,
                                     data_mode=args.data_mode,
                                     train_step=args.load_train_step
                                 )
@@ -130,8 +129,8 @@ for dataset in dataset_list:
                                 prompt_length=prompt_length,
                                 response_length=response_length,
                                 num_samples=n_samples,
-                                noise_level=noise_level,
-                                label_flip_rate=args.label_flip_rate,
+                                feature_noise=feature_noise,
+                                label_noise=args.label_noise,
                                 n_gpus=args.n_gpus,
                                 data_mode=args.data_mode,
                                 wandb=args.wandb,
@@ -148,8 +147,8 @@ for dataset in dataset_list:
                             template_type=template_type,
                             response_length=response_length,
                             num_samples=n_samples,
-                            noise_level=noise_level, 
-                            label_flip_rate=args.label_flip_rate,
+                            feature_noise=feature_noise, 
+                            label_noise=args.label_noise,
                             data_mode=args.data_mode
                         )
                         script_path = f"{root_dir}/run_exps/auto/{model_name}_train_{args.train}.sh"
@@ -160,5 +159,7 @@ for dataset in dataset_list:
 
 run_all_scripts = "\n".join([f"bash {script_path}" for script_path in script_paths])
 
-with open(f"{root_dir}/run_exps/auto/run_all.sh", "w") as f:
+exp_name = args.exp_name
+if exp_name: exp_name = f"_{exp_name}"
+with open(f"{root_dir}/run_exps/auto/run_all{exp_name}.sh", "w") as f:
     f.write(run_all_scripts)

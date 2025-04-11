@@ -16,11 +16,12 @@ Generate responses given a dataset of prompts
 """
 import ray
 import numpy as np
+from sklearn.metrics import r2_score
 import pdb
 import hydra
 import os
 import time
-
+import re
 from datetime import datetime
 
 
@@ -44,7 +45,7 @@ from verl.utils.llm_api import LLMAPI
 from verl.utils.hdfs_io import makedirs
 from verl.single_controller.ray import RayClassWithInitArgs, RayResourcePool, RayWorkerGroup
 from utils import flatten_dict, print_configs
-from constants import get_configs_via_result_dir, supported_llms
+from constants import get_configs_via_result_dir, supported_llms, supported_datasets
 from verl.trainer.fsdp_sft_trainer import extract_model_name
 import wandb   
 try:
@@ -142,11 +143,16 @@ def main(config):
         wg.init_model()
 
     # Use RLHFDataset for both API and non-API modes
+    if use_api:
+        max_prompt_length = 40_000
+    else:
+        max_prompt_length = config.rollout.prompt_length
+        
     rlhf_dataset = RLHFDataset(
         parquet_files=config.data.path,
         tokenizer=tokenizer,
         prompt_key=config.data.prompt_key,
-        max_prompt_length=config.rollout.prompt_length,
+        max_prompt_length=max_prompt_length,
         filter_prompts=True,
         return_raw_chat=config.data.get('return_raw_chat', False),
         truncation='error'
@@ -301,23 +307,53 @@ def main(config):
         artifact.add_file(config.data.output_path)
         wandb.log_artifact(artifact)
     
-    # eval
-    passes = 0
+    config_dict = get_configs_via_result_dir(os.path.dirname(config.data.output_path))
+    if supported_datasets[config_dict['dataset_name']]['type'] == 'regression':
+        sum_square_error = 0
+        
+        y_pred, y_true = [], []
+        k = None
+        for i in range(total_samples):
+            if k is None: k = len(reward_tensor_lst[i])
+            best_i = np.argmax(reward_tensor_lst[i])
+            sum_square_error += reward_tensor_lst[i][best_i]
+            # Check if the answer can be converted to float without using try/except
+            answer = dataset["answers"][i][best_i]
+            # Check if string represents a valid float (handles digits, decimal point, and signs)
+            try:
+                y_pred.append(float(answer))
+            except ValueError:
+                y_pred.append(0)
+            y_true.append(dataset["label"][i])
+        
+        mse = sum_square_error / total_samples
+        r2 = r2_score(np.array(y_true), np.array(y_pred))
+        print(f'mse@{k}: {mse}')
+        print(f'r2@{k}: {r2}')
+        
+        if config.trainer.wandb:
+            wandb.log({
+                f'mse@{k}': mse,
+                f'r2@{k}': r2,
+            })
+    else:
+        # eval
+        passes = 0
 
-    k = None
-    for i in range(total_samples):
-        if k is None: k = len(reward_tensor_lst[i])
-        max_score = np.max(reward_tensor_lst[i])
+        k = None
+        for i in range(total_samples):
+            if k is None: k = len(reward_tensor_lst[i])
+            max_score = np.max(reward_tensor_lst[i])
 
-        if max_score == 1:
-            passes += 1
+            if max_score == 1:
+                passes += 1
 
-    print(f'pass@{k}: {passes / total_samples}')
+        print(f'pass@{k}: {passes / total_samples}')
 
-    if config.trainer.wandb:
-        wandb.log({
-            f'pass@{k}': passes / total_samples,
-        })
+        if config.trainer.wandb:
+            wandb.log({
+                f'pass@{k}': passes / total_samples,
+            })
 
     if config.trainer.wandb:
         wandb.finish()

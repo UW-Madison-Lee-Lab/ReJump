@@ -13,33 +13,15 @@ import html
 from pathlib import Path
 import random
 from typing import Dict, Any, List, Optional, Tuple
+from constants import supported_datasets
+import pdb
+from verl.trainer.ppo.helper import _select_rm_score_fn as select_reward_fn
 
-# Import function to get the number of classes
 try:
-    from liftr.icl_reasoning.icl_reasoning import get_num_classes
     from transformers import AutoTokenizer
 except ImportError:
-    # If unable to import, provide a simple fallback function
-    def get_num_classes(task_type: str) -> int:
-        """
-        Return the number of classes for each task type
-        """
-        num_classes = {
-            "blobs": 3,
-            "circles": 2,
-            "linear": 2,
-            "moons": 2
-        }
-        if task_type not in num_classes:
-            return 2  # Default value
-        
-        return num_classes[task_type]
-    
-    try:
-        from transformers import AutoTokenizer
-    except ImportError:
-        print("Warning: Could not import AutoTokenizer from transformers")
-        AutoTokenizer = None
+    print("Warning: Could not import AutoTokenizer from transformers")
+    AutoTokenizer = None
 
 # Initialize tokenizer
 def get_tokenizer(tokenizer_name="Qwen/Qwen2.5-3B-Instruct"):
@@ -140,7 +122,7 @@ def extract_answer_content(text) -> Optional[str]:
     return None
 
 
-def get_prediction_result(response_text: Optional[str], ground_truth) -> Tuple[Optional[int], bool]:
+def get_prediction_result(response_text: Optional[str], ground_truth, task_type: str) -> Tuple[Optional[int], bool]:
     """
     Evaluate prediction using main_eval approach
     
@@ -149,13 +131,13 @@ def get_prediction_result(response_text: Optional[str], ground_truth) -> Tuple[O
         ground_truth: The ground truth data containing label and features
         
     Returns:
-        Tuple of (predicted_label, is_correct)
+        Tuple of (predicted_label, metric)
     """
     # Import classification_reward_fn from helper module
-    try:
+    if task_type == "classification":
         from examples.data_preprocess.helper import classification_reward_fn
         # Use the classification_reward_fn for evaluation
-        is_correct = classification_reward_fn(response_text, ground_truth)
+        metric = classification_reward_fn(response_text, ground_truth)
         
         # Extract the predicted label for display
         all_matches = list(re.finditer(r'<answer>(.*?)</answer>', response_text, re.DOTALL))
@@ -163,59 +145,76 @@ def get_prediction_result(response_text: Optional[str], ground_truth) -> Tuple[O
             response_extract = None
             for match in all_matches[::-1]:  # Check from last to first
                 match_content = match.group(1).strip()
-                if match_content.isdigit():
+                # Match integers and floats (including negative numbers)
+                if re.match(r'^-?\d+(\.\d+)?$', match_content):
                     response_extract = match
                     break
-            if response_extract is not None and response_extract.group(1).strip().isdigit():
-                prediction = int(response_extract.group(1).strip())
-                return prediction, is_correct
+            if response_extract is not None and re.match(r'^-?\d+(\.\d+)?$', response_extract.group(1).strip()):
+                prediction_str = response_extract.group(1).strip()
+                # Convert to int if it's an integer, otherwise float
+                if '.' in prediction_str:
+                    prediction = float(prediction_str)
+                else:
+                    prediction = int(prediction_str)
+                return prediction, metric
             
             # Try direct pattern matching if the tags might have whitespace issues
-            int_pattern = r'<answer>\s*(\d+)\s*</answer>'
-            int_matches = re.findall(int_pattern, response_text)
-            if int_matches:
-                prediction = int(int_matches[-1])  # Use the last match
-                return prediction, is_correct
+            num_pattern = r'<answer>\s*(-?\d+(\.\d+)?)\s*</answer>'
+            num_matches = re.findall(num_pattern, response_text)
+            if num_matches:
+                prediction_str = num_matches[-1][0]  # Use the last match
+                # Convert to int if it's an integer, otherwise float
+                if '.' in prediction_str:
+                    prediction = float(prediction_str)
+                else:
+                    prediction = int(prediction_str)
+                return prediction, metric
         
-        # If is_correct but didn't find valid prediction, try more aggressive patterns
-        if is_correct:
+        # If metric but didn't find valid prediction, try more aggressive patterns
+        if metric:
             # Look for numbers after "answer:" or "class:" patterns that might appear in text
             alternative_patterns = [
-                r'answer:\s*(\d+)',
-                r'class:\s*(\d+)',
-                r'prediction:\s*(\d+)',
-                r'label:\s*(\d+)',
-                r'the answer is\s*(\d+)',
-                r'class is\s*(\d+)'
+                r'answer:\s*(-?\d+(\.\d+)?)',
+                r'class:\s*(-?\d+(\.\d+)?)',
+                r'prediction:\s*(-?\d+(\.\d+)?)',
+                r'label:\s*(-?\d+(\.\d+)?)',
+                r'the answer is\s*(-?\d+(\.\d+)?)',
+                r'class is\s*(-?\d+(\.\d+)?)'
             ]
             
             for pattern in alternative_patterns:
                 matches = re.findall(pattern, response_text, re.IGNORECASE)
                 if matches:
                     try:
-                        prediction = int(matches[-1])  # Use the last match
-                        return prediction, is_correct
+                        prediction_str = matches[-1][0]  # Use the last match
+                        # Convert to int if it's an integer, otherwise float
+                        if '.' in prediction_str:
+                            prediction = float(prediction_str)
+                        else:
+                            prediction = int(prediction_str)
+                        return prediction, metric
                     except (ValueError, TypeError):
                         continue  # Try next pattern if this one didn't work
             
             # Final fallback: just find any number that could be a valid class
             if ground_truth and 'label' in ground_truth:
                 # Get task type to determine number of classes
-                num_classes = 0
-                try:
-                    data_source = ground_truth.get('data_source', 'blobs')
-                    num_classes = get_num_classes(data_source)
-                except:
-                    num_classes = 3  # Default for most classification tasks
+                num_classes = supported_datasets[ground_truth['data_source']]['num_classes']
                 
-                # Extract all digit sequences and check if any could be a valid class
-                digit_matches = re.findall(r'\b(\d+)\b', response_text)
-                for match in digit_matches[::-1]:  # Check from last to first
+                # Extract all number sequences and check if any could be a valid class
+                num_matches = re.findall(r'\b(-?\d+(\.\d+)?)\b', response_text)
+                for match in num_matches[::-1]:  # Check from last to first
                     try:
-                        digit_val = int(match)
-                        if 0 <= digit_val < num_classes:
+                        # Convert to int if it's an integer, otherwise float
+                        if '.' in match[0]:
+                            num_val = float(match[0])
+                        else:
+                            num_val = int(match[0])
+                        
+                        # For integer values, check if they're valid class indices
+                        if isinstance(num_val, int) and 0 <= num_val < num_classes:
                             # Found a valid class index
-                            return digit_val, is_correct
+                            return num_val, metric
                     except (ValueError, TypeError):
                         continue
                 
@@ -225,7 +224,7 @@ def get_prediction_result(response_text: Optional[str], ground_truth) -> Tuple[O
         
         # Otherwise, couldn't extract prediction
         return None, False
-    except ImportError:
+    else:
         # Fallback to original implementation if module not available
         if response_text is None:
             return None, False
@@ -236,58 +235,74 @@ def get_prediction_result(response_text: Optional[str], ground_truth) -> Tuple[O
             
         ground_truth_label = ground_truth['label']
         
-        # Try to parse an integer from the answer
+        # Try to parse a number from the answer
         answer = extract_answer_content(response_text)
-        if answer is not None and answer.strip().isdigit():
-            prediction = int(answer.strip())
+        if answer is not None and re.match(r'^-?\d+(\.\d+)?$', answer.strip()):
+            prediction_str = answer.strip()
+            # Convert to int if it's an integer, otherwise float
+            if '.' in prediction_str:
+                prediction = float(prediction_str)
+            else:
+                prediction = int(prediction_str)
             return prediction, prediction == ground_truth_label
         
-        # Look for integer patterns in the full response
-        int_pattern = r'<answer>\s*(\d+)\s*</answer>'
-        int_matches = re.findall(int_pattern, response_text)
-        if int_matches:
-            prediction = int(int_matches[-1])  # Use the last match
+        # Look for number patterns in the full response
+        num_pattern = r'<answer>\s*(-?\d+(\.\d+)?)\s*</answer>'
+        num_matches = re.findall(num_pattern, response_text)
+        if num_matches:
+            prediction_str = num_matches[-1][0]  # Use the last match
+            # Convert to int if it's an integer, otherwise float
+            if '.' in prediction_str:
+                prediction = float(prediction_str)
+            else:
+                prediction = int(prediction_str)
             return prediction, prediction == ground_truth_label
             
         # Try additional patterns for classification responses
         alternative_patterns = [
-            r'answer:\s*(\d+)',
-            r'class:\s*(\d+)',
-            r'prediction:\s*(\d+)',
-            r'label:\s*(\d+)',
-            r'the answer is\s*(\d+)',
-            r'class is\s*(\d+)'
+            r'answer:\s*(-?\d+(\.\d+)?)',
+            r'class:\s*(-?\d+(\.\d+)?)',
+            r'prediction:\s*(-?\d+(\.\d+)?)',
+            r'label:\s*(-?\d+(\.\d+)?)',
+            r'the answer is\s*(-?\d+(\.\d+)?)',
+            r'class is\s*(-?\d+(\.\d+)?)'
         ]
         
         for pattern in alternative_patterns:
             matches = re.findall(pattern, response_text, re.IGNORECASE)
             if matches:
                 try:
-                    prediction = int(matches[-1])  # Use the last match
+                    prediction_str = matches[-1][0]  # Use the last match
+                    # Convert to int if it's an integer, otherwise float
+                    if '.' in prediction_str:
+                        prediction = float(prediction_str)
+                    else:
+                        prediction = int(prediction_str)
                     return prediction, prediction == ground_truth_label
                 except (ValueError, TypeError):
                     continue  # Try next pattern if this one didn't work
         
         # Final fallback: just find any number that could be a valid class
-        num_classes = 0
-        try:
-            data_source = ground_truth.get('data_source', 'blobs')
-            num_classes = get_num_classes(data_source)
-        except:
-            num_classes = 3  # Default for most classification tasks
+        num_classes = supported_datasets[ground_truth['data_source']]['num_classes']
             
-        # Extract all digit sequences and check if any could be a valid class
-        digit_matches = re.findall(r'\b(\d+)\b', response_text)
-        for match in digit_matches[::-1]:  # Check from last to first
+        # Extract all number sequences and check if any could be a valid class
+        num_matches = re.findall(r'\b(-?\d+(\.\d+)?)\b', response_text)
+        for match in num_matches[::-1]:  # Check from last to first
             try:
-                digit_val = int(match)
-                if 0 <= digit_val < num_classes:
+                # Convert to int if it's an integer, otherwise float
+                if '.' in match[0]:
+                    num_val = float(match[0])
+                else:
+                    num_val = int(match[0])
+                
+                # For integer values, check if they're valid class indices
+                if isinstance(num_val, int) and 0 <= num_val < num_classes:
                     # Found a valid class index
-                    return digit_val, digit_val == ground_truth_label
+                    return num_val, num_val == ground_truth_label
             except (ValueError, TypeError):
                 continue
         
-        # If no integer found, return None
+        # If no number found, return None
         return None, False
 
 
@@ -312,48 +327,28 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
     
     # Read the parquet file
     print(f"Reading parquet file: {input_file}")
-    try:
-        df = pd.read_parquet(input_file)
-        
-        # Debug information
-        print(f"DataFrame loaded successfully with {len(df)} rows")
-        print(f"DataFrame columns: {df.columns.tolist()}")
-        
-        # Check if 'responses' column exists
-        if 'responses' in df.columns:
-            print("'responses' column found in DataFrame")
-            # Check the type of the first response
-            if len(df) > 0:
-                first_response = df.iloc[0].get('responses')
-                print(f"Type of first response: {type(first_response)}")
-                if isinstance(first_response, list) and len(first_response) > 0:
-                    print(f"Type of first response item: {type(first_response[0])}")
-            
-        else:
-            raise ValueError("'responses' column not found in DataFrame")
-        
-    except Exception as e:
-        print(f"Error reading parquet file: {e}")
-        raise
+
+    df = pd.read_parquet(input_file)
     
-    # Import reward function selection from main_eval
-    try:
-        from verl.trainer.ppo.helper import _select_rm_score_fn as select_reward_fn
-        print("Successfully imported select_reward_fn from verl.trainer.ppo.helper")
-    except ImportError:
-        # Define a basic fallback if imports not available
-        def select_reward_fn(data_source):
-            if "blobs" in data_source:
-                try:
-                    from examples.data_preprocess.blobs import blobs_reward_fn
-                    return blobs_reward_fn
-                except ImportError:
-                    print("Warning: Could not import blobs_reward_fn")
-            
-            # Default reward function (will use our get_prediction_result)
-            return lambda solution_str, ground_truth: get_prediction_result(solution_str, ground_truth)[1]
+    # Debug information
+    print(f"DataFrame loaded successfully with {len(df)} rows")
+    print(f"DataFrame columns: {df.columns.tolist()}")
+    
+    # Check if 'responses' column exists
+    if 'responses' in df.columns:
+        print("'responses' column found in DataFrame")
+        # Check the type of the first response
+        if len(df) > 0:
+            first_response = df.iloc[0].get('responses')
+            print(f"Type of first response: {type(first_response)}")
+            if isinstance(first_response, list) and len(first_response) > 0:
+                print(f"Type of first response item: {type(first_response[0])}")
         
-        print("Using fallback select_reward_fn function")
+    else:
+        raise ValueError("'responses' column not found in DataFrame")
+    
+    
+    
         
     # Calculate accuracy on full dataset first
     total_data_size = len(df)
@@ -370,7 +365,7 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
         # Get ground truth label
         ground_truth = None
         data_source = row.get('data_source', 'blobs')
-        
+        task_type = supported_datasets[data_source]['type']
         if 'reward_model' in row and isinstance(row['reward_model'], dict):
             ground_truth_data = row['reward_model'].get('ground_truth', None)
             if isinstance(ground_truth_data, dict) and 'label' in ground_truth_data:
@@ -431,55 +426,50 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
         reward_fn = select_reward_fn(data_source)
         
         # Evaluate with the appropriate reward function
-        is_correct = False
+        metric = False
         can_parse_prediction = True
         
-        try:
-            # Use the dedicated reward function
-            is_correct = reward_fn(cleaned_response_text, ground_truth)
+        # Use the dedicated reward function
+        metric = reward_fn(cleaned_response_text, ground_truth)
+
+        # Try to extract prediction result to check if it can be parsed
+        parsed_prediction, _ = get_prediction_result(cleaned_response_text, ground_truth, task_type)
+        can_parse_prediction = parsed_prediction is not None
             
-            # Try to extract prediction result to check if it can be parsed
-            parsed_prediction, _ = get_prediction_result(cleaned_response_text, ground_truth)
-            can_parse_prediction = parsed_prediction is not None
-            
-        except Exception as e:
-            # Fallback to simple prediction extraction
-            prediction, is_correct = get_prediction_result(cleaned_response_text, ground_truth)
-            can_parse_prediction = prediction is not None
         
-        if is_correct:
-            full_correct_predictions += 1
-            full_refined_correct += 1  # Correct predictions also count as correct in refined accuracy
-            if can_parse_prediction:
-                parseable_correct += 1
-        
-        # Track parseable predictions
-        if can_parse_prediction:
-            parseable_predictions += 1
-        elif ground_truth is not None and 'label' in ground_truth:
+        if metric != -10000:
+            full_correct_predictions += metric
+            full_refined_correct += metric
+            if can_parse_prediction: parseable_correct += metric
+            if can_parse_prediction: parseable_predictions += 1
+        if ground_truth is not None and 'label' in ground_truth and task_type == "classification":
             # For samples with unparseable predictions, calculate refined accuracy
             unparseable_predictions += 1
             
             # Get task type to determine number of classes
-            num_classes = get_num_classes(data_source)
+            num_classes = supported_datasets[data_source]['num_classes']
             
             # Randomly select a label (fixed seed set at function start)
             random_label = random.randint(0, num_classes - 1)
             
             # If randomly selected label matches the true label, count as correct for refined accuracy
             if random_label == ground_truth['label']:
-                full_refined_correct += 1
+                full_refined_correct += metric
     
     # Calculate overall accuracy and refined accuracy
-    accuracy = (full_correct_predictions / total_data_size) * 100 if total_data_size > 0 else 0
-    refined_accuracy = (full_refined_correct / total_data_size) * 100 if total_data_size > 0 else 0
+    accuracy = (full_correct_predictions / total_data_size) if total_data_size > 0 else 0
+    refined_accuracy = (full_refined_correct / total_data_size) if total_data_size > 0 else 0
     
     # Calculate accuracy for parseable predictions only
-    parseable_accuracy = (parseable_correct / parseable_predictions) * 100 if parseable_predictions > 0 else 0
+    parseable_accuracy = (parseable_correct / parseable_predictions) 
     
-    print(f"Overall accuracy from all {total_data_size} samples: {accuracy:.2f}%")
-    print(f"Refined accuracy (random guess for unparseable): {refined_accuracy:.2f}%")
-    print(f"Parseable accuracy (excluding unparseable): {parseable_accuracy:.2f}% ({parseable_predictions}/{total_data_size} samples)")
+    if task_type == "classification":
+        print(f"Overall accuracy from all {total_data_size} samples: {accuracy*100:.2f}%")
+        print(f"Refined accuracy (random guess for unparseable): {refined_accuracy*100:.2f}%")
+        print(f"Parseable accuracy (excluding unparseable): {parseable_accuracy*100:.2f}% ({parseable_predictions}/{total_data_size} samples)")
+    else:
+        print(f"Overall MSE from all {total_data_size} samples: {-accuracy:.2f}")
+        print(f"Parseable MSE: {-parseable_accuracy:.2f} ({parseable_predictions}/{total_data_size} samples)")
     print(f"Unparseable predictions: {unparseable_predictions} ({unparseable_predictions/total_data_size*100:.2f}%)")
         
     # Sample the dataframe if needed for visualization, ensuring balanced correct/incorrect samples
@@ -538,13 +528,13 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
             data_source = row.get('data_source', 'blobs')
             reward_fn = select_reward_fn(data_source)
             
-            is_correct = False
+            metric = False
             try:
-                is_correct = reward_fn(cleaned_response_text, ground_truth)
+                metric = reward_fn(cleaned_response_text, ground_truth)
             except Exception:
-                _, is_correct = get_prediction_result(cleaned_response_text, ground_truth)
+                _, metric = get_prediction_result(cleaned_response_text, ground_truth, task_type)
             
-            if is_correct:
+            if metric:
                 correct_mask.append(idx)
             else:
                 incorrect_mask.append(idx)
@@ -607,7 +597,7 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
             "<head>",
             "    <meta charset=\"UTF-8\">",
             "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">",
-            "    <title>ICL Reasoning Results - Accuracy: " + f"{accuracy:.2f}%" + "</title>",
+            "    <title>ICL Reasoning Results - Accuracy: " + f"{accuracy*100:.2f}%" + "</title>" if task_type == "classification" else "ICL Reasoning Results - MSE: " + f"{accuracy:.2f}",
             "    <style>",
             "        body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }",
             "        .sample { border: 1px solid #ddd; padding: 15px; margin-bottom: 20px; border-radius: 5px; }",
@@ -644,10 +634,10 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
             f'<!-- ACCURACY DATA: {accuracy:.2f}% | REFINED: {refined_accuracy:.2f}% | UNPARSEABLE: {unparseable_predictions} -->',
             f'<h1>ICL Reasoning Results: {Path(input_file).name}</h1>',
             f'<div class="accuracy-big">',
-            f'Accuracy: {accuracy:.2f}% &nbsp;|&nbsp; Refined Accuracy: {refined_accuracy:.2f}%',
+            f'Accuracy: {accuracy*100:.2f}% &nbsp;|&nbsp; Refined Accuracy: {refined_accuracy*100:.2f}%' if task_type == "classification" else f'MSE: {-accuracy:.2f} &nbsp;|&nbsp; Refined MSE: {-refined_accuracy:.2f}',
             f'</div>',
             f'<div class="accuracy-big" style="background-color: #e9f0ff; border-color: #1565C0;">',
-            f'Parseable Accuracy: {parseable_accuracy:.2f}% (excluding {unparseable_predictions} unparseable samples)',
+            f'Parseable Accuracy: {parseable_accuracy*100:.2f}% (excluding {unparseable_predictions} unparseable samples)' if task_type == "classification" else f'Parseable MSE: {-parseable_accuracy:.2f} (excluding {unparseable_predictions} unparseable samples)',
             f'</div>',
             f'<div>Unparseable Predictions: {unparseable_predictions} ({unparseable_predictions/total_data_size*100:.2f}%)</div>',
             f'<hr style="margin: 20px 0; border: 0; height: 2px; background: #333;">',
@@ -659,10 +649,10 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
             f'<table>',
             f'<tr><th>Metric</th><th>Value</th></tr>',
             f'<tr><td>Total Samples{sampled_note}</td><td>{total_data_size}</td></tr>',
-            f'<tr><td>Correct Predictions (all data)</td><td>{full_correct_predictions}</td></tr>',
-            f'<tr><td>Accuracy (all data)</td><td>{accuracy:.2f}%</td></tr>',
-            f'<tr><td>Refined Accuracy</td><td>{refined_accuracy:.2f}%</td></tr>',
-            f'<tr><td>Parseable Accuracy</td><td>{parseable_accuracy:.2f}% ({parseable_predictions}/{total_data_size} samples)</td></tr>',
+            f'<tr><td>Correct Predictions (all data)</td><td>{full_correct_predictions}</td></tr>' if task_type == "classification" else ""
+            f'<tr><td>Accuracy (all data)</td><td>{accuracy*100:.2f}%</td></tr>' if task_type == "classification" else f'<tr><td>MSE (all data)</td><td>{-accuracy:.2f}</td></tr>',
+            f'<tr><td>Refined Accuracy</td><td>{refined_accuracy*100:.2f}%</td></tr>' if task_type == "classification" else f'<tr><td>Refined MSE</td><td>{-refined_accuracy:.2f}</td></tr>',
+            f'<tr><td>Parseable Accuracy</td><td>{parseable_accuracy*100:.2f}% ({parseable_predictions}/{total_data_size} samples)</td></tr>' if task_type == "classification" else f'<tr><td>Parseable MSE</td><td>{-parseable_accuracy:.2f} ({parseable_predictions}/{total_data_size} samples)</td></tr>',
             f'<tr><td>Unparseable Predictions</td><td>{unparseable_predictions} ({unparseable_predictions/total_data_size*100:.2f}%)</td></tr>',
             f'</table>',
             f'{balance_note}',
@@ -739,34 +729,29 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
             reward_fn = select_reward_fn(data_source)
             
             # Evaluate with the appropriate reward function
-            is_correct = False
+            metric = False
             prediction = None
             
-            try:
-                # First try with the dedicated reward function
-                is_correct = reward_fn(cleaned_response_text, ground_truth)
-                
-                # Extract prediction for display with enhanced matching
-                prediction = None
-                # First check if there's a clean answer tag
-                if raw_answer and raw_answer.strip().isdigit():
-                    prediction = int(raw_answer.strip())
-                else:
-                    # Try to extract prediction using get_prediction_result function
-                    parsed_prediction, _ = get_prediction_result(cleaned_response_text, ground_truth)
-                    if parsed_prediction is not None:
-                        prediction = parsed_prediction
-                    elif ground_truth and 'label' in ground_truth and is_correct:
-                        # If correct but can't parse prediction, use ground truth
-                        prediction = ground_truth['label']
-                
-            except Exception as e:
-                print(f"Warning: Error using reward function: {e}")
-                # Fallback to simple prediction extraction
-                prediction, is_correct = get_prediction_result(cleaned_response_text, ground_truth)
+            # First try with the dedicated reward function
+            metric = reward_fn(cleaned_response_text, ground_truth)
+
             
-            if is_correct:
-                displayed_correct_predictions += 1
+            # Extract prediction for display with enhanced matching
+            prediction = None
+            # First check if there's a clean answer tag
+            if raw_answer and raw_answer.strip().isdigit():
+                prediction = int(raw_answer.strip())
+            else:
+                # Try to extract prediction using get_prediction_result function
+                parsed_prediction, _ = get_prediction_result(cleaned_response_text, ground_truth, task_type)
+                if parsed_prediction is not None:
+                    prediction = parsed_prediction
+                elif ground_truth and 'label' in ground_truth and metric:
+                    # If correct but can't parse prediction, use ground truth
+                    prediction = ground_truth['label']
+                
+            
+            if task_type == "classification" and metric: displayed_correct_predictions += 1
             
             # Start building the sample HTML
             html_content.append(f'<div class="sample">')
@@ -1123,8 +1108,11 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
             html_content.append(f'<div class="section">')
             html_content.append(f'<div class="section-title">Prediction Result</div>')
             if prediction is not None:
-                result_class = "correct" if is_correct else "incorrect"
-                html_content.append(f'<div class="{result_class}">Predicted: {prediction} ({("CORRECT" if is_correct else "INCORRECT")})</div>')
+                if task_type == "classification":
+                    result_class = "correct" if metric else "incorrect"
+                    html_content.append(f'<div class="{result_class}">Predicted: {prediction} ({("CORRECT" if metric else "INCORRECT")})</div>')
+                else:
+                    html_content.append(f'<div class="correct">Predicted: {prediction}</div>')
             else:
                 html_content.append(f'<div class="incorrect">Unable to parse prediction</div>')
             
@@ -1505,39 +1493,35 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
                 reward_fn = select_reward_fn(data_source)
                 
                 # Evaluate with the appropriate reward function
-                is_correct = False
+                metric = False
                 prediction = None
                 
-                try:
-                    # First try with the dedicated reward function
-                    is_correct = reward_fn(cleaned_response_text, ground_truth)
-                    
-                    # Extract prediction for display with enhanced matching
-                    prediction = None
-                    # First check if there's a clean answer tag
-                    if raw_answer and raw_answer.strip().isdigit():
-                        prediction = int(raw_answer.strip())
-                    else:
-                        # Try to extract prediction using get_prediction_result function
-                        parsed_prediction, _ = get_prediction_result(cleaned_response_text, ground_truth)
-                        if parsed_prediction is not None:
-                            prediction = parsed_prediction
-                        elif ground_truth and 'label' in ground_truth and is_correct:
-                            # If correct but can't parse prediction, use ground truth
-                            prediction = ground_truth['label']
                 
-                except Exception as e:
-                    print(f"Warning: Error using reward function: {e}")
-                    # Fallback to simple prediction extraction
-                    prediction, is_correct = get_prediction_result(cleaned_response_text, ground_truth)
+                # First try with the dedicated reward function
+                metric = reward_fn(cleaned_response_text, ground_truth)
+
                 
-                if is_correct:
+                # Extract prediction for display with enhanced matching
+                prediction = None
+                # First check if there's a clean answer tag
+                if raw_answer and raw_answer.strip().isdigit():
+                    prediction = int(raw_answer.strip())
+                else:
+                    # Try to extract prediction using get_prediction_result function
+                    parsed_prediction, _ = get_prediction_result(cleaned_response_text, ground_truth, task_type)
+                    if parsed_prediction is not None:
+                        prediction = parsed_prediction
+                    elif ground_truth and 'label' in ground_truth and metric:
+                        # If correct but can't parse prediction, use ground truth
+                        prediction = ground_truth['label']
+
+                if metric:
                     displayed_correct_predictions += 1
                 
                 # Write prediction result
                 f.write("--- Prediction Result ---\n")
                 if prediction is not None:
-                    result_str = "CORRECT" if is_correct else "INCORRECT"
+                    result_str = "CORRECT" if metric else "INCORRECT"
                     f.write(f"Predicted: {prediction} ({result_str})\n")
                 else:
                     f.write("Unable to parse prediction\n")

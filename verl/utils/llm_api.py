@@ -6,33 +6,12 @@ import time
 import numpy as np
 import torch
 import pdb
-import re
+import re, openai
 import json
-from verl.utils.reward_score import gsm8k, math, multiply, countdown
 
-def _select_rm_score_fn(data_source):
-    if data_source == 'openai/gsm8k':
-        return gsm8k.compute_score
-    elif data_source == 'lighteval/MATH':
-        return math.compute_score
-    elif "multiply" in data_source or "arithmetic" in data_source:
-        return multiply.compute_score
-    elif "countdown" in data_source:
-        return countdown.compute_score
-    elif "linear" in data_source:
-        from examples.data_preprocess.linear import linear_reward_fn
-        return linear_reward_fn
-    elif "blobs" in data_source:
-        from examples.data_preprocess.blobs import blobs_reward_fn
-        return blobs_reward_fn
-    elif "moons" in data_source:
-        from examples.data_preprocess.moons import moons_reward_fn
-        return moons_reward_fn
-    elif "circles" in data_source:
-        from examples.data_preprocess.circles import circles_reward_fn
-        return circles_reward_fn
-    else:
-        raise NotImplementedError
+from examples.data_preprocess.helper import _select_rm_score_fn
+from google import genai 
+import httpx
 
 class APIRewardManager:
     """The reward manager for API outputs.
@@ -113,11 +92,25 @@ class LLMAPI:
             self.model = model_name.replace("openrouter-", "")  # Remove the prefix to get the actual model name
             self.client_type = "openrouter"
         elif model_name.startswith("claude/"):
-            self.client = anthropic.Anthropic(api_key=api_key)
+            print(f"Initializing Claude client with model: {model_name}")
+            try:
+                self.client = anthropic.Anthropic(
+                    api_key=api_key,
+                    timeout=120.0  # Set timeout to 120 seconds
+                )
+                print(f"Claude client initialized successfully")
+            except Exception as e:
+                print(f"Error initializing Claude client: {str(e)}")
+                raise
             self.model = model_name.replace("claude/", "")  # Remove the prefix to get the actual model name
+            print(f"Using Claude model: {self.model}")
             self.client_type = "anthropic"
             if "thinking" in self.model: 
                 self.model = self.model.replace("-thinking", "")
+        elif model_name.startswith("google/"):
+            self.client = genai.Client(api_key=api_key)
+            self.model = model_name.replace("google/", "")
+            self.client_type = "google"
         else:
             raise ValueError(f"Unsupported model: {model_name}")
 
@@ -130,10 +123,10 @@ class LLMAPI:
             self.thinking = "cot"
         
 
-    def generate(self, messages: List[Dict[str, str]], max_tokens: int = 8000, temperature: float = 0.7) -> str:
-        max_retries = 10  # Very large number of retries
+    def generate(self, messages: List[Dict[str, str]], max_tokens: int = 8000, temperature: float = 0.1) -> str:
+        max_retries = 1000  # Increased retry count
         if max_retries <= 0: raise ValueError("max_retries must be greater than 0")
-        timeout = 10  # 60 seconds timeout
+        timeout = 120  # Increased timeout to 120 seconds
         
         # Ensure messages is a list
         if not isinstance(messages, list):
@@ -141,7 +134,7 @@ class LLMAPI:
         
         for attempt in range(max_retries):
             try:
-                if self.client_type is not None and self.client_type == "anthropic":
+                if self.client_type == "anthropic":
                     if self.thinking == "enabled":
                         thinking={
                             "type": "enabled",
@@ -164,7 +157,17 @@ class LLMAPI:
                         output = response.content[1].text
                     else:
                         output = response.content[0].text
-                    
+                        
+                elif self.client_type == "google":
+                    response = self.client.models.generate_content(
+                        model=self.model,
+                        contents = [messages[0]['content']],
+                    )
+                    if response is None or response.candidates is None or len(response.candidates) == 0: 
+                        reasoning, output = "", ""
+                    else:
+                        output = response.candidates[0].content.parts[0].text
+                        reasoning = ""
                 else:
                     response = self.client.chat.completions.create(
                         model=self.model,
@@ -208,22 +211,30 @@ class LLMAPI:
                 print(f"JSONDecodeError: {e}")
                 time.sleep(timeout)
                 
+            except IndexError as e:
+                print(f"IndexError: {e}")
+                return "", "", ""
+            
+            except httpx.ReadError as e:
+                print(f"ReadError: {e}")
+                time.sleep(timeout)
+                
+            except genai.errors.ServerError as e:
+                print(f"ServerError: {e}")
+                time.sleep(timeout)
+                
+            except genai.errors.ClientError as e:
+                print(f"ClientError: {e}")
+                time.sleep(timeout)
+                
+            except Exception as e:
+                print(type(e))
+                pdb.set_trace()
+                
             print(f"Failed to generate response after {attempt} attempts, max_retries: {max_retries}")
             
         raise Exception("Failed to generate response")
 
-            # except KeyboardInterrupt:
-            #     raise KeyboardInterrupt
-            # except pdb.bdb.BdbQuit:
-            #     raise pdb.bdb.BdbQuit
-            # except Exception as e:
-            #     if attempt < max_retries - 1:
-            #         time.sleep(5)
-            #         continue
-                    
-            #     if "maximum context length" in str(e).lower():
-            #         return (response.choices[0].message.content, getattr(response.choices[0].message, 'reasoning_content', None)) if 'response' in locals() else ("", None)
-            #     raise
 
     def process_batch(self, batch_chat_lst: List[Dict[str, str]], n_samples: int = 1, config=None, batch_idx: int = 0, wandb=None, ground_truths=None, data_sources=None) -> List[List[str]]:
         """Process a batch of chat messages in parallel using threading."""

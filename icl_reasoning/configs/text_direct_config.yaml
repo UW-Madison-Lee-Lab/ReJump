@@ -1,0 +1,33 @@
+defaults:
+  - _self_
+
+# ICL examples configuration
+icl_examples:
+  - _target_: liftr.icl_reasoning.icl_reasoning.TextDirectICLExampleConfig
+    text_file_path: "/home/szhang967/liftr/icl_reasoning/deepseek-good-example.txt"  # Replace with your text file path
+    example_count: 1  # Number of examples in the text file
+    icl_example_maxlength: 20000  # Maximum token length for example
+
+# Test data configuration
+test_data:
+  task_type: "circles"  # Options: moons, circles, blobs, linear
+  flip_rate: 0.0  # Label flip rate (0.0, 0.1, 0.2)
+  noise_type: 0.0  # Noise level (0.1, 1.0)
+  num_samples: 100  # Number of test samples to generate
+
+# Test data examples configuration (for context in the prompt)
+test_data_examples:
+  task_type: "circles"  # Must match test_data.task_type
+  flip_rate: 0.0
+  noise_type: 0.0
+  shot_type: 50  # Number of examples to include as context
+
+# Seeds for reproducibility
+icl_example_seed: 42
+test_data_seed: 42
+
+# Tokenizer for length calculations
+tokenizer_name: "Qwen/Qwen2.5-3B-Instruct"
+
+# Output directory for the generated dataset
+output_path: "/staging/szhang967/icl_datasets_apr7"  # Replace with your desired output path 

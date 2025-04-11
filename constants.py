@@ -1,6 +1,6 @@
 import os, re
 import pdb
-from environment import root_dir, DEEPSEEK_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, OPENROUTER_API_KEY
+from environment import root_dir, DEEPSEEK_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY
 
 
 data_dir = os.path.join(root_dir, 'datasets')
@@ -12,11 +12,11 @@ def get_model_name(
     template_type, 
     response_length,
     num_samples,
-    noise_level,
-    label_flip_rate,
+    feature_noise,
+    label_noise,
     data_mode
 ):
-    return f"{model_name.replace('/', '-')}/{dataset_name}_{shot}_shot_{template_type}_reslen_{response_length}_nsamples_{num_samples}_noise_{noise_level}_flip_rate_{label_flip_rate}_mode_{data_mode}"
+    return f"{model_name.replace('/', '-')}/{dataset_name}_{shot}_shot_{template_type}_reslen_{response_length}_nsamples_{num_samples}_noise_{feature_noise}_flip_rate_{label_noise}_mode_{data_mode}"
 def get_configs_via_model_name(model_name):
     pattern = r"(.+?)/(.+?)_(.+?)_shot_(.+)_reslen_(.+)_nsamples_(.+)_noise_(.+)_flip_rate_(.+)_mode_(.+)"
     match = re.match(pattern, model_name)
@@ -28,8 +28,8 @@ def get_configs_via_model_name(model_name):
         template_type = match.group(4)
         response_length = match.group(5)
         num_samples = match.group(6)
-        noise_level = match.group(7)
-        label_flip_rate = match.group(8)
+        feature_noise = match.group(7)
+        label_noise = match.group(8)
         data_mode = match.group(9)
     
 
@@ -40,8 +40,8 @@ def get_configs_via_model_name(model_name):
             "template_type": template_type,
             "response_length": response_length,
             "num_samples": num_samples,
-            "noise_level": noise_level,
-            "label_flip_rate": label_flip_rate,
+            "feature_noise": feature_noise,
+            "label_noise": label_noise,
             "data_mode": data_mode
         }
     else:
@@ -54,12 +54,12 @@ def get_model_dir(
     template_type, 
     response_length, 
     num_samples, 
-    noise_level,
-    label_flip_rate,
+    feature_noise,
+    label_noise,
     data_mode,
     train_step = 0,
 ):
-    return os.path.join(root_dir, 'checkpoints', 'TinyZero', get_model_name(dataset_name, model_name, shot, template_type, response_length, num_samples, noise_level, label_flip_rate, data_mode), "actor", f"global_step_{train_step}")
+    return os.path.join(root_dir, 'checkpoints', 'TinyZero', get_model_name(dataset_name, model_name, shot, template_type, response_length, num_samples, feature_noise, label_noise, data_mode), "actor", f"global_step_{train_step}")
 def get_configs_via_model_dir(model_dir):
     # Extract model name and train step from the model directory path using regex
     pattern = r".*TinyZero[/\\](.+)[/\\]actor[/\\]global_step_(\d+)$"
@@ -81,12 +81,12 @@ def get_result_dir(
     template_type, 
     response_length,
     num_samples, 
-    noise_level,
-    label_flip_rate,
+    feature_noise,
+    label_noise,
     train_step = 0,
     data_mode = "default",
 ):
-    return os.path.join(root_dir, 'results', get_model_name(dataset_name, model_name, shot, template_type, response_length, num_samples, noise_level, label_flip_rate, data_mode), f"global_step_{train_step}")
+    return os.path.join(root_dir, 'results', get_model_name(dataset_name, model_name, shot, template_type, response_length, num_samples, feature_noise, label_noise, data_mode), f"global_step_{train_step}")
 def get_configs_via_result_dir(result_dir):
     # Extract model name from the result directory path using regex
     pattern = r".*results[/\\](.+)[/\\]global_step_(\d+)$"
@@ -107,11 +107,13 @@ def get_dataset_dir(
     shot, 
     template_type, 
     num_samples, 
-    noise_level = 0,
-    label_flip_rate = 0,
+    feature_noise = 0,
+    label_noise = 0,
     data_mode = "default",
 ):
-    return os.path.join(root_dir, 'datasets', dataset_name, f"{shot}_shot", template_type, f"{num_samples}_samples_{noise_level}_noise_{label_flip_rate}_flip_rate_{data_mode}_mode")
+    if "ricl" in template_type:
+        shot = f"3*{shot}"
+    return os.path.join(root_dir, 'datasets', dataset_name, f"{shot}_shot", template_type, f"{num_samples}_samples_{feature_noise}_noise_{label_noise}_flip_rate_{data_mode}_mode")
 def get_configs_via_dataset_dir(dataset_dir):
 
     basename = dataset_dir.replace(f"{root_dir}/datasets/", "")
@@ -122,8 +124,8 @@ def get_configs_via_dataset_dir(dataset_dir):
         shot = match.group(2)
         template_type = match.group(3)
         num_samples = match.group(4)
-        noise_level = match.group(5)
-        label_flip_rate = match.group(6)
+        feature_noise = match.group(5)
+        label_noise = match.group(6)
         data_mode = match.group(7)
     else:
         return {}
@@ -133,8 +135,8 @@ def get_configs_via_dataset_dir(dataset_dir):
         "shot": shot,
         "template_type": template_type,
         "num_samples": num_samples,
-        "noise_level": noise_level,
-        "label_flip_rate": label_flip_rate,
+        "feature_noise": feature_noise,
+        "label_noise": label_noise,
         "data_mode": data_mode
     }
     
@@ -280,4 +282,141 @@ supported_llms = {
         "type": "api",
         "api_key": ANTHROPIC_API_KEY,
     },
+    "google/gemini-2.0-flash": {
+        "template_type": "standard_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": GEMINI_API_KEY,
+    },
+    "google/gemini-2.0-flash-lite": {
+        "template_type": "standard_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": GEMINI_API_KEY,
+    },
+    "google/gemini-2.5-pro-preview-03-25": {
+        "template_type": "reasoning_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": GEMINI_API_KEY,
+    },
+    "google/gemini-2.0-flash-thinking-exp": {
+        "template_type": "reasoning_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": GEMINI_API_KEY,
+    },
+    "openai/o1-pro": {
+        "template_type": "reasoning_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": OPENAI_API_KEY,
+    },
+    "openai/o3-mini": {
+        "template_type": "reasoning_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": OPENAI_API_KEY,
+    },
+    "openrouter-deepseek/deepseek-r1": {
+        "template_type": "reasoning_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": OPENROUTER_API_KEY,
+    },
+    "claude/claude-3-7-sonnet-20250219": {
+        "template_type": "standard_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": ANTHROPIC_API_KEY,
+    },
+    "claude/claude-3-7-sonnet-20250219-thinking": {
+        "template_type": "reasoning_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": ANTHROPIC_API_KEY,
+    }
+}
+
+supported_datasets = {
+    "blobs": {
+        "num_classes": 3,
+        "num_features": 2,
+        "feature_noise": 1.0,
+        "label_noise": 0.0,
+        "type": "classification",
+        "difficulty": 1,
+    },
+    "moons": {
+        "num_classes": 2,
+        "num_features": 2,
+        "feature_noise": 0.1,
+        "label_noise": 0.0,
+        "type": "classification",
+        "difficulty": 2,
+    },
+    "linear": {
+        "num_classes": 2,
+        "num_features": 2,
+        "feature_noise": 0.1,
+        "label_noise": 0.0,
+        "type": "classification",
+        "difficulty": 1,
+    },  
+    "circles": {
+        "num_classes": 2,
+        "num_features": 2,
+        "feature_noise": 0.01,
+        "label_noise": 0.01,
+        "type": "classification",
+        "difficulty": 3,
+    },
+    "linreg": {
+        "num_classes": None,
+        "num_features": 2,
+        "feature_noise": 0.1,
+        "label_noise": 0.0,
+        "type": "regression",
+        "difficulty": 1,
+    },
+    "quadreg": {
+        "num_classes": None,
+        "num_features": 2,
+        "feature_noise": 0.1,
+        "label_noise": 0.0,
+        "type": "regression",
+        "difficulty": 2,
+    },
+    "expreg": {
+        "num_classes": None,
+        "num_features": 2,
+        "feature_noise": 0.1,
+        "label_noise": 0.0,
+        "type": "regression",
+        "difficulty": 1,
+    },
+    "cosreg": {
+        "num_classes": None,
+        "num_features": 2,
+        "feature_noise": 0.02,
+        "label_noise": 0.0,
+        "type": "regression",
+        "difficulty": 3,
+    },
+    "l1normreg": {
+        "num_classes": None,
+        "num_features": 2,
+        "feature_noise": 0.1,
+        "label_noise": 0.0,
+        "type": "regression",
+        "difficulty": 2,
+    },
+    "pwreg": {
+        "num_classes": None,
+        "num_features": 2,
+        "feature_noise": 0.1,
+        "label_noise": 0.0,
+        "type": "regression",
+        "difficulty": 2,
+    }
 }

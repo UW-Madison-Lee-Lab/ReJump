@@ -1,6 +1,6 @@
 import pandas as pd
 import os
-from constants import supported_llms, get_dataset_dir, get_model_name, get_model_dir, get_mixed_configs
+from constants import supported_llms, get_dataset_dir, get_model_name, get_model_dir, get_mixed_configs, supported_datasets
 from environment import root_dir
 from run_exps.helper import gen_dataset, inference, rl_train, mix_dataset
 import argparse
@@ -19,8 +19,8 @@ parser.add_argument("--n_gpus", type=int, default=2)
 parser.add_argument("--response_length_thinking_factor", type=float, default=2.0)
 parser.add_argument("--load_train_step", type=int, default=0)
 parser.add_argument("--n_samples", type=int, nargs="+", default=[10000])
-parser.add_argument("--noise_level", type=float, nargs="+", default=[None, None, None])
-parser.add_argument("--label_flip_rate", type=float, nargs="+", default=[0.0, 0.0, 0.0])
+parser.add_argument("--feature_noise", type=float, nargs="+", default=[None, None, None])
+parser.add_argument("--label_noise", type=float, nargs="+", default=[0.0, 0.0, 0.0])
 parser.add_argument("--dataset_ratio", type=str, nargs="+", default=[1, 1, 1])
 parser.add_argument("--data_mode", type=str, default="mixed", choices=["default", "mixed"])
 parser.add_argument("--wandb", type=int, default=2, choices=[1, 2])
@@ -31,8 +31,8 @@ n_mix = len(args.dataset)
 mix_check = True 
 mix_check = mix_check and len(args.dataset_ratio) == n_mix
 mix_check = mix_check and len(args.shot) == n_mix
-mix_check = mix_check and len(args.noise_level) == n_mix
-mix_check = mix_check and len(args.label_flip_rate) == n_mix
+mix_check = mix_check and len(args.feature_noise) == n_mix
+mix_check = mix_check and len(args.label_noise) == n_mix
 if not mix_check:
     raise ValueError("Make sure the number of datasets, shots, noise levels, and dataset ratios are the same")
 
@@ -54,8 +54,8 @@ model_list = args.model
 mode_list = args.mode
 shot_list = args.shot
 n_samples_list = args.n_samples
-noise_level_list = args.noise_level
-label_flip_rate_list = args.label_flip_rate
+feature_noise_list = args.feature_noise
+label_noise_list = args.label_noise
 
 os.makedirs(f"{root_dir}/run_exps/auto", exist_ok=True)
  
@@ -67,16 +67,11 @@ for model in model_list:
         
             command_list = []
             dataset_paths = []
-            for dataset, shot, noise_level, label_flip_rate, dataset_ratio in zip(dataset_list, shot_list, noise_level_list, label_flip_rate_list, dataset_ratio_list):    
+            for dataset, shot, feature_noise, label_noise, dataset_ratio in zip(dataset_list, shot_list, feature_noise_list, label_noise_list, dataset_ratio_list):    
                 prompt_length = int((24 * shot + 185) * 1.1)
             
-                if noise_level is None:
-                    if dataset == "blobs":
-                        noise_level = 1.0
-                    elif dataset in ["moons", "linear"]:
-                        noise_level = 0.1
-                    else:
-                        noise_level = 0.01
+                if feature_noise is None:
+                    feature_noise = supported_datasets[dataset]["feature_noise"]
                 if mode == "reasoning":
                     template_type = supported_llms[model]["template_type"]
                     response_length = int(prompt_length * args.response_length_thinking_factor)
@@ -92,17 +87,17 @@ for model in model_list:
                     shot=shot,
                     template_type=template_type,
                     num_samples=n_samples,
-                    noise_level=noise_level,
-                    label_flip_rate=label_flip_rate,
-                    data_mode=args.data_mode
+                    feature_noise=feature_noise,
+                    label_noise=label_noise,
+                    data_mode=args.data_mode,
                 )   
                 dataset_path = get_dataset_dir(
                     dataset_name=dataset,
                     shot=shot,
                     template_type=template_type,
                     num_samples=n_samples,
-                    noise_level=noise_level,
-                    label_flip_rate=label_flip_rate,
+                    feature_noise=feature_noise,
+                    label_noise=label_noise,
                     data_mode=args.data_mode
                 )
                 command_list.append(gen_command)
@@ -134,8 +129,8 @@ for model in model_list:
                     prompt_length=prompt_length,
                     response_length=response_length,
                     num_samples=n_samples,
-                    noise_level=mixed_configs["noise_level"],
-                    label_flip_rate=mixed_configs["label_flip_rate"],
+                    feature_noise=mixed_configs["feature_noise"],
+                    label_noise=mixed_configs["label_noise"],
                     n_gpus=args.n_gpus,
                     data_mode=mixed_configs["data_mode"],
                 )
@@ -149,8 +144,8 @@ for model in model_list:
                         template_type=mixed_configs["template_type"],
                         response_length=response_length,
                         num_samples=n_samples,
-                        noise_level=mixed_configs["noise_level"],
-                        label_flip_rate=mixed_configs["label_flip_rate"],
+                        feature_noise=mixed_configs["feature_noise"],
+                        label_noise=mixed_configs["label_noise"],
                         data_mode=args.data_mode,
                         train_step=args.load_train_step
                     )
@@ -164,8 +159,8 @@ for model in model_list:
                     prompt_length=prompt_length,
                     response_length=response_length,
                     num_samples=n_samples,
-                    noise_level=mixed_configs["noise_level"],
-                    label_flip_rate=mixed_configs["label_flip_rate"],
+                    feature_noise=mixed_configs["feature_noise"],
+                    label_noise=mixed_configs["label_noise"],
                     n_gpus=args.n_gpus,
                     data_mode=mixed_configs["data_mode"],
                     wandb=args.wandb,
@@ -189,8 +184,8 @@ for model in model_list:
                 template_type=mixed_configs["template_type"],
                 response_length=response_length,
                 num_samples=n_samples,
-                noise_level=mixed_configs["noise_level"], 
-                label_flip_rate=mixed_configs["label_flip_rate"],
+                feature_noise=mixed_configs["feature_noise"], 
+                label_noise=mixed_configs["label_noise"],
                 data_mode=mixed_configs["data_mode"]
             )
             script_path = f"{root_dir}/run_exps/auto/{model_name}_train_{args.train}.sh"

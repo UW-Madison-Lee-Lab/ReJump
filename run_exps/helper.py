@@ -1,32 +1,85 @@
 from environment import root_dir
-from constants import get_dataset_dir, get_model_name, get_result_dir, get_dataset_filename
+from constants import get_dataset_dir, get_model_name, get_result_dir, get_dataset_filename, supported_datasets
 import pdb
+import re
 
 def gen_dataset(
     dataset_name, 
     shot,
     template_type="qwen-instruct",
     num_samples=10000,
-    noise_level=None,
-    label_flip_rate=0.0,
-    data_mode="default"
+    feature_noise=None,
+    label_noise=0.0,
+    data_mode="default",
 ):
-    if dataset_name == "blobs":
-        noise_level = 1.0 if noise_level is None else noise_level
-    elif dataset_name in ["moons", "linear"]:
-        noise_level = 0.1 if noise_level is None else noise_level
-    elif dataset_name == "circles":
-        noise_level = 0.01 if noise_level is None else noise_level
-    return f"""
+    if "ricl" in template_type:
+        datasets = {"regression": [], "classification": []}
+        for dataset in supported_datasets:
+            datasets[supported_datasets[dataset]["type"]].append(dataset)
+            
+        for dataset_type in datasets:
+            datasets[dataset_type].sort(key=lambda x: supported_datasets[x]["difficulty"], reverse=True)
+            
+        example_datasets = datasets[supported_datasets[dataset_name]["type"]]
+        example_datasets.remove(dataset_name)
+        ricl_shot = int(re.match(r".*?ricl_(\d+)", template_type).group(1))
+        example_datasets = example_datasets[:ricl_shot]
+        
+        icl_examples = []
+        for i, example_dataset in enumerate(example_datasets):
+            icl_example_prompt = f"""
+    "+icl_examples.{i}.dataset_name={example_dataset}" \
+    "+icl_examples.{i}.label_noise={label_noise}" \
+    "+icl_examples.{i}.feature_noise={supported_datasets[example_dataset]['feature_noise']}" \
+    "+icl_examples.{i}.shot=50" \
+    "+icl_examples.{i}.response_length=3046" \
+    "+icl_examples.{i}.num_samples=500" \
+    "+icl_examples.{i}.num_examples=1" \
+    "+icl_examples.{i}.train_step=0" \
+    "+icl_examples.{i}.data_mode={data_mode}"
+        """
+            icl_examples.append(icl_example_prompt)
+            
+        icl_examples_prompt = ''.join(icl_examples).replace('\n', '')
+        command = f"""
+python -m icl_reasoning.icl_reasoning \
+    "+icl_examples=[]" \
+    {icl_examples_prompt} \
+    "+mode=reasoning" \
+    "+template_type={template_type}" \
+    "+tokenizer_name=Qwen/Qwen2.5-3B-Instruct" \
+    "+icl_example_seed=42" \
+    "+test_data_seed=42" \
+    "+train_step=0" \
+    "+data_mode=default" \
+    "+icl_example_maxlength=10000" \
+    "+test_data.dataset_name={dataset_name}" \
+    "+test_data.label_noise={label_noise}" \
+    "+test_data.feature_noise={feature_noise}" \
+    "+test_data.num_samples={num_samples}" \
+    "+test_data_examples.dataset_name={dataset_name}" \
+    "+test_data_examples.label_noise={label_noise}" \
+    "+test_data_examples.feature_noise={feature_noise}" \
+    "+test_data_examples.shot={shot}"
+        """
+    else:
+        if dataset_name == "blobs":
+            feature_noise = 1.0 if feature_noise is None else feature_noise
+        elif dataset_name in ["moons", "linear"]:
+            feature_noise = 0.1 if feature_noise is None else feature_noise
+        elif dataset_name == "circles":
+            feature_noise = 0.01 if feature_noise is None else feature_noise
+        command = f"""
 python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --template_type={template_type} \
     --num_samples={num_samples} \
     --n_shot={shot} \
-    --noise_level={noise_level} \
+    --feature_noise={feature_noise} \
     --test_ratio=0.2 \
-    --label_flip_rate={label_flip_rate} \
-    --data_mode={data_mode}
-    """ 
+        --label_noise={label_noise} \
+        --data_mode={data_mode}
+            """ 
+    return command
 
 
 def mix_dataset(
@@ -51,8 +104,8 @@ def rl_train(
     prompt_length=256,
     response_length=1024,
     num_samples=10000,
-    noise_level=None,
-    label_flip_rate=0.0,
+    feature_noise=None,
+    label_noise=0.0,
     n_gpus=2,
     data_mode="default"
 ):
@@ -61,8 +114,8 @@ def rl_train(
         shot=shot,
         template_type=template_type,
         num_samples=num_samples,
-        noise_level=noise_level,
-        label_flip_rate=label_flip_rate,
+        feature_noise=feature_noise,
+        label_noise=label_noise,
         data_mode=data_mode
     )
     trained_model_name = get_model_name(
@@ -72,8 +125,8 @@ def rl_train(
         template_type=template_type,
         response_length=response_length,
         num_samples=num_samples,
-        noise_level=noise_level,
-        label_flip_rate=label_flip_rate,
+        feature_noise=feature_noise,
+        label_noise=label_noise,
         data_mode=data_mode
     )
     result_dir = get_result_dir(
@@ -83,8 +136,8 @@ def rl_train(
         template_type=template_type,
         response_length=response_length,
         num_samples=num_samples,
-        noise_level=noise_level,
-        label_flip_rate=label_flip_rate,
+        feature_noise=feature_noise,
+        label_noise=label_noise,
         data_mode=data_mode,
         train_step=0,
     )
@@ -143,8 +196,8 @@ def inference(
     prompt_length=256,
     response_length=1024,
     num_samples=10000,
-    noise_level=None,
-    label_flip_rate=0.0,
+    feature_noise=None,
+    label_noise=0.0,
     n_gpus=2,
     data_mode="default",
     train_step=0,
@@ -156,8 +209,8 @@ def inference(
         shot=shot,
         template_type=template_type,
         num_samples=num_samples,
-        noise_level=noise_level,
-        label_flip_rate=label_flip_rate,
+        feature_noise=feature_noise,
+        label_noise=label_noise,
         data_mode=data_mode
     )
     result_dir = get_result_dir(
@@ -167,8 +220,8 @@ def inference(
         template_type=template_type,
         response_length=response_length,
         num_samples=num_samples,
-        noise_level=noise_level,
-        label_flip_rate=label_flip_rate,
+        feature_noise=feature_noise,
+        label_noise=label_noise,
         data_mode=data_mode,
         train_step=train_step
     )
