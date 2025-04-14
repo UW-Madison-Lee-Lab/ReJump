@@ -125,12 +125,13 @@ for dataset in dataset_list:
                         
                             inference_command = inference(
                                 dataset_name=dataset,
-                                shot=shot,
+                                shot=shot,                               
                                 model_name=model_path,
                                 template_type=template_type,
                                 prompt_length=prompt_length,
                                 response_length=response_length,
                                 num_samples=n_samples,
+                                query=args.n_query, 
                                 feature_noise=feature_noise,
                                 label_noise=args.label_noise,
                                 n_gpus=args.n_gpus,
@@ -151,7 +152,8 @@ for dataset in dataset_list:
                             num_samples=n_samples,
                             feature_noise=feature_noise, 
                             label_noise=args.label_noise,
-                            data_mode=args.data_mode
+                            data_mode=args.data_mode,
+                            query=args.n_query
                         )
                         script_path = f"{root_dir}/run_exps/auto/{model_name}_train_{args.train}.sh"
                         script_paths.append(script_path)

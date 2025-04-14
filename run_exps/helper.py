@@ -198,6 +198,7 @@ def inference(
     prompt_length=256,
     response_length=1024,
     num_samples=10000,
+    query=1,
     feature_noise=None,
     label_noise=0.0,
     n_gpus=2,
@@ -209,6 +210,7 @@ def inference(
     dataset_dir = get_dataset_dir(
         dataset_name=dataset_name,
         shot=shot,
+        query=query,
         template_type=template_type,
         num_samples=num_samples,
         feature_noise=feature_noise,
@@ -219,6 +221,7 @@ def inference(
         dataset_name=dataset_name,
         model_name=model_name,
         shot=shot,
+        query=query,
         template_type=template_type,
         response_length=response_length,
         num_samples=num_samples,
