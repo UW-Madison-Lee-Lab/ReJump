@@ -293,26 +293,25 @@ def make_regression_prefix(
         """
     elif template_type == 'reasoning_api':
         prefix = f"""
-        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Your answer should be just the target value, without any other text or punctuation.
+        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Your answer should be just the target value, without any other text or punctuation, for example {answer_example}.
         """
     elif template_type == "reasoning_api_customized":
         prefix = f"""
-        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} {customized_prompt} Your answer should be just the target value, without any other text or punctuation.
+        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} {customized_prompt} Your answer should be just the target value, without any other text or punctuation, for example {answer_example}.
         """
     elif template_type == "standard_api_no_reasoning":
         prefix = f"""
-        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Your answer should be just the target value, without any other text or punctuation.
+        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Your answer should be just the target value, without any other text or punctuation , for example {answer_example}..
         """
     elif template_type == "standard_api":
         prefix = f"""
-        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Let's think step by step. Please provide your thinking process in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example {answer_example}. Note that your final answer should be just the target value, without any other text or punctuation.
+        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Let's think step by step. 
+        Please provide your thinking process in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example {answer_example}. Note that your final answer should be just the target value, without any other text or punctuation.
         """
     else:
         raise ValueError(f"Invalid template type: {template_type}")
     
     return prefix, in_context_samples
-
-
 
 def make_prefix(
     dp, 
@@ -347,12 +346,10 @@ def make_prefix(
         raise ValueError(f"Invalid task type: {task_type}")
 
 def make_map_fn(split, args, n_classes, in_context_dataset, data_source, data_mode, customized_prompt=None):
-
-    
+   
     def process_fn(example, idx):
         if data_mode in ["grid", "default"]:
             in_context_dataset_ = in_context_dataset[split]
-            print("in_context_dataset_", in_context_dataset)
         else:
             in_context_dataset_ = Dataset.from_dict({
                 "features": [in_context_dataset[split][idx][i][0] for i in range(len(in_context_dataset[split][idx]))],
@@ -425,12 +422,10 @@ def save_data(
     
     if data_mode == "default":
         raw_in_context_dataset = Dataset.from_dict(in_context_dataset_dict)
-        print("raw_in_context_dataset", raw_in_context_dataset)
         in_context_dataset = {
             "train": raw_in_context_dataset.select(train_indices),
             "test": raw_in_context_dataset.select(test_indices)
         }
-        print("in_context_dataset", in_context_dataset)
     elif data_mode == "grid":
         raw_in_context_dataset = Dataset.from_dict(in_context_dataset_dict)
         in_context_dataset = {
@@ -460,7 +455,6 @@ def save_data(
                 print("Please enter a valid prompt")
     else:
         customized_prompt = None
-    print(in_context_dataset)
 
     train_dataset = train_dataset.map(function=make_map_fn(
         split='train', 
@@ -498,8 +492,7 @@ def save_data(
         test_dataset=test_dataset,
         args=args,
         data_mode=data_mode
-    )
-    
+    )    
         
 def store_data(
     local_dir,
@@ -532,7 +525,7 @@ def store_data(
             
 def classification_extract_solution(solution_str):
     # Extract the answer from the solution string
-    direct_match = re.search(r'<answer><answer>(.*?)</answer></answer>', solution_str, re.DOTALL)
+    direct_match = re.search(r'<answer><answer>((?:[-+]?\d+(?:\s*,\s*[-+]?\d+)*))</answer></answer>', solution_str, re.DOTALL)
     if direct_match:
         answer_content = direct_match.group(1).strip()
         try:
@@ -540,6 +533,16 @@ def classification_extract_solution(solution_str):
         except ValueError:
             answers = []
         return answers
+    
+    direct_match2 = re.search(r'<answer>((?:[-+]?\d+(?:\s*,\s*[-+]?\d+)*))</answer>', solution_str, re.DOTALL)
+    if direct_match2:
+        answer_content = direct_match2.group(1).strip()
+        try:
+            answers = [int(val.strip()) for val in answer_content.split(',') if val.strip().isdigit()]
+        except ValueError:
+            answers = []
+        return answers
+
 
     cleaned_solution_str = solution_str
     cleaned_solution_str = re.sub(r'</answer>(\s*</answer>)+', '</answer>', cleaned_solution_str)
@@ -557,7 +560,7 @@ def classification_extract_solution(solution_str):
     lenient_matches = re.findall(r'<answer[^>]*>(\d+)', cleaned_solution_str)
     if lenient_matches:
         try:
-            answers = [int(val.strip()) for val in lenient_matches if val.strip().isdigit()]
+            answers = [int(val.strip()) for val in answer_content.split(',') if val.strip().isdigit()]
         except ValueError:
             answers = []
         return answers
@@ -566,19 +569,21 @@ def classification_extract_solution(solution_str):
 def classification_reward_fn(solution_str, ground_truth):
     # Extract the answer from the solution string
     extracted_answers = classification_extract_solution(solution_str)
+    gt_labels = ground_truth['label'] if isinstance(ground_truth['label'], list) else list(ground_truth['label'])
+
     # Check if the extracted answers match the ground truth
-    if extracted_answers:
-        gt_labels = ground_truth['label'] if isinstance(ground_truth['label'], list) else list(ground_truth['label'])
-        if len(extracted_answers) != len(gt_labels):
-            return -100
+    if extracted_answers and len(extracted_answers) == len(gt_labels):
+        return sum(a == b for a, b in zip(extracted_answers, gt_labels))/ len(gt_labels)
+    else:
+        # Fallback to random scores if no answers are found
+        import random
+        answers = [random.uniform(0, 10) for _ in range(len(ground_truth['label']))]
         return sum(a == b for a, b in zip(extracted_answers, gt_labels))/ len(gt_labels)
     
-    return -10000
-
 def regression_extract_solution(solution_str):
     # Extract the answer from the solution string
-    direct_match = re.search(r'<answer><answer>(.*?)</answer></answer>', solution_str, re.DOTALL)
 
+    direct_match = re.search(r'<answer>((?:[-+]?\d+\.\d+)(?:,\s*[-+]?\d+\.\d+)*)</answer>', solution_str, re.DOTALL)
     if direct_match:
         answer_content = direct_match.group(1).strip()
         try:
@@ -588,11 +593,11 @@ def regression_extract_solution(solution_str):
             answers = []
 
 
-    direct_match2 = re.search(r'<answer>(.*?)</answer>', solution_str, re.DOTALL)
-    if direct_match2:
+    direct_match = re.search(r'<answer><answer>((?:[-+]?\d+\.\d+)(?:,\s*[-+]?\d+\.\d+)*)</answer></answer>', solution_str, re.DOTALL)
+    if direct_match:
         answer_content = direct_match.group(1).strip()
         try:
-            answers = [float(val.strip()) for val in answer_content.split(',') if val.strip().isdigit()]
+            answers = [float(val.strip()) for val in answer_content.split(',') if val.strip() != '']
             return answers
         except ValueError:
             answers = []
@@ -601,24 +606,73 @@ def regression_extract_solution(solution_str):
     cleaned_solution_str = re.sub(r'<answer>(\s*<answer>)+', '</answer>', cleaned_solution_str)
     cleaned_solution_str = re.sub(r'</answer>(\s*</answer>)+', '</answer>', cleaned_solution_str)
     
-    clean_match = re.search(r'<answer>(.*?)</answer>', cleaned_solution_str, re.DOTALL)
+    clean_match = re.search(r'<answer>((?:[-+]?\d+\.\d+)(?:,\s*[-+]?\d+\.\d+)*)</answer>', cleaned_solution_str, re.DOTALL)
     if clean_match:
         answer_content = clean_match.group(1).strip()
         try:
-            answers = [float(val.strip()) for val in answer_content.split(',') if val.strip().isdigit()]
+            answers = [float(val.strip()) for val in answer_content.split(',') if val.strip() != '']
             return answers
         except ValueError:
             answers = []
 
-    
-    lenient_matches = re.findall(r'<answer[^>]*>(\d+)', cleaned_solution_str)
-    if lenient_matches:
+    clean_match_lenient = re.search(r'<answer>(.*?)</answer>', cleaned_solution_str, re.DOTALL)
+    if clean_match_lenient:
+        answer_content = clean_match_lenient.group(1).strip()
         try:
-            answers = [float(val.strip()) for val in lenient_matches if val.strip().isdigit()]
+            if ',' in answer_content:
+                answers = [float(val.strip()) for val in answer_content.split(',') if val.strip() != '']
+            else:
+                answers = [float(val.strip()) for val in answer_content.split() if val.strip() != '']
             return answers
         except ValueError:
-            answers = []
+            num_match = re.match(r'^((?:[-+]?\d+\.\d+\s*)+)', answer_content)
+            if num_match:
+                numbers_block = num_match.group(1)
+                try:
+                    answers = [float(x) for x in numbers_block.split() if x.strip() != '']
+                    return answers
+                except ValueError:
+                    pass
+            else: 
+                multiline_matches = re.findall(r'((?:^\s*[-+]?\d+\.\d+\s*$\n?)+)', answer_content, re.M)
+                if multiline_matches:
+                    last_block = multiline_matches[-1]
+                    try:
+                        answers = [float(x) for x in last_block.split() if x.strip() != '']
+                        return answers
+                    except ValueError:
+                        pass
 
+    # # Use a more lenient pattern for other cases
+    # # This handles partial or malformed tags
+    # lenient_match = re.search(r'<answer[^>]*>(\d+)[^<]*(?:</answer>|<\\/answer>|<?/?answer>)', cleaned_solution_str)
+    # if lenient_match:
+    #     response_class = int(lenient_match.group(1).strip())
+    #     return response_class 
+    
+    # # Last resort - just look for digits between any answer-like tags
+    # fallback_matches = re.findall(r'<answer.*?>(\d+).*?(?:</answer>|<\\/answer>|answer>)', solution_str, re.DOTALL)
+    # if fallback_matches:
+    #     for answer in fallback_matches[::-1]:
+    #         if answer.strip().isdigit():
+    #             response_class 
+    #             return response_class
+            
+    # last last resort - look for digits in the last line of the solution string
+    # no_answer_lines = [line for line in cleaned_solution_str.splitlines() if line.strip() != '']
+    # while no_answer_lines and re.search(r'\d', no_answer_lines[-1]) is None:
+    #     no_answer_lines.pop()
+
+    # if no_answer_lines:
+    #     last_line = no_answer_lines[-1].strip()
+    #     last_line = re.sub(r'(?<=\.)\s+', '', last_line)
+    #     pattern = r'^([-+]?\d+\.\d+(?:\s*,\s*[-+]?\d+\.\d+)*)$'
+    #     if re.match(pattern, last_line):
+    #         try:
+    #             answers = [float(val.strip()) for val in last_line.split(',')]
+    #             return answers
+    #         except ValueError:
+    #             return []
     return []
 
 def regression_reward_fn(solution_str, ground_truth):
@@ -626,20 +680,22 @@ def regression_reward_fn(solution_str, ground_truth):
         return -(y_true - y_pred) ** 2
 
     answers = regression_extract_solution(solution_str)
-    if answers:
-        gt_labels = ground_truth['label']
-        # Convert numpy array to list if needed.
-        if hasattr(gt_labels, 'tolist'):
-            gt_labels = gt_labels.tolist()
-        elif not isinstance(gt_labels, list):
-            gt_labels = [gt_labels]
-        if len(answers) != len(gt_labels):
-            return -100
+    gt_labels = ground_truth['label']
+    # Convert numpy array to list if needed.
+    if hasattr(gt_labels, 'tolist'):
+        gt_labels = gt_labels.tolist()
+    elif not isinstance(gt_labels, list):
+        gt_labels = [gt_labels]
+    if answers and len(answers) == len(gt_labels):
+        scores = [criterion(y_pred, y_true) for y_pred, y_true in zip(answers, gt_labels)]
+        return sum(scores) / len(scores)
+    else:
+        # Fallback to random scores if no answers are found
+        import random
+        answers = [random.uniform(0, 10) for _ in range(len(ground_truth['label']))]
         scores = [criterion(y_pred, y_true) for y_pred, y_true in zip(answers, gt_labels)]
         return sum(scores) / len(scores)
     
-    return -10000
-
     
 def _select_rm_score_fn(data_source):
     if data_source == 'openai/gsm8k':

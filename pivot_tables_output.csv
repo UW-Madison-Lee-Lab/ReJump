@@ -1,0 +1,28 @@
+Table for overall_accuracy:
+test_item,google-gemini-2.0-flash-lite,google-gemini-2.0-flash-thinking-exp
+blobs,100.0,
+circles,0.0,68.0
+linear,49.0,26.0
+moons,62.0,
+
+Table for accuracy_per_point:
+test_item,google-gemini-2.0-flash-lite,google-gemini-2.0-flash-thinking-exp
+blobs,100.0,
+circles,60.60000000000001,80.80000000000001
+linear,92.30000000000004,75.09999999999998
+moons,95.60000000000002,
+
+Table for parseable_accuracy:
+test_item,google-gemini-2.0-flash-lite,google-gemini-2.0-flash-thinking-exp
+blobs,100.0,
+circles,0.0,75.55555555555556
+linear,49.0,29.88505747126437
+moons,62.0,
+
+Table for parseable_predictions:
+test_item,google-gemini-2.0-flash-lite,google-gemini-2.0-flash-thinking-exp
+blobs,100.0,
+circles,100.0,90.0
+linear,100.0,87.0
+moons,100.0,
+
