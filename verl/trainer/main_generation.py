@@ -315,8 +315,8 @@ def main(config):
         k = None
         for i in range(total_samples):
             if k is None: k = len(reward_tensor_lst[i])
-            best_i = np.argmax(reward_tensor_lst[i])
-            sum_square_error += reward_tensor_lst[i][best_i]
+            best_i = np.argmin(reward_tensor_lst[i])
+            sum_square_error -= reward_tensor_lst[i][best_i]
             # Check if the answer can be converted to float without using try/except
             answer = dataset["answers"][i][best_i]
             # Check if string represents a valid float (handles digits, decimal point, and signs)
@@ -324,7 +324,8 @@ def main(config):
                 y_pred.append(float(answer))
             except ValueError:
                 y_pred.append(0)
-            y_true.append(dataset["label"][i])
+                
+            y_true.append(dataset["reward_model"].iloc[i]["ground_truth"]["label"])
         
         mse = sum_square_error / total_samples
         r2 = r2_score(np.array(y_true), np.array(y_pred))
