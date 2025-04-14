@@ -8,30 +8,31 @@ data_dir = os.path.join(root_dir, 'datasets')
 def get_model_name(
     dataset_name, 
     model_name, 
-    shot, 
+    shot,
     template_type, 
     response_length,
     num_samples,
     feature_noise,
     label_noise,
-    data_mode
+    data_mode,
+    query=1,
 ):
-    return f"{model_name.replace('/', '-')}/{dataset_name}_{shot}_shot_{template_type}_reslen_{response_length}_nsamples_{num_samples}_noise_{feature_noise}_flip_rate_{label_noise}_mode_{data_mode}"
+    return f"{model_name.replace('/', '-')}/{dataset_name}_{shot}_shot_{query}_query_{template_type}_reslen_{response_length}_nsamples_{num_samples}_noise_{feature_noise}_flip_rate_{label_noise}_mode_{data_mode}"
 def get_configs_via_model_name(model_name):
-    pattern = r"(.+?)/(.+?)_(.+?)_shot_(.+)_reslen_(.+)_nsamples_(.+)_noise_(.+)_flip_rate_(.+)_mode_(.+)"
+    pattern = r"(.+?)/(.+?)_(.+?)_shot_(.+?)_query_(.+)_reslen_(.+)_nsamples_(.+)_noise_(.+)_flip_rate_(.+)_mode_(.+)"
     match = re.match(pattern, model_name)
     
     if match:
         model_name = match.group(1)
         dataset_name = match.group(2)
         shot = match.group(3)
-        template_type = match.group(4)
-        response_length = match.group(5)
-        num_samples = match.group(6)
-        feature_noise = match.group(7)
-        label_noise = match.group(8)
-        data_mode = match.group(9)
-    
+        query          = match.group(4)  #new
+        template_type  = match.group(5)
+        response_length= match.group(6)
+        num_samples    = match.group(7)
+        feature_noise  = match.group(8)
+        label_noise    = match.group(9)
+        data_mode      = match.group(10)
 
         return {
             "dataset_name": dataset_name,
@@ -78,6 +79,7 @@ def get_result_dir(
     dataset_name, 
     model_name, 
     shot, 
+    query,
     template_type, 
     response_length,
     num_samples, 
@@ -86,7 +88,7 @@ def get_result_dir(
     train_step = 0,
     data_mode = "default",
 ):
-    return os.path.join(root_dir, 'results', get_model_name(dataset_name, model_name, shot, template_type, response_length, num_samples, feature_noise, label_noise, data_mode), f"global_step_{train_step}")
+    return os.path.join(root_dir, 'results', get_model_name(dataset_name, model_name, shot, template_type, response_length, num_samples, feature_noise, label_noise, data_mode, query=query), f"global_step_{train_step}")
 def get_configs_via_result_dir(result_dir):
     # Extract model name from the result directory path using regex
     pattern = r".*results[/\\](.+)[/\\]global_step_(\d+)$"
@@ -110,29 +112,32 @@ def get_dataset_dir(
     feature_noise = 0,
     label_noise = 0,
     data_mode = "default",
+    query=1,
 ):
     if "ricl" in template_type:
         shot = f"3*{shot}"
-    return os.path.join(root_dir, 'datasets', dataset_name, f"{shot}_shot", template_type, f"{num_samples}_samples_{feature_noise}_noise_{label_noise}_flip_rate_{data_mode}_mode")
+    return os.path.join(root_dir, 'datasets', dataset_name, f"{shot}_shot_{query}_query", template_type, f"{num_samples}_samples_{feature_noise}_noise_{label_noise}_flip_rate_{data_mode}_mode")
 def get_configs_via_dataset_dir(dataset_dir):
 
     basename = dataset_dir.replace(f"{root_dir}/datasets/", "")
-    pattern = r"(.+)/(\d+)_shot/(.+)/(.+)_samples_(.+)_noise_(.+)_flip_rate_(.+)_mode"
+    pattern = r"(.+)/(\d+)_shot_(\d+)_query/(.+)/(.+)_samples_(.+)_noise_(.+)_flip_rate_(.+)_mode"
     match = re.match(pattern, basename)
     if match:
-        dataset_name = match.group(1)
-        shot = match.group(2)
-        template_type = match.group(3)
-        num_samples = match.group(4)
-        feature_noise = match.group(5)
-        label_noise = match.group(6)
-        data_mode = match.group(7)
+        dataset_name   = match.group(1)
+        shot           = match.group(2)
+        query          = match.group(3)  #new
+        template_type  = match.group(4)
+        num_samples    = match.group(5)
+        feature_noise  = match.group(6)
+        label_noise    = match.group(7)
+        data_mode      = match.group(8)
     else:
         return {}
     
     return {
         "dataset_name": dataset_name,
         "shot": shot,
+        "query": query,
         "template_type": template_type,
         "num_samples": num_samples,
         "feature_noise": feature_noise,

@@ -479,6 +479,7 @@ def save_data(
     local_dir = get_dataset_dir(
         dataset_name=data_source,
         shot=args.n_shot,
+        query=args.n_query,
         template_type=args.template_type,
         num_samples=args.num_samples,
         feature_noise=args.feature_noise,
