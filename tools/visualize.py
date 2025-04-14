@@ -16,7 +16,7 @@ from typing import Dict, Any, List, Optional, Tuple
 from constants import supported_datasets
 import pdb
 from verl.trainer.ppo.helper import _select_rm_score_fn as select_reward_fn
-
+from examples.data_preprocess.helper import _select_parse_fn
 try:
     from transformers import AutoTokenizer
 except ImportError:
@@ -123,6 +123,7 @@ def extract_answer_content(text) -> Optional[str]:
 
 
 def get_prediction_result(response_text: Optional[str], ground_truth, task_type: str) -> Tuple[Optional[int], bool]:
+    #should be the same with reward_fn in helper.py, but I am too lazy to copy it over
     """
     Evaluate prediction using main_eval approach
     
@@ -139,12 +140,46 @@ def get_prediction_result(response_text: Optional[str], ground_truth, task_type:
         # Use the classification_reward_fn for evaluation
         metric = classification_reward_fn(response_text, ground_truth)
         
+        nested_match = re.search(r'<answer><answer>(.*?)</answer></answer>', response_text, re.DOTALL)
+        if nested_match:
+            prediction_str = nested_match.group(1).strip()
+            if ',' in prediction_str:
+                try:
+                    prediction = [int(x.strip()) for x in prediction_str.split(',')]
+                except ValueError:
+                    try:
+                        prediction = [float(x.strip()) for x in prediction_str.split(',')]
+                    except ValueError:
+                        prediction = None
+                if prediction is not None:
+                    return prediction, metric
+            else:
+                if re.match(r'^-?\d+(\.\d+)?$', prediction_str):
+                    if '.' in prediction_str:
+                        prediction = float(prediction_str)
+                    else:
+                        prediction = int(prediction_str)
+                    return prediction, metric
+                
         # Extract the predicted label for display
         all_matches = list(re.finditer(r'<answer>(.*?)</answer>', response_text, re.DOTALL))
         if all_matches:
             response_extract = None
             for match in all_matches[::-1]:  # Check from last to first
                 match_content = match.group(1).strip()
+
+                # Match comma-separated integers or floats
+                if ',' in match_content:
+                    try:
+                        prediction = [int(x.strip()) for x in match_content.split(',')]
+                        return prediction, metric
+                    except ValueError:
+                        try:
+                            prediction = [float(x.strip()) for x in match_content.split(',')]
+                            return prediction, metric
+                        except ValueError:
+                            continue
+
                 # Match integers and floats (including negative numbers)
                 if re.match(r'^-?\d+(\.\d+)?$', match_content):
                     response_extract = match
@@ -304,9 +339,19 @@ def get_prediction_result(response_text: Optional[str], ground_truth, task_type:
         
         # If no number found, return None
         return None, False
+    
+def get_experiment_name(exp_path):
+    """
+    Get experiment name from the path  
+    """
+    parts = exp_path.split('/')
+    if len(parts) >= 3:
+        first = parts[1]
+        second = parts[2].split('_')[0]
+        return f"{first}_{second}"
+    return "Unknown_Experiment"
 
-
-def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", save_dir: Optional[str] = None, max_samples: int = 100):
+def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", save_dir: Optional[str] = None, max_samples: int = 100, REGRESSION_CORRECT_THRESHOLD=-0.01, output_csv_dir: Optional[str] = None) -> str:
     """
     Visualize ICL reasoning output from parquet files with model responses
     
@@ -352,12 +397,20 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
         
     # Calculate accuracy on full dataset first
     total_data_size = len(df)
+    wrong_number_of_answer=0
     full_correct_predictions = 0
-    full_refined_correct = 0  # For storing the correct count for refined accuracy
+    full_MSE_accuracyPsamples = 0  # For storing the correct count for refined accuracy
+    parseable_correct_predictions = 0
+    parseable_MSE_accuracyPsamples= 0  # For storing the refined accuracy
     unparseable_predictions = 0  # Count of unparseable predictions
-    parseable_predictions = 0  # Count of parseable predictions
     parseable_correct = 0  # Count of correct predictions among parseable ones
-    
+    parseable_predictions = 0  # List to store parseable predictions
+    #caculate R2
+    predictions_list = []
+    ground_truths_list = []
+    parseable_predictions_list = []
+    parseable_ground_truths_list = []
+
     print(f"Calculating accuracy on all {total_data_size} samples...")
     
     # Process all samples for accuracy calculation
@@ -424,7 +477,7 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
         
         # Get reward function for the data source
         reward_fn = select_reward_fn(data_source)
-        
+        extract_answer=_select_parse_fn(data_source)
         # Evaluate with the appropriate reward function
         metric = False
         can_parse_prediction = True
@@ -432,44 +485,129 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
         # Use the dedicated reward function
         metric = reward_fn(cleaned_response_text, ground_truth)
 
+
         # Try to extract prediction result to check if it can be parsed
-        parsed_prediction, _ = get_prediction_result(cleaned_response_text, ground_truth, task_type)
-        can_parse_prediction = parsed_prediction is not None
-            
+        parsed_prediction = extract_answer(cleaned_response_text)
+
         
-        if metric != -10000:
-            full_correct_predictions += metric
-            full_refined_correct += metric
-            if can_parse_prediction: parseable_correct += metric
-            if can_parse_prediction: parseable_predictions += 1
-        if ground_truth is not None and 'label' in ground_truth and task_type == "classification":
-            # For samples with unparseable predictions, calculate refined accuracy
+
+        if parsed_prediction != [] and len(parsed_prediction) == len(ground_truth['label']):
+            parseable_correct += 1  
+            parseable_predictions += 1
+            
+
+            if task_type == "classification":
+                # For classification, check if the prediction matches the ground truth
+                if metric == 1.0:
+                    full_correct_predictions += 1
+                    parseable_correct_predictions += 1
+                full_MSE_accuracyPsamples += metric
+                parseable_MSE_accuracyPsamples += metric
+                
+            if task_type == "regression":
+                # For regression, we can use the metric directly
+                if metric >= REGRESSION_CORRECT_THRESHOLD:
+                    full_correct_predictions += 1
+                    parseable_correct_predictions += 1  
+                
+                full_MSE_accuracyPsamples += metric   
+                parseable_MSE_accuracyPsamples += metric
+
+                #Calculate R2
+                if ground_truth and 'label' in ground_truth:
+                    ground_truth_label = ground_truth['label']
+                    parseable_predictions_list.append(parsed_prediction)
+                    parseable_ground_truths_list.append(ground_truth_label)
+                    predictions_list.append(parsed_prediction)
+                    ground_truths_list.append(ground_truth_label)
+
+  
+        else: #a random prediction
             unparseable_predictions += 1
-            
-            # Get task type to determine number of classes
-            num_classes = supported_datasets[data_source]['num_classes']
-            
-            # Randomly select a label (fixed seed set at function start)
-            random_label = random.randint(0, num_classes - 1)
-            
-            # If randomly selected label matches the true label, count as correct for refined accuracy
-            if random_label == ground_truth['label']:
-                full_refined_correct += metric
+            if task_type == "classification":
+                # For classification, check if the prediction matches the ground truth
+                if metric == 1.0:
+                    full_correct_predictions += 1
+                full_MSE_accuracyPsamples += metric
+            if task_type == "regression":
+                # For regression, we can use the metric directly
+                if metric >= REGRESSION_CORRECT_THRESHOLD:
+                    full_correct_predictions += 1
+                full_MSE_accuracyPsamples += metric 
+
+                answers = [random.uniform(0, 10) for _ in range(len(ground_truth['label']))]
+                predictions_list.append(answers)
+                ground_truths_list.append(ground_truth['label'])
+
     
     # Calculate overall accuracy and refined accuracy
     accuracy = (full_correct_predictions / total_data_size) if total_data_size > 0 else 0
-    refined_accuracy = (full_refined_correct / total_data_size) if total_data_size > 0 else 0
+    refined_accuracy = (full_MSE_accuracyPsamples / total_data_size) if total_data_size > 0 else 0
     
     # Calculate accuracy for parseable predictions only
-    parseable_accuracy = (parseable_correct / parseable_predictions) 
+    parseable_accuracy = (parseable_correct_predictions / parseable_correct) if parseable_correct > 0 else 0
+    parseable_refined_accuracy= (parseable_MSE_accuracyPsamples / parseable_correct) if parseable_correct > 0 else 0
+    parseable_porporation = (parseable_correct / total_data_size) if total_data_size > 0 else 0
+    if task_type == "regression":
+        # Calculate R2 score
+        from sklearn.metrics import r2_score
+        r2 = r2_score(ground_truths_list, predictions_list)
+        r2_parseable = r2_score(parseable_ground_truths_list, parseable_predictions_list) if parseable_predictions_list != [] else 0
     
     if task_type == "classification":
-        print(f"Overall accuracy from all {total_data_size} samples: {accuracy*100:.2f}%")
-        print(f"Refined accuracy (random guess for unparseable): {refined_accuracy*100:.2f}%")
-        print(f"Parseable accuracy (excluding unparseable): {parseable_accuracy*100:.2f}% ({parseable_predictions}/{total_data_size} samples)")
+        metrics_dict = {
+            "overall_accuracy": accuracy * 100,
+            "accuracy_per_point": refined_accuracy * 100,
+            "parseable_overall_accuracy": parseable_accuracy * 100,
+            "parseable_accuracy_per_point": parseable_refined_accuracy * 100,
+            "parseableporporation": parseable_porporation * 100
+        }
     else:
-        print(f"Overall MSE from all {total_data_size} samples: {-accuracy:.2f}")
-        print(f"Parseable MSE: {-parseable_accuracy:.2f} ({parseable_predictions}/{total_data_size} samples)")
+        # 对回归任务：
+        metrics_dict = {
+            "overall_accuracy": accuracy * 100,  # 如果需要百分比，可以乘以 100
+            "overall_mse": -refined_accuracy,
+            "parseable_accuracy": parseable_accuracy * 100,
+            "parseable_mse": -parseable_refined_accuracy,
+            "r2_score": r2,
+            "parseable_r2_score": r2_parseable,
+            "parseableporporation": parseable_porporation * 100
+        }
+    import csv
+    import os
+    def append_experiment_metrics(csv_path, experiment_name, metrics):
+        experiment_name = get_experiment_name(experiment_name)
+
+        file_exists = os.path.isfile(csv_path)
+        row = {"experiment": experiment_name}
+        row.update(metrics)
+        
+        mode = 'a' if file_exists else 'w'
+        with open(csv_path, mode, newline='') as csvfile:
+            fieldnames = list(row.keys())
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            if not file_exists:
+                writer.writeheader()
+            writer.writerow(row)
+        
+    if task_type == "classification":
+        print(f"Overall accuracy from all {total_data_size} samples: {accuracy*100:.2f}%")
+        print(f"Accuracy for each point: {refined_accuracy*100:.2f}%")
+        print(f"Parseable accuracy (excluding unparseable): {parseable_accuracy*100:.2f}% ({parseable_predictions}/{total_data_size} samples)")
+        print(f"Parseable refined accuracy (excluding unparseable): {parseable_refined_accuracy*100:.2f}% ({parseable_predictions}/{total_data_size} samples)")
+        if output_csv_dir is not None:
+            output_csv = os.path.join(output_csv_dir, "classification_metrics.csv")
+            append_experiment_metrics(output_csv, input_file, metrics_dict)
+    else:
+        print(f"Overall accuracy from all {total_data_size} samples: {accuracy*100:.2f}")
+        print(f"Overall MSE: {-refined_accuracy:.4f} ({parseable_predictions}/{total_data_size} samples)")
+        print(f"Parseable accuracy (excluding unparseable): {parseable_accuracy*100:.2f}% ({parseable_predictions}/{total_data_size} samples)")
+        print(f"Parseable MSE: {-parseable_refined_accuracy:.4f} ({parseable_predictions}/{total_data_size} samples)")
+        print(f"R2 Score: {r2:.4f}")
+        print(f"Parseable R2 Score: {r2_parseable:.4f}")
+        if output_csv_dir is not None:
+            output_csv = os.path.join(output_csv_dir, "regression_metrics.csv")
+            append_experiment_metrics(output_csv, input_file, metrics_dict)
     print(f"Unparseable predictions: {unparseable_predictions} ({unparseable_predictions/total_data_size*100:.2f}%)")
         
     # Sample the dataframe if needed for visualization, ensuring balanced correct/incorrect samples
@@ -597,7 +735,7 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
             "<head>",
             "    <meta charset=\"UTF-8\">",
             "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">",
-            "    <title>ICL Reasoning Results - Accuracy: " + f"{accuracy*100:.2f}%" + "</title>" if task_type == "classification" else "ICL Reasoning Results - MSE: " + f"{accuracy:.2f}",
+            "    <title>ICL Reasoning Results - Accuracy: " + f"{accuracy*100:.2f}%" + "</title>" if task_type == "classification" else "ICL Reasoning Results - MSE: " + f"{refined_accuracy:.4f}",
             "    <style>",
             "        body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }",
             "        .sample { border: 1px solid #ddd; padding: 15px; margin-bottom: 20px; border-radius: 5px; }",
@@ -634,12 +772,15 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
             f'<!-- ACCURACY DATA: {accuracy:.2f}% | REFINED: {refined_accuracy:.2f}% | UNPARSEABLE: {unparseable_predictions} -->',
             f'<h1>ICL Reasoning Results: {Path(input_file).name}</h1>',
             f'<div class="accuracy-big">',
-            f'Accuracy: {accuracy*100:.2f}% &nbsp;|&nbsp; Refined Accuracy: {refined_accuracy*100:.2f}%' if task_type == "classification" else f'MSE: {-accuracy:.2f} &nbsp;|&nbsp; Refined MSE: {-refined_accuracy:.2f}',
+            f'Accuracy: {accuracy*100:.2f}% &nbsp;|&nbsp; Refined Accuracy: {refined_accuracy*100:.2f}%' if task_type == "classification" else f'Accuracy: {accuracy:.2f} &nbsp;|&nbsp; Refined MSE: {-refined_accuracy:.4f}',
             f'</div>',
             f'<div class="accuracy-big" style="background-color: #e9f0ff; border-color: #1565C0;">',
-            f'Parseable Accuracy: {parseable_accuracy*100:.2f}% (excluding {unparseable_predictions} unparseable samples)' if task_type == "classification" else f'Parseable MSE: {-parseable_accuracy:.2f} (excluding {unparseable_predictions} unparseable samples)',
+            f'Parseable Accuracy: {parseable_accuracy*100:.2f}% (excluding {unparseable_predictions} unparseable samples)' if task_type == "classification" else f'Parseable Accuracy: {-parseable_accuracy:.2f} (excluding {unparseable_predictions} unparseable samples)',
             f'</div>',
             f'<div>Unparseable Predictions: {unparseable_predictions} ({unparseable_predictions/total_data_size*100:.2f}%)</div>',
+            f'</div>',
+            f'<div>Wrong Number of Answers: {wrong_number_of_answer} ({wrong_number_of_answer/total_data_size*100:.2f}%)</div>',
+            f'<div>Correct threshold: {REGRESSION_CORRECT_THRESHOLD} </div>' if task_type == "regression" else "",
             f'<hr style="margin: 20px 0; border: 0; height: 2px; background: #333;">',
         ]
         
@@ -649,10 +790,11 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
             f'<table>',
             f'<tr><th>Metric</th><th>Value</th></tr>',
             f'<tr><td>Total Samples{sampled_note}</td><td>{total_data_size}</td></tr>',
-            f'<tr><td>Correct Predictions (all data)</td><td>{full_correct_predictions}</td></tr>' if task_type == "classification" else ""
-            f'<tr><td>Accuracy (all data)</td><td>{accuracy*100:.2f}%</td></tr>' if task_type == "classification" else f'<tr><td>MSE (all data)</td><td>{-accuracy:.2f}</td></tr>',
-            f'<tr><td>Refined Accuracy</td><td>{refined_accuracy*100:.2f}%</td></tr>' if task_type == "classification" else f'<tr><td>Refined MSE</td><td>{-refined_accuracy:.2f}</td></tr>',
-            f'<tr><td>Parseable Accuracy</td><td>{parseable_accuracy*100:.2f}% ({parseable_predictions}/{total_data_size} samples)</td></tr>' if task_type == "classification" else f'<tr><td>Parseable MSE</td><td>{-parseable_accuracy:.2f} ({parseable_predictions}/{total_data_size} samples)</td></tr>',
+            f'<tr><td>Correct Predictions (all data)</td><td>{full_correct_predictions}</td></tr>' if task_type == "classification" else "",
+            f'<tr><td>Accuracy (all data)</td><td>{accuracy*100:.2f}%</td></tr>' 
+            f'<tr><td>Refined Accuracy</td><td>{refined_accuracy*100:.2f}%</td></tr>' if task_type == "classification" else f'<tr><td>MSE</td><td>{-refined_accuracy:.4f}</td></tr>',
+            f'<tr><td>Parseable Accuracy</td><td>{parseable_accuracy*100:.2f}% ({parseable_predictions}/{total_data_size} samples)</td></tr>',
+            f'<tr><td>Parseable MSE</td><td>{-parseable_refined_accuracy:.4f} ({parseable_predictions}/{total_data_size} samples)</td></tr>'  if task_type == "regression" else f'<tr><td>Parseable Refined Accuracy</td><td>{parseable_refined_accuracy*100:.2f}% ({parseable_predictions}/{total_data_size} samples)</td></tr>', 
             f'<tr><td>Unparseable Predictions</td><td>{unparseable_predictions} ({unparseable_predictions/total_data_size*100:.2f}%)</td></tr>',
             f'</table>',
             f'{balance_note}',
@@ -728,6 +870,9 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
             # Get reward function for the data source
             reward_fn = select_reward_fn(data_source)
             
+            # Extract prediction function
+            extract_answer=_select_parse_fn(data_source)
+
             # Evaluate with the appropriate reward function
             metric = False
             prediction = None
@@ -743,7 +888,7 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
                 prediction = int(raw_answer.strip())
             else:
                 # Try to extract prediction using get_prediction_result function
-                parsed_prediction, _ = get_prediction_result(cleaned_response_text, ground_truth, task_type)
+                parsed_prediction = extract_answer(cleaned_response_text)
                 if parsed_prediction is not None:
                     prediction = parsed_prediction
                 elif ground_truth and 'label' in ground_truth and metric:
@@ -939,7 +1084,6 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
                                 prompt_content = example_data['prompt']['content']
                             
                             if prompt_content:
-                                # 计算token数量
                                 prompt_token_length = calculate_token_length(prompt_content, tokenizer)
                                 html_content.append(f'<div><b>Prompt:</b> <span style="color:#666; font-size:0.9em;">[{prompt_token_length} tokens]</span></div>')
                                 html_content.append(f'<div style="white-space: pre-wrap; font-family: monospace; background-color: #f5f5f5; padding: 5px; margin-bottom: 5px; max-height: 200px; overflow-y: auto;">{html.escape(prompt_content)}</div>')
@@ -1109,12 +1253,12 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
             html_content.append(f'<div class="section-title">Prediction Result</div>')
             if prediction is not None:
                 if task_type == "classification":
-                    result_class = "correct" if metric else "incorrect"
+                    result_class = "correct" if metric==1 else "incorrect"
                     html_content.append(f'<div class="{result_class}">Predicted: {prediction} ({("CORRECT" if metric else "INCORRECT")})</div>')
                 else:
-                    result_class = "correct" if -metric < 0.001 else "incorrect"
-                    html_content.append(f'<div class="{result_class}">Predicted: {prediction}</div>')
-                    html_content.append(f'<div style="margin-top: 5px;">Squared Error: {-metric:.6f}</div>')                    
+                    result_class = "correct" if metric>REGRESSION_CORRECT_THRESHOLD else "incorrect"
+                    html_content.append(f'<div class="{result_class}">Predicted: {prediction} ({("CORRECT" if (result_class=="correct") else "INCORRECT")})</div>')
+                    html_content.append(f'<div class="{result_class}">MSE: {metric}</div>')
             else:
                 html_content.append(f'<div class="incorrect">Unable to parse prediction</div>')
             
@@ -1510,7 +1654,7 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
                     prediction = int(raw_answer.strip())
                 else:
                     # Try to extract prediction using get_prediction_result function
-                    parsed_prediction, _ = get_prediction_result(cleaned_response_text, ground_truth, task_type)
+                    parsed_prediction, _ = extract_answer(cleaned_response_text, ground_truth, task_type)
                     if parsed_prediction is not None:
                         prediction = parsed_prediction
                     elif ground_truth and 'label' in ground_truth and metric:
@@ -1555,21 +1699,15 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
             f.write("="*80 + "\n")
             f.write(f"Total samples{sampled_note}: {total_data_size}\n")
             f.write(f"Correct predictions (all data): {full_correct_predictions}\n")
-            f.write(f"Accuracy (all data): {accuracy:.2f}%\n")
-            f.write(f"Refined accuracy: {refined_accuracy:.2f}%\n")
-            f.write(f"Parseable accuracy: {parseable_accuracy:.2f}% ({parseable_predictions}/{total_data_size} samples)\n")
+            f.write(f"Accuracy (all data): {accuracy*100:.2f}%\n")
+            f.write(f"Refined accuracy: {refined_accuracy*100:.2f}%\n")
+            f.write(f"Parseable accuracy: {parseable_accuracy*100:.2f}% ({parseable_predictions}/{total_data_size} samples)\n")
             f.write(f"Unparseable predictions: {unparseable_predictions} ({unparseable_predictions/total_data_size*100:.2f}%)\n")
             if balance_note:
                 f.write(f"{balance_note}\n")
             f.write("="*80 + "\n")
     
     print(f"Visualization saved to: {output_file}")
-    print(f"Total samples{sampled_note}: {total_data_size}")
-    print(f"Correct predictions (all data): {full_correct_predictions}")
-    print(f"Accuracy (all data): {accuracy:.2f}%")
-    print(f"Refined accuracy: {refined_accuracy:.2f}%")
-    print(f"Parseable accuracy: {parseable_accuracy:.2f}% ({parseable_predictions}/{total_data_size} samples)")
-    print(f"Unparseable predictions: {unparseable_predictions} ({unparseable_predictions/total_data_size*100:.2f}%)")
     
     return str(output_file)
 
@@ -1585,7 +1723,10 @@ def main():
                         help='Directory to save the output file (default: same as input file)')
     parser.add_argument('--max-samples', type=int, default=100,
                         help='Maximum number of samples to visualize (default: 100, use 0 for all)')
-    
+    parser.add_argument('--REGRESSION_CORRECT_THRESHOLD', type=float, default=-0.01,
+                        help='Threshold for regression correctness (default:-0.01)')
+    parser.add_argument('--output-csv', type=str, default=None,
+                        help='Output results to CSV file')
     args = parser.parse_args()
     
     # Check if input file exists
@@ -1594,7 +1735,7 @@ def main():
         return
     
     # Visualize the output
-    output_file = visualize_icl_reasoning_output(args.input, args.format, args.output_dir, args.max_samples)
+    output_file = visualize_icl_reasoning_output(args.input, args.format, args.output_dir, args.max_samples, args.REGRESSION_CORRECT_THRESHOLD, args.output_csv)
     print(f"Visualization complete! Saved to: {output_file}")
 
 
