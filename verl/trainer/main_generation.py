@@ -313,22 +313,57 @@ def main(config):
         
         y_pred, y_true = [], []
         k = None
+        valid_samples = total_samples
         for i in range(total_samples):
             if k is None: k = len(reward_tensor_lst[i])
+<<<<<<< HEAD
             best_i = np.argmin(reward_tensor_lst[i])
             sum_square_error -= reward_tensor_lst[i][best_i]
+=======
+            best_i = np.argmax(reward_tensor_lst[i])
+            if reward_tensor_lst[i][best_i] <= -100: #either answer is not parsed or answers number is incorrect
+                valid_samples -= 1
+            else:
+                sum_square_error += reward_tensor_lst[i][best_i]
+>>>>>>> 0e9b129c06a35cbbe2ad2f17774487b3d5651e83
             # Check if the answer can be converted to float without using try/except
             answer = dataset["answers"][i][best_i]
-            # Check if string represents a valid float (handles digits, decimal point, and signs)
+            # 使用split将字符串按逗号拆分成一个列表
+            number_str_list = answer.split(',')
+
+            # 将每个子字符串转换为浮点数
             try:
-                y_pred.append(float(answer))
+                number_list = [float(num.strip()) for num in number_str_list]
             except ValueError:
+<<<<<<< HEAD
                 y_pred.append(0)
                 
             y_true.append(dataset["reward_model"].iloc[i]["ground_truth"]["label"])
+=======
+                # 如果转换失败，可以设置一个默认值，这里设为0
+                number_list = [0]
+
+            # 如果你需要使用 numpy 数组（通常计算 r2 时需要保证类型一致）
+            converted_answer = np.array(number_list)
+            if isinstance(answer, list):
+                try:
+                    y_pred.append(answer)
+                except ValueError:
+                    y_pred.append([])
+            # Check if string represents a valid float (handles digits, decimal point, and signs)
+            else:
+                try:
+                    y_pred.append(float(answer))
+                except ValueError:
+                    y_pred.append(0)
+                y_true.append(dataset["label"][i])
+>>>>>>> 0e9b129c06a35cbbe2ad2f17774487b3d5651e83
         
-        mse = sum_square_error / total_samples
-        r2 = r2_score(np.array(y_true), np.array(y_pred))
+        mse = sum_square_error / valid_samples
+        try:
+            r2 = r2_score(np.array(y_true), np.array(y_pred))
+        except ValueError:
+            r2 = 0
         print(f'mse@{k}: {mse}')
         print(f'r2@{k}: {r2}')
         

@@ -8,6 +8,7 @@ def gen_dataset(
     shot,
     template_type="qwen-instruct",
     num_samples=10000,
+    n_query=10,
     feature_noise=None,
     label_noise=0.0,
     data_mode="default",
@@ -73,6 +74,7 @@ python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --template_type={template_type} \
     --num_samples={num_samples} \
     --n_shot={shot} \
+    --n_query={n_query} \
     --feature_noise={feature_noise} \
     --test_ratio=0.2 \
         --label_noise={label_noise} \
@@ -195,6 +197,7 @@ def inference(
     prompt_length=256,
     response_length=1024,
     num_samples=10000,
+    query=1,
     feature_noise=None,
     label_noise=0.0,
     n_gpus=2,
@@ -206,6 +209,7 @@ def inference(
     dataset_dir = get_dataset_dir(
         dataset_name=dataset_name,
         shot=shot,
+        query=query,
         template_type=template_type,
         num_samples=num_samples,
         feature_noise=feature_noise,
@@ -216,6 +220,7 @@ def inference(
         dataset_name=dataset_name,
         model_name=model_name,
         shot=shot,
+        query=query,
         template_type=template_type,
         response_length=response_length,
         num_samples=num_samples,
