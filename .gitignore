@@ -122,3 +122,9 @@ environment.py
 analyze_deepseek/
 
 reasoning_analysis/deepseek-r1-cosreg_claude_analysis.parquet
+
+
+#all json and parquet and png files in reasoning_analysis
+reasoning_analysis/*.json
+reasoning_analysis/*.parquet
+reasoning_analysis/*.png
