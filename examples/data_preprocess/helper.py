@@ -402,7 +402,6 @@ def save_data(
 ): 
     raw_dataset = Dataset.from_dict(dataset_dict)
     
-    
     #assert len(raw_dataset) >= TRAIN_SIZE + TEST_SIZE
 
     # Create non-overlapping train and test sets
@@ -415,10 +414,11 @@ def save_data(
     train_dataset = raw_dataset.select(train_indices)
     test_dataset = raw_dataset.select(test_indices)
 
-    all_indices = np.arange(args.num_samples*args.n_shot)
-    train_indices = np.random.choice(all_indices, int((1-args.test_ratio)*args.num_samples*args.n_shot), replace=False)
+    in_context_dataset_length = len(in_context_dataset_dict[list(in_context_dataset_dict.keys())[0]])
+    all_indices = np.arange(in_context_dataset_length)
+    train_indices = np.random.choice(all_indices, int((1-args.test_ratio)*in_context_dataset_length), replace=False)
     remaining_indices = np.setdiff1d(all_indices, train_indices)
-    test_indices = np.random.choice(remaining_indices, int(args.test_ratio*args.num_samples*args.n_shot), replace=False)
+    test_indices = np.random.choice(remaining_indices, int(args.test_ratio*in_context_dataset_length), replace=False)
     
     if data_mode == "default":
         raw_in_context_dataset = Dataset.from_dict(in_context_dataset_dict)
