@@ -74,6 +74,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_operands', type=int, default=6)
     parser.add_argument('--max_target', type=int, default=1000)
     parser.add_argument('--min_number', type=int, default=1)
+    parser.add_argument('--n_query', type=int, default=10)
     parser.add_argument('--max_number', type=int, default=100)
     parser.add_argument('--train_size', type=int, default=327680)
     parser.add_argument('--test_size', type=int, default=1024)
