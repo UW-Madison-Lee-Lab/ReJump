@@ -156,18 +156,23 @@ def make_classification_prefix(
         query = "Given the following data points:\n"
         for i in range(n_query):
             query += f"{i+1}. Features: {format_features(features[i])}\n"
-        query += "Classify each of them into one of the possible classes. "
+        query += "Classify each data point into one of the possible classes, and list the corresponding class labels separated by commas."
+        label_str = "class labels"
     else:
         query = f"Given the data point with features {format_features(features[0])}, classify it into one of the possible classes. "
-    
+        label_str = "class label"
     answer_example_number = np.random.choice(range(n_classes), n_query, replace=True)
-    answer_example = f"<answer>{', '.join([str(x) for x in answer_example_number])}</answer>"
+    if "reasoning_api" in template_type or "standard_api_no_reasoning" in template_type:
+        answer_example = f"{', '.join([str(x) for x in answer_example_number])}"
+    else:
+        answer_example = f"<answer>{', '.join([str(x) for x in answer_example_number])}</answer>"
+    
 
     if template_type == 'base':
         prefix = f"""
         A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
 
-        User: The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} {query} Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example {answer_example}.
+        User: The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} {query} Please provide your thinking process in <think> </think> tags. Your final answer should be enclosed in <answer> and </answer> tags, containing only {label_str} with no additional text—for example, {answer_example}
         Assistant: Let me solve this step by step.
         <think>
         """
@@ -177,7 +182,7 @@ def make_classification_prefix(
         You are a helpful assistant. You first think about the reasoning process in your mind and then provide the user with the answer.
         <|im_end|>
         <|im_start|>user
-        The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} {query} Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example {answer_example}.
+        The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} {query} Please provide your thinking process in <think> </think> tags. Your final answer should be enclosed in <answer> and </answer> tags, containing only {label_str} with no additional text—for example, {answer_example}
         <|im_end|>
         <|im_start|>assistant
         Let me solve this step by step.
@@ -187,25 +192,25 @@ def make_classification_prefix(
         prefix = f"""
         A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
 
-        User: The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} {query} Your response should be in <answer> </answer> tags without any other text, for example {answer_example}.
+        User: The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} {query} Your final answer should be enclosed in <answer> and </answer> tags, containing only {label_str} with no additional text—for example, {answer_example}
         Assistant: 
         """
     elif template_type == 'reasoning_api':
         prefix = f"""
-        The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} {query} Your answer should be just the class label, without any other text or punctuation. And return the final answer in <answer> </answer> tags, for example {answer_example}
+        The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} {query} Your final answer should just be the {label_str}, without any other text, e.g., {answer_example}
         """
     elif template_type == "reasoning_api_customized":
         prefix = f"""
-        The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} {query} {customized_prompt} Your answer should be just the class label, without any other text or punctuation.
+        The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} {query} {customized_prompt} Your answer should just be {label_str}, without any other text, e.g., {answer_example}
         """
     elif template_type == "standard_api_no_reasoning":
         prefix = f"""
-        The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} {query} Your answer should be just the class label, without any other text or punctuation.
+        The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} {query} Your answer should be just the {label_str}, without any other text, e.g., {answer_example}
         """
     elif template_type == "standard_api":
         prefix = f"""
         The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} {query}
-        Let's think step by step. Please provide your thinking process in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example {answer_example}. Note that your final answer should be just the class label, without any other text or punctuation.
+        Let's think step by step. Please provide your thinking process in <think> </think> tags. Your final answer should be enclosed in <answer> and </answer> tags, containing only {label_str} with no additional text—for example, {answer_example}
         """
     else:
         raise ValueError(f"Invalid template type: {template_type}")
@@ -245,19 +250,24 @@ def make_regression_prefix(
         query = "Given the following data points with features:\n"
         for i in range(n_query):
             query += f"{i+1}. Features: {format_features(features[i])}\n"
-        query += "predict target values for each data point. "
+        query += "predict target values for each data point, separated by commas. "
+        target_str = "predicted values for all samples"
 
     else:
         query = f"Given the data point with features {format_features(features[0])}, predict the target value. "
+        target_str = "predicted value"
 
     random_targets = [np.round(np.random.uniform(0, 10), 3) for _ in range(n_query)]
-    answer_example = f"<answer>{', '.join(str(x) for x in random_targets)}</answer>"
+    if "reasoning_api" in template_type or "standard_api_no_reasoning" in template_type:
+        answer_example = f"{', '.join(str(x) for x in random_targets)}"
+    else:
+        answer_example = f"<answer>{', '.join(str(x) for x in random_targets)}</answer>"
 
     if template_type == 'base':
         prefix = f"""
         A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
 
-        User: The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example {answer_example}.
+        User: The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Please provide your thinking process in <think> </think> tags. Your final answer should be enclosed in <answer> and </answer> tags, containing only {target_str} with no additional text—for example, {answer_example}
         Assistant: Let me solve this step by step.
         <think>
         """
@@ -267,7 +277,7 @@ def make_regression_prefix(
         You are a helpful assistant. You first think about the reasoning process in your mind and then provide the user with the answer.
         <|im_end|>
         <|im_start|>user
-        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example {answer_example}.
+        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Please provide your thinking process in <think> </think> tags. Your final answer should be enclosed in <answer> and </answer> tags, containing only {target_str} with no additional text—for example, {answer_example}
         <|im_end|>
         <|im_start|>assistant
         Let me solve this step by step.
@@ -279,7 +289,7 @@ def make_regression_prefix(
         You are a helpful assistant. You always provide the user directly with the answer without any reasoning.
         <|im_end|>
         <|im_start|>user
-        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Your response should be in <answer> </answer> tags without any other text, for example {answer_example}.
+        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Your final answer should be enclosed in <answer> and </answer> tags, containing only {target_str} with no additional text—for example, {answer_example}
         <|im_end|>
         <|im_start|>assistant
         <answer>
@@ -288,25 +298,25 @@ def make_regression_prefix(
         prefix = f"""
         A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
 
-        User: The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Your response should be in <answer> </answer> tags without any other text, for example {answer_example}.
+        User: The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Your final answer should be enclosed in <answer> and </answer> tags, containing only {target_str} with no additional text—for example, {answer_example}
         Assistant: 
         """
     elif template_type == 'reasoning_api':
         prefix = f"""
-        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Your answer should be just the target value, without any other text or punctuation, for example {answer_example}.
+        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Your response should contain only {target_str} with no additional text—for example, {answer_example}
         """
     elif template_type == "reasoning_api_customized":
         prefix = f"""
-        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} {customized_prompt} Your answer should be just the target value, without any other text or punctuation, for example {answer_example}.
+        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} {customized_prompt} Your response should contain only {target_str} with no additional text—for example, {answer_example}
         """
     elif template_type == "standard_api_no_reasoning":
         prefix = f"""
-        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Your answer should be just the target value, without any other text or punctuation , for example {answer_example}..
+        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Your response should contain only {target_str} with no additional text—for example, {answer_example}
         """
     elif template_type == "standard_api":
         prefix = f"""
         The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Let's think step by step. 
-        Please provide your thinking process in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example {answer_example}. Note that your final answer should be just the target value, without any other text or punctuation.
+        Please provide your thinking process in <think> </think> tags. Your final answer should be enclosed in <answer> and </answer> tags, containing only {target_str} with no additional text—for example, {answer_example}
         """
     else:
         raise ValueError(f"Invalid template type: {template_type}")
@@ -479,7 +489,7 @@ def save_data(
     local_dir = get_dataset_dir(
         dataset_name=data_source,
         shot=args.n_shot,
-        query=args.n_query,
+        n_query=args.n_query,
         template_type=args.template_type,
         num_samples=args.num_samples,
         feature_noise=args.feature_noise,

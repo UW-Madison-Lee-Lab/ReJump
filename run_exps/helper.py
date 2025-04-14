@@ -108,7 +108,8 @@ def rl_train(
     feature_noise=None,
     label_noise=0.0,
     n_gpus=2,
-    data_mode="default"
+    data_mode="default",
+    n_query=1
 ):
     dataset_dir = get_dataset_dir(
         dataset_name=dataset_name,
@@ -117,7 +118,8 @@ def rl_train(
         num_samples=num_samples,
         feature_noise=feature_noise,
         label_noise=label_noise,
-        data_mode=data_mode
+        data_mode=data_mode,
+        n_query=n_query
     )
     trained_model_name = get_model_name(
         dataset_name=dataset_name,
@@ -128,7 +130,8 @@ def rl_train(
         num_samples=num_samples,
         feature_noise=feature_noise,
         label_noise=label_noise,
-        data_mode=data_mode
+        data_mode=data_mode,
+        n_query=n_query
     )
     result_dir = get_result_dir(
         dataset_name=dataset_name,
@@ -141,6 +144,7 @@ def rl_train(
         label_noise=label_noise,
         data_mode=data_mode,
         train_step=0,
+        n_query=n_query
     )
     output_file = get_dataset_filename(split="test", data_mode=data_mode)
     return f"""
@@ -197,7 +201,7 @@ def inference(
     prompt_length=256,
     response_length=1024,
     num_samples=10000,
-    query=1,
+    n_query=1,
     feature_noise=None,
     label_noise=0.0,
     n_gpus=2,
@@ -209,25 +213,25 @@ def inference(
     dataset_dir = get_dataset_dir(
         dataset_name=dataset_name,
         shot=shot,
-        query=query,
         template_type=template_type,
         num_samples=num_samples,
         feature_noise=feature_noise,
         label_noise=label_noise,
-        data_mode=data_mode
+        data_mode=data_mode,
+        n_query=n_query
     )
     result_dir = get_result_dir(
         dataset_name=dataset_name,
         model_name=model_name,
         shot=shot,
-        query=query,
         template_type=template_type,
         response_length=response_length,
         num_samples=num_samples,
         feature_noise=feature_noise,
         label_noise=label_noise,
         data_mode=data_mode,
-        train_step=train_step
+        train_step=train_step,
+        n_query=n_query
     )
     output_file = get_dataset_filename(split="test", data_mode=data_mode)
     return f"""
