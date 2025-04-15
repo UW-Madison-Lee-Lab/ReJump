@@ -456,10 +456,7 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
         
         # Get input prompt content
         input_prompt = row.get('prompt')
-        input_prompt_content = None
-        if input_prompt and isinstance(input_prompt, list) and len(input_prompt) > 0:
-            if isinstance(input_prompt[0], dict) and 'content' in input_prompt[0]:
-                input_prompt_content = input_prompt[0]['content']
+        input_prompt_content = input_prompt[0]['content']
         
         # Use original response without attempting to remove prompt
         cleaned_response_text = clean_response_text(response_text, input_prompt_content)

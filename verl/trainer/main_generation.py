@@ -16,7 +16,7 @@ Generate responses given a dataset of prompts
 """
 import ray
 import numpy as np
-from sklearn.metrics import r2_score
+from sklearn.metrics import r2_score, mean_squared_error, accuracy_score
 import pdb
 import hydra
 import os
@@ -47,6 +47,7 @@ from verl.single_controller.ray import RayClassWithInitArgs, RayResourcePool, Ra
 from utils import flatten_dict, print_configs
 from constants import get_configs_via_result_dir, supported_llms, supported_datasets
 from verl.trainer.fsdp_sft_trainer import extract_model_name
+from examples.data_preprocess.helper import classification_extract_solution, regression_extract_solution
 import wandb   
 try:
     from environment import WANDB_INFO, HUGGINGFACE_API_KEY, DEEPSEEK_API_KEY, OPENAI_API_KEY, OPENROUTER_API_KEY, ANTHROPIC_API_KEY
@@ -69,6 +70,7 @@ login(token=HUGGINGFACE_API_KEY)
 @hydra.main(config_path='config', config_name='generation', version_base=None)
 def main(config):
     wandb_configs = flatten_dict(config)
+    wandb_configs.update(get_configs_via_result_dir(os.path.dirname(config.data.output_path)))
     if config.trainer.wandb == 1:
         config.model.path = extract_model_name(config.model.path)
         run_name = f"run-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
@@ -80,15 +82,12 @@ def main(config):
             config=wandb_configs
         )
     elif config.trainer.wandb == 2:
-        
-        wandb_configs.update(get_configs_via_result_dir(os.path.dirname(config.data.output_path)))
+    
         wandb.init(
             project=f"{WANDB_INFO['project']}-generation",
             entity=WANDB_INFO['entity'],
             config=wandb_configs
         )
-    
-    
     print_configs(flatten_dict(config))
     
     from pprint import pprint
@@ -99,9 +98,8 @@ def main(config):
     # Initialize model based on config
     use_api = supported_llms[config.model.path]["type"] == "api"
     if use_api:
-        data_configs = get_configs_via_result_dir(os.path.dirname(config.data.output_path))
         api_key = supported_llms[config.model.path]["api_key"]
-        model = LLMAPI(api_key=api_key, model_name=config.model.path, template_type=data_configs["template_type"])
+        model = LLMAPI(api_key=api_key, model_name=config.model.path, template_type=wandb_configs["template_type"])
         chat_lst_converter = LLMAPI.convert_chat_list
         # Use Qwen tokenizer for API mode
         local_path = "Qwen/Qwen2.5-3B-Instruct"
@@ -249,10 +247,12 @@ def main(config):
                 test_batch = test_batch.union(test_output_gen_batch)
                 reward_dict = reward_fn(test_batch)
                 reward_tensor = reward_dict['reward_tensor']
-                reward_tensor_lst[i].extend(reward_tensor.sum(dim=1).tolist())
-                output_lst[i].extend(reward_dict['sequences_lst'])
-                answer_lst[i].extend(reward_dict['answer_lst'])
-                reasonings_lst[i].extend(reward_dict['reasoning_lst'])
+                indexes = [item.non_tensor_batch["extra_info"]["index"] for item in test_batch]
+                sort_idx = np.argsort(indexes)
+                reward_tensor_lst[i].extend(reward_tensor.sum(dim=1)[sort_idx].tolist())
+                output_lst[i].extend(np.array(reward_dict['sequences_lst'])[sort_idx].tolist())
+                answer_lst[i].extend(np.array(reward_dict['answer_lst'])[sort_idx].tolist())
+                reasonings_lst[i].extend(np.array(reward_dict['reasoning_lst'])[sort_idx].tolist())
                 
                 # Debug: Print first sample's output
                 if batch_idx == 0 and i == 0:
@@ -308,77 +308,85 @@ def main(config):
         wandb.log_artifact(artifact)
     
     config_dict = get_configs_via_result_dir(os.path.dirname(config.data.output_path))
-    if supported_datasets[config_dict['dataset_name']]['type'] == 'regression':
-        sum_square_error = 0
+    
+    y_pred, y_true = [], []
+    
+    task_type = supported_datasets[config_dict['dataset_name']]['type']
+    k = config.data.n_samples
+    n_query = int(wandb_configs["n_query"])
+    valid_prompts = np.zeros(total_samples)
+    for i in range(total_samples):
+        best_metric = -np.inf
+        best_answer = [0 for _ in range(n_query)]
+        true_labels = dataset["reward_model"].iloc[i]["ground_truth"]["label"]
+        valid_flag = False
+        for j in range(k):
+            if task_type == 'classification':
+                answers = np.array(classification_extract_solution(output_lst[i][j]))
+                if len(answers) == n_query:
+                    metric = (answers == true_labels).mean()
+                    if metric > best_metric:
+                        best_metric = metric
+                        best_answer = answers
+                        valid_flag = True
+            elif task_type == 'regression':
+                answers = np.array(regression_extract_solution(output_lst[i][j]))
+                if len(answers) == n_query:
+                    metric = -((answers - true_labels)**2).mean()
+                    if metric > best_metric:
+                        best_metric = metric
+                        best_answer = answers
+                        valid_flag = True
+                        
+        valid_prompts[i] = valid_flag
+        y_pred.append(best_answer)
+        y_true.append(true_labels)
+            
+    y_pred, y_true = np.array(y_pred), np.array(y_true)
+    valid_prompts = valid_prompts.astype(bool)
+    if task_type == 'regression':
+        mse = mean_squared_error(y_true.flatten(), y_pred.flatten())
+        r2 = r2_score(y_true, y_pred)
         
-        y_pred, y_true = [], []
-        k = None
-        valid_samples = total_samples
-        for i in range(total_samples):
-            if k is None: k = len(reward_tensor_lst[i])
-            best_i = np.argmax(reward_tensor_lst[i])
-            if reward_tensor_lst[i][best_i] <= -100: #either answer is not parsed or answers number is incorrect
-                valid_samples -= 1
-            else:
-                sum_square_error += reward_tensor_lst[i][best_i]
-            # Check if the answer can be converted to float without using try/except
-            answer = dataset["answers"][i][best_i]
-            # 使用split将字符串按逗号拆分成一个列表
-            number_str_list = answer.split(',')
-
-            # 将每个子字符串转换为浮点数
-            try:
-                number_list = [float(num.strip()) for num in number_str_list]
-            except ValueError:
-                # 如果转换失败，可以设置一个默认值，这里设为0
-                number_list = [0]
-
-            # 如果你需要使用 numpy 数组（通常计算 r2 时需要保证类型一致）
-            converted_answer = np.array(number_list)
-            if isinstance(answer, list):
-                try:
-                    y_pred.append(answer)
-                except ValueError:
-                    y_pred.append([])
-            # Check if string represents a valid float (handles digits, decimal point, and signs)
-            else:
-                try:
-                    y_pred.append(float(answer))
-                except ValueError:
-                    y_pred.append(0)
-                y_true.append(dataset["label"][i])
+        print(f'mse@{k}: {mse: .3f}')
+        print(f'r2@{k}: {r2: .3f}')
         
-        mse = sum_square_error / valid_samples
-        try:
-            r2 = r2_score(np.array(y_true), np.array(y_pred))
-        except ValueError:
-            r2 = 0
-        print(f'mse@{k}: {mse}')
-        print(f'r2@{k}: {r2}')
+        valid_mse = mean_squared_error(y_true[valid_prompts].flatten(), y_pred[valid_prompts].flatten())
+        valid_r2 = r2_score(y_true[valid_prompts], y_pred[valid_prompts])
+        print(f'valid_mse@{k}: {valid_mse: .3f}')
+        print(f'valid_r2@{k}: {valid_r2: .3f}')
         
         if config.trainer.wandb:
             wandb.log({
                 f'mse@{k}': mse,
                 f'r2@{k}': r2,
+                f'valid_mse@{k}': valid_mse,
+                f'valid_r2@{k}': valid_r2,
             })
     else:
-        # eval
-        passes = 0
-
-        k = None
-        for i in range(total_samples):
-            if k is None: k = len(reward_tensor_lst[i])
-            max_score = np.max(reward_tensor_lst[i])
-
-            if max_score == 1:
-                passes += 1
-
-        print(f'pass@{k}: {passes / total_samples}')
-
+        strict_accuracy = accuracy_score(np.ones(total_samples), np.all(y_pred == y_true, axis=1))
+        accuracy = accuracy_score(y_true.flatten(), y_pred.flatten())
+        print(f'pass@{k}: {accuracy: .3f}')
+        print(f'strict_pass@{k}: {strict_accuracy: .3f}')
+        
+        valid_strict_accuracy = accuracy_score(np.ones(valid_prompts.sum()), np.all(y_pred[valid_prompts] == y_true[valid_prompts], axis=1))
+        valid_accuracy = accuracy_score(y_true[valid_prompts].flatten(), y_pred[valid_prompts].flatten())
+        print(f'valid_pass@{k}: {valid_accuracy: .3f}')
+        print(f'valid_strict_pass@{k}: {valid_strict_accuracy: .3f}')
         if config.trainer.wandb:
             wandb.log({
-                f'pass@{k}': passes / total_samples,
+                f'pass@{k}': accuracy,
+                f'strict_pass@{k}': strict_accuracy,
+                f'valid_pass@{k}': valid_accuracy,
+                f'valid_strict_pass@{k}': valid_strict_accuracy,
             })
+            
+    valid_ratio = np.mean(valid_prompts)
+    print(f'valid_ratio@{k}: {valid_ratio: .3f}')
+    if config.trainer.wandb:
+        wandb.log({
+            f'valid_ratio@{k}': valid_ratio,
+        })
 
     if config.trainer.wandb:
         wandb.finish()

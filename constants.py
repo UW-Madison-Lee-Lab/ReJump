@@ -15,9 +15,9 @@ def get_model_name(
     feature_noise,
     label_noise,
     data_mode,
-    query=1,
+    n_query=1,
 ):
-    return f"{model_name.replace('/', '-')}/{dataset_name}_{shot}_shot_{query}_query_{template_type}_reslen_{response_length}_nsamples_{num_samples}_noise_{feature_noise}_flip_rate_{label_noise}_mode_{data_mode}"
+    return f"{model_name.replace('/', '-')}/{dataset_name}_{shot}_shot_{n_query}_query_{template_type}_reslen_{response_length}_nsamples_{num_samples}_noise_{feature_noise}_flip_rate_{label_noise}_mode_{data_mode}"
 def get_configs_via_model_name(model_name):
     pattern = r"(.+?)/(.+?)_(.+?)_shot_(.+?)_query_(.+)_reslen_(.+)_nsamples_(.+)_noise_(.+)_flip_rate_(.+)_mode_(.+)"
     match = re.match(pattern, model_name)
@@ -26,7 +26,7 @@ def get_configs_via_model_name(model_name):
         model_name = match.group(1)
         dataset_name = match.group(2)
         shot = match.group(3)
-        query          = match.group(4)  #new
+        n_query          = match.group(4)  #new
         template_type  = match.group(5)
         response_length= match.group(6)
         num_samples    = match.group(7)
@@ -38,6 +38,7 @@ def get_configs_via_model_name(model_name):
             "dataset_name": dataset_name,
             "model_name": model_name,
             "shot": shot,
+            "n_query": n_query,
             "template_type": template_type,
             "response_length": response_length,
             "num_samples": num_samples,
@@ -59,8 +60,9 @@ def get_model_dir(
     label_noise,
     data_mode,
     train_step = 0,
+    n_query=1,
 ):
-    return os.path.join(root_dir, 'checkpoints', 'TinyZero', get_model_name(dataset_name, model_name, shot, template_type, response_length, num_samples, feature_noise, label_noise, data_mode), "actor", f"global_step_{train_step}")
+    return os.path.join(root_dir, 'checkpoints', 'TinyZero', get_model_name(dataset_name, model_name, shot, template_type, response_length, num_samples, feature_noise, label_noise, data_mode, n_query=n_query), "actor", f"global_step_{train_step}")
 def get_configs_via_model_dir(model_dir):
     # Extract model name and train step from the model directory path using regex
     pattern = r".*TinyZero[/\\](.+)[/\\]actor[/\\]global_step_(\d+)$"
@@ -87,8 +89,9 @@ def get_result_dir(
     label_noise,
     train_step = 0,
     data_mode = "default",
+    n_query=1,
 ):
-    return os.path.join(root_dir, 'results', get_model_name(dataset_name, model_name, shot, template_type, response_length, num_samples, feature_noise, label_noise, data_mode, query=query), f"global_step_{train_step}")
+    return os.path.join(root_dir, 'results', get_model_name(dataset_name, model_name, shot, template_type, response_length, num_samples, feature_noise, label_noise, data_mode, n_query=n_query), f"global_step_{train_step}")
 def get_configs_via_result_dir(result_dir):
     # Extract model name from the result directory path using regex
     pattern = r".*results[/\\](.+)[/\\]global_step_(\d+)$"
@@ -112,20 +115,21 @@ def get_dataset_dir(
     feature_noise = 0,
     label_noise = 0,
     data_mode = "default",
-    query=1,
+    n_query=1,
 ):
     if "ricl" in template_type:
-        shot = f"3*{shot}"
-    return os.path.join(root_dir, 'datasets', dataset_name, f"{shot}_shot_{query}_query", template_type, f"{num_samples}_samples_{feature_noise}_noise_{label_noise}_flip_rate_{data_mode}_mode")
+        ricl_shot = int(re.match(r".*?ricl_(\d+)", template_type).group(1))
+        shot = f"{ricl_shot}*{shot}"
+    return os.path.join(root_dir, 'datasets', dataset_name, f"{shot}_shot_{n_query}_query", template_type, f"{num_samples}_samples_{feature_noise}_noise_{label_noise}_flip_rate_{data_mode}_mode")
 def get_configs_via_dataset_dir(dataset_dir):
 
     basename = dataset_dir.replace(f"{root_dir}/datasets/", "")
-    pattern = r"(.+)/(\d+)_shot_(\d+)_query/(.+)/(.+)_samples_(.+)_noise_(.+)_flip_rate_(.+)_mode"
+    pattern = r"(.+)/(.+)_shot_(\d+)_query/(.+)/(.+)_samples_(.+)_noise_(.+)_flip_rate_(.+)_mode"
     match = re.match(pattern, basename)
     if match:
         dataset_name   = match.group(1)
         shot           = match.group(2)
-        query          = match.group(3)  #new
+        n_query          = match.group(3)  #new
         template_type  = match.group(4)
         num_samples    = match.group(5)
         feature_noise  = match.group(6)
@@ -137,7 +141,7 @@ def get_configs_via_dataset_dir(dataset_dir):
     return {
         "dataset_name": dataset_name,
         "shot": shot,
-        "query": query,
+        "n_query": n_query,
         "template_type": template_type,
         "num_samples": num_samples,
         "feature_noise": feature_noise,

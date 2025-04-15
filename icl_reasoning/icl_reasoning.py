@@ -335,6 +335,12 @@ def sample_icl_examples(
         if len(sampled_examples) >= config.num_examples:
             break
             
+        if supported_datasets[example["data_source"]]["type"] == "classification":
+            if example["label"] != float(example["answers"][0]):
+                continue
+        elif supported_datasets[example["data_source"]]["type"] == "regression":
+            if abs(example["label"] - float(example["answers"][0])) > 0.05:
+                continue
         # Check if example is under the maximum token length
         
         prompt_content = extract_test_prompt_content(example)
@@ -697,6 +703,7 @@ def load_examples_from_dataset(dataset_path: str, example_indices: List[int], to
                     "index": idx,
                     "token_length": token_length
                 }
+                
             except Exception as e:
                 # print(f"Warning: Could not calculate token length for example {idx}: {e}")
                 # # Add minimal metadata
@@ -1017,7 +1024,6 @@ def main(cfg: DictConfig) -> None:
         # Calculate final prompt length in tokens
         prompt_token_length = calculate_token_length(prompt_text, tokenizer)
         print(f"Test example {idx+1}: Prompt length = {prompt_token_length} tokens")
-        
         # Create dataset entry with the new format
 
         entry = {
