@@ -336,8 +336,10 @@ def sample_icl_examples(
             break
             
         if supported_datasets[example["data_source"]]["type"] == "classification":
-            if example["label"] != float(example["answers"][0]):
+            
+            if ', '.join([str(item) for item in example["label"]]) != example["answers"][0]:
                 continue
+        
         elif supported_datasets[example["data_source"]]["type"] == "regression":
             if abs(example["label"] - float(example["answers"][0])) > 0.05:
                 continue
@@ -414,6 +416,7 @@ def create_prompt(instruction: str, icl_examples: List[Dict], test_examples: Lis
             else:
                 example_content = example_prompt
                 
+            prompt += "-----------------------------------\n"
             prompt += f"Example {i+1}:\n"
             prompt += f"Problem: {example_content}\n"
             prompt += f"Reasoning: {example_response}\n\n"
@@ -443,6 +446,7 @@ def create_prompt(instruction: str, icl_examples: List[Dict], test_examples: Lis
     else:
         test_prompt = f"Given the data point with features [{test_features[0]:.3f}, {test_features[1]:.3f}], classify it into one of the possible classes. Show your work in <think></think> tags. And return the final answer in <answer></answer> tags, for example <answer>1</answer>."
     
+    prompt += "-----------------------------------\n"
     prompt += f"Now, solve this problem:\n{test_prompt}"
     
     return prompt
