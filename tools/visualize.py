@@ -22,7 +22,7 @@ try:
 except ImportError:
     print("Warning: Could not import AutoTokenizer from transformers")
     AutoTokenizer = None
-
+import numpy as np
 # Initialize tokenizer
 def get_tokenizer(tokenizer_name="Qwen/Qwen2.5-3B-Instruct"):
     """
@@ -1198,7 +1198,7 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
             
             prompt = row.get('prompt', None)
             if prompt is not None:
-                if isinstance(prompt, list):
+                if isinstance(prompt, list) or isinstance(prompt, np.ndarray):
                     # Handle list of prompt items
                     html_content.append(f'<details>')
                     html_content.append(f'<summary>Show Input Prompt</summary>')

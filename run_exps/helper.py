@@ -40,7 +40,7 @@ def gen_dataset(
         """
             icl_examples.append(icl_example_prompt)
             
-        max_length = 20000 if supported_datasets[dataset_name]["type"] == "regression" else 10000
+        max_length = 20000 if supported_datasets[dataset_name]["type"] == "regression" else 40000
         icl_examples_prompt = ''.join(icl_examples).replace('\n', '')
         command = f"""
 python -m icl_reasoning.icl_reasoning \
@@ -57,7 +57,8 @@ python -m icl_reasoning.icl_reasoning \
     "+test_data.dataset_name={dataset_name}" \
     "+test_data.label_noise={label_noise}" \
     "+test_data.feature_noise={feature_noise}" \
-    "+test_data.num_samples={int(num_samples*0.2)}" \
+    "+test_data.num_samples={num_samples}" \
+    "+test_data.test_ratio=0.2" \
     "+test_data_examples.dataset_name={dataset_name}" \
     "+test_data_examples.label_noise={label_noise}" \
     "+test_data_examples.feature_noise={feature_noise}" \

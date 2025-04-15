@@ -157,6 +157,7 @@ class LLMAPI:
                         output = response.content[1].text
                     else:
                         output = response.content[0].text
+                        reasoning = ""
                         
                 elif self.client_type == "google":
                     response = self.client.models.generate_content(
@@ -226,6 +227,7 @@ class LLMAPI:
             except genai.errors.ClientError as e:
                 print(f"ClientError: {e}")
                 time.sleep(timeout)
+                
                 
             except Exception as e:
                 print(type(e))

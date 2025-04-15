@@ -54,7 +54,7 @@ class TestDataConfig:
     label_noise: float = MISSING  # 0.0, 0.1, 0.2
     feature_noise: float = MISSING  # noise level like 0.1, 1.0
     num_samples: int = MISSING  # Number of test samples to use
-
+    test_ratio: float = MISSING  # Ratio of test samples to use
 
 @dataclass
 class TestDataExampleConfig:
@@ -153,7 +153,7 @@ def generate_test_data(
     num_samples: int, 
     feature_noise: float, 
     label_noise: float, 
-    seed_value: int
+    seed_value: int,
 ) -> pd.DataFrame:
     """
     Generate test data using the appropriate data generator based on task type.
@@ -630,7 +630,7 @@ def sample_non_duplicate_examples(
     all_feature_vectors: list,
     icl_prompt_contents: set,
     rng: np.random.RandomState,
-    max_attempts: int = 10
+    max_attempts: int = 10,
 ) -> Tuple[List[Tuple], List, set]:
     """
     Sample a specified number of non-duplicate examples
@@ -669,7 +669,7 @@ def sample_non_duplicate_examples(
             num_samples=num_samples * 10,
             feature_noise=feature_noise,
             label_noise=label_noise,
-            seed_value=current_seed
+            seed_value=current_seed,
         )
         
         # Shuffle to get random examples
@@ -1027,14 +1027,14 @@ def main(cfg: DictConfig) -> None:
     print(f"Sampling {cfg.test_data.num_samples} test data points...")
     test_data, all_feature_vectors, all_features_str_set = sample_non_duplicate_examples(
         dataset_name=cfg.test_data.dataset_name,
-        num_samples=cfg.test_data.num_samples * cfg.test_data_examples.n_query,
+        num_samples=int(cfg.test_data.num_samples * cfg.test_data_examples.n_query * cfg.test_data.test_ratio),
         feature_noise=cfg.test_data.feature_noise,
         label_noise=cfg.test_data.label_noise,
         seed_value=cfg.test_data_seed,
         all_features_str_set=all_features_str_set,
         all_feature_vectors=all_feature_vectors,
         icl_prompt_contents=icl_prompt_contents,
-        rng=test_rng
+        rng=test_rng,
     )
     
     
