@@ -31,6 +31,7 @@ def gen_dataset(
     "+icl_examples.{i}.label_noise={label_noise}" \
     "+icl_examples.{i}.feature_noise={supported_datasets[example_dataset]['feature_noise']}" \
     "+icl_examples.{i}.shot=50" \
+    "+icl_examples.{i}.n_query={n_query}" \
     "+icl_examples.{i}.response_length=3046" \
     "+icl_examples.{i}.num_samples=500" \
     "+icl_examples.{i}.num_examples=1" \
@@ -60,7 +61,8 @@ python -m icl_reasoning.icl_reasoning \
     "+test_data_examples.dataset_name={dataset_name}" \
     "+test_data_examples.label_noise={label_noise}" \
     "+test_data_examples.feature_noise={feature_noise}" \
-    "+test_data_examples.shot={shot}"
+    "+test_data_examples.shot={shot}" \
+    "+test_data_examples.n_query={n_query}"
         """
     else:
         if dataset_name == "blobs":
