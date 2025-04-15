@@ -536,7 +536,7 @@ def store_data(
             
 def classification_extract_solution(solution_str):
     # Extract the answer from the solution string
-    direct_match = re.search(r'<answer><answer>((?:[-+]?\d+(?:\s*,\s*[-+]?\d+)*))</answer></answer>', solution_str, re.DOTALL)
+    direct_match = re.search(r'<answer>((?:[-+]?\d+(?:\s*,\s*[-+]?\d+)*))</answer>', solution_str, re.DOTALL)
     if direct_match:
         answer_content = direct_match.group(1).strip()
         try:
@@ -544,16 +544,6 @@ def classification_extract_solution(solution_str):
         except ValueError:
             answers = []
         return answers
-    
-    direct_match2 = re.search(r'<answer>((?:[-+]?\d+(?:\s*,\s*[-+]?\d+)*))</answer>', solution_str, re.DOTALL)
-    if direct_match2:
-        answer_content = direct_match2.group(1).strip()
-        try:
-            answers = [int(val.strip()) for val in answer_content.split(',') if val.strip().isdigit()]
-        except ValueError:
-            answers = []
-        return answers
-
 
     cleaned_solution_str = solution_str
     cleaned_solution_str = re.sub(r'</answer>(\s*</answer>)+', '</answer>', cleaned_solution_str)
@@ -603,15 +593,6 @@ def regression_extract_solution(solution_str):
         except ValueError:
             answers = []
 
-
-    direct_match = re.search(r'<answer><answer>((?:[-+]?\d+\.\d+)(?:,\s*[-+]?\d+\.\d+)*)</answer></answer>', solution_str, re.DOTALL)
-    if direct_match:
-        answer_content = direct_match.group(1).strip()
-        try:
-            answers = [float(val.strip()) for val in answer_content.split(',') if val.strip() != '']
-            return answers
-        except ValueError:
-            answers = []
 
     cleaned_solution_str = solution_str
     cleaned_solution_str = re.sub(r'<answer>(\s*<answer>)+', '</answer>', cleaned_solution_str)
