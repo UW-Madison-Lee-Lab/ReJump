@@ -57,7 +57,7 @@ python -m icl_reasoning.icl_reasoning \
     "+test_data.dataset_name={dataset_name}" \
     "+test_data.label_noise={label_noise}" \
     "+test_data.feature_noise={feature_noise}" \
-    "+test_data.num_samples={num_samples}" \
+    "+test_data.num_samples={int(num_samples*0.2)}" \
     "+test_data_examples.dataset_name={dataset_name}" \
     "+test_data_examples.label_noise={label_noise}" \
     "+test_data_examples.feature_noise={feature_noise}" \

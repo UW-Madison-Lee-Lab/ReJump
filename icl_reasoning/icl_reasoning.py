@@ -428,6 +428,7 @@ def create_prompt(instruction: str, icl_examples: List[Dict], test_examples: Lis
             prompt += f"Problem: {example_content}\n"
             prompt += f"Reasoning: {example_response}\n\n"
     
+    prompt += "-----------------------------------\n"
     # Add generated test examples in the format matching user's example
     if not test_examples:
         raise ValueError("No test examples provided. Test examples are required for the prompt.")
@@ -485,7 +486,6 @@ def create_prompt(instruction: str, icl_examples: List[Dict], test_examples: Lis
             answer_example = f"<answer>{random_target}</answer>"
         
         test_prompt = f"{query}Please provide your thinking process in <think> </think> tags. Your final answer should be enclosed in <answer> and </answer> tags, containing only {target_str} with no additional text—for example, {answer_example}"
-    prompt += "-----------------------------------\n"
     prompt += f"Now, solve this problem:\n{test_prompt}"
     
     return prompt

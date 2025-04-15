@@ -1123,9 +1123,14 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
                         
                         # Extract features and label if available
                         if 'features' in example_data and isinstance(example_data['features'], list):
-                            features = example_data['features']
-                            features_str = ", ".join([f"{x:.3f}" for x in features])
-                            html_content.append(f'<div><b>Features:</b> [{features_str}]</div>')
+                            if isinstance(example_data['features'][0], list):
+                                for example in example_data['features']:
+                                    features_str = ", ".join([f"{x:.3f}" for x in example])
+                                    html_content.append(f'<div><b>Features:</b> [{features_str}]</div>')
+                            else:
+                                features = example_data['features']
+                                features_str = ", ".join([f"{x:.3f}" for x in features])
+                                html_content.append(f'<div><b>Features:</b> [{features_str}]</div>')
                         
                         if 'ground_truth' in example_data and isinstance(example_data['ground_truth'], dict):
                             ground_truth = example_data['ground_truth']
@@ -1209,8 +1214,9 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
                                     # Escape HTML content
                                     escaped_content = html.escape(content)
                                     html_content.append(f'{escaped_content}<br><br>')
-                        else:
-                            html_content.append(f'{str(prompt_item)}<br>')
+                        elif isinstance(prompt_item, list):
+                            for item in prompt_item:
+                                html_content.append(f"{str(item['content'])}<br>")
                     html_content.append(f'</div>')
                     html_content.append(f'</details>')
                 else:
