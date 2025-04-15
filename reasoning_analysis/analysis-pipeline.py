@@ -37,7 +37,9 @@ def run_analysis_pipeline(base_dir="/home/szhang967/liftr/multi-query-results"):
                 # Run llm_analysis.py
                 analysis_script = "/home/szhang967/liftr/reasoning_analysis/llm_analysis.py"
                 data_type = get_data_type(input_file)
-                subprocess.run(["python", analysis_script, "--input", input_file, "--data_type", data_type], check=True)
+            #     if data_type == "classification":
+            #         continue
+            #     subprocess.run(["python", analysis_script, "--input", input_file, "--data_type", data_type], check=True)
                 
                 # Get the output file path (same directory as input)
                 output_dir = os.path.dirname(input_file)
@@ -48,7 +50,7 @@ def run_analysis_pipeline(base_dir="/home/szhang967/liftr/multi-query-results"):
                 if os.path.exists(analysis_output):
                     plot_script = "/home/szhang967/liftr/reasoning_analysis/plot_model_accuracy.py"
                     subprocess.run(["python", plot_script, "--input", analysis_output, "--data_type", data_type], check=True)
-                else:
+                else: 
                     print(f"Warning: Analysis output file not found at {analysis_output}")
 
 def parse_args():

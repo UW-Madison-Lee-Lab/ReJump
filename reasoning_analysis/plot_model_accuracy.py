@@ -23,6 +23,7 @@ import numpy as np
 from pathlib import Path
 import re
 import seaborn as sns
+import math
 
 def convert_to_numeric(order):
     """Convert an order value to a numeric value."""
@@ -65,15 +66,29 @@ def extract_model_accuracy_data(json_file):
         data = json.load(f)
     
     all_data = []
+    # Add a second list for model_family_best_accuracy data
+    all_best_data = []
+    # Add a third list for accuracy/best_accuracy ratio data
+    all_ratio_data = []
     total_filtered = 0
+    # 添加一个列表用于存储每个样本的模型数量
+    sample_model_counts = []
     
     for sample_idx, sample in enumerate(data['samples']):
         if 'model_evaluation_table' not in sample:
             continue
         
         model_table = sample['model_evaluation_table']
+        # 记录样本的模型数量（有效行数）
+        valid_model_count = sum(1 for row in model_table 
+                                if not row.get('has_error', False)
+                                and row.get('order') is not None
+                                and row.get('accuracy') is not None)
+        if valid_model_count > 0:
+            sample_model_counts.append(valid_model_count)
+            
         valid_rows = [
-            (row['order'], float(row['accuracy']))
+            (row['order'], float(row['accuracy']), row.get('model_family_best_accuracy'))
             for row in model_table
             if not row.get('has_error', False)
             and row.get('order') is not None
@@ -83,27 +98,40 @@ def extract_model_accuracy_data(json_file):
         if not valid_rows:
             continue
             
-        orders, accuracies = zip(*valid_rows)
+        orders, accuracies, best_accuracies = zip(*valid_rows)
         numeric_orders = [convert_to_numeric(order) for order in orders]
         
         # Filter out invalid orders
         valid_data = [
-            (order, accuracy)
-            for order, accuracy, num_order in zip(orders, accuracies, numeric_orders)
+            (order, accuracy, best_acc)
+            for order, accuracy, best_acc, num_order in zip(orders, accuracies, best_accuracies, numeric_orders)
             if num_order != float('inf')
         ]
         
         if not valid_data:
             continue
             
-        filtered_orders, filtered_accuracies = zip(*valid_data)
+        filtered_orders, filtered_accuracies, filtered_best_accuracies = zip(*valid_data)
         total_filtered += len(orders) - len(filtered_orders)
         
         normalized_orders = normalize_orders(filtered_orders)
+        
+        # Add original accuracy data
         all_data.extend((norm_order, accuracy, sample_idx)
                        for norm_order, accuracy in zip(normalized_orders, filtered_accuracies))
+        
+        # Add model_family_best_accuracy data if available
+        all_best_data.extend((norm_order, float(best_acc), sample_idx)
+                            for norm_order, best_acc in zip(normalized_orders, filtered_best_accuracies)
+                            if best_acc is not None)
+        
+        # Add accuracy/best_accuracy ratio data
+        for norm_order, accuracy, best_acc in zip(normalized_orders, filtered_accuracies, filtered_best_accuracies):
+            if best_acc is not None and best_acc > 0:
+                ratio = accuracy / best_acc
+                all_ratio_data.append((norm_order, ratio, sample_idx))
     
-    return all_data, total_filtered
+    return all_data, all_best_data, all_ratio_data, total_filtered, sample_model_counts
 
 def extract_model_mse_data(json_file):
     """Extract model MSE data from the JSON file for regression tasks."""
@@ -111,15 +139,29 @@ def extract_model_mse_data(json_file):
         data = json.load(f)
     
     all_data = []
+    # Add a second list for model_family_best_mse data
+    all_best_data = []
+    # Add a third list for |best_mse - mse| difference data
+    all_diff_data = []
     total_filtered = 0
+    # 添加一个列表用于存储每个样本的模型数量
+    sample_model_counts = []
     
     for sample_idx, sample in enumerate(data['samples']):
         if 'model_evaluation_table' not in sample:
             continue
         
         model_table = sample['model_evaluation_table']
+        # 记录样本的模型数量（有效行数）
+        valid_model_count = sum(1 for row in model_table 
+                                if not row.get('has_error', False)
+                                and row.get('order') is not None
+                                and row.get('mse') is not None)
+        if valid_model_count > 0:
+            sample_model_counts.append(valid_model_count)
+            
         valid_rows = [
-            (row['order'], float(row['mse']))
+            (row['order'], float(row['mse']), row.get('model_family_best_mse'))
             for row in model_table
             if not row.get('has_error', False)
             and row.get('order') is not None
@@ -129,35 +171,48 @@ def extract_model_mse_data(json_file):
         if not valid_rows:
             continue
             
-        orders, mse_values = zip(*valid_rows)
+        orders, mse_values, best_mse_values = zip(*valid_rows)
         numeric_orders = [convert_to_numeric(order) for order in orders]
         
         # Filter out invalid orders
         valid_data = [
-            (order, mse)
-            for order, mse, num_order in zip(orders, mse_values, numeric_orders)
+            (order, mse, best_mse)
+            for order, mse, best_mse, num_order in zip(orders, mse_values, best_mse_values, numeric_orders)
             if num_order != float('inf')
         ]
         
         if not valid_data:
             continue
             
-        filtered_orders, filtered_mse = zip(*valid_data)
+        filtered_orders, filtered_mse, filtered_best_mse = zip(*valid_data)
         total_filtered += len(orders) - len(filtered_orders)
         
         normalized_orders = normalize_orders(filtered_orders)
+        
+        # Add original MSE data
         all_data.extend((norm_order, mse, sample_idx)
                        for norm_order, mse in zip(normalized_orders, filtered_mse))
+        
+        # Add model_family_best_mse data if available
+        all_best_data.extend((norm_order, float(best_mse), sample_idx)
+                            for norm_order, best_mse in zip(normalized_orders, filtered_best_mse)
+                            if best_mse is not None)
+        
+        # Add |best_mse - mse| difference data
+        for norm_order, mse, best_mse in zip(normalized_orders, filtered_mse, filtered_best_mse):
+            if best_mse is not None:
+                diff = abs(best_mse - mse)
+                all_diff_data.append((norm_order, diff, sample_idx))
     
-    return all_data, total_filtered
+    return all_data, all_best_data, all_diff_data, total_filtered, sample_model_counts
 
 def clear_existing_plots():
-    """清除matplotlib中所有现有的图表内容，防止遗留的图形元素影响新图表"""
+    """Clear all existing plot contents in matplotlib to prevent leftover graphical elements from affecting new charts"""
     plt.close('all')
     plt.figure(figsize=(12, 8))
     return
 
-def plot_model_accuracy(data, output_file=None, title=None, exclude_outliner=False):
+def plot_model_accuracy(data, output_file=None, title=None, exclude_outliner=False, y_limits=(40, 100)):
     """Create a scatter plot of model accuracy vs normalized order."""
     clear_existing_plots()
     
@@ -202,53 +257,56 @@ def plot_model_accuracy(data, output_file=None, title=None, exclude_outliner=Fal
         if points:
             sample_orders, sample_accuracies = zip(*points)
             plt.scatter(sample_orders, sample_accuracies, 
-                       color=colors[i], alpha=0.7, label=f"Sample {sample_idx}")
+                       color=colors[i], alpha=0.7, label=f"Sample {sample_idx}", zorder=5)
     
     # Plot outliers in black if any
     if exclude_outliner and np.any(outliers_mask):
         plt.scatter(x_outliers, y_outliers, color='black', marker='x', alpha=0.7, 
-                   label='Outliers (excluded from fit)')
+                   label='Outliers (excluded from fit)', zorder=5)
     
     # Use either clean data or all valid data for fitting based on exclude_outliner
     fit_x = x_clean if exclude_outliner else x_valid
     fit_y = y_clean if exclude_outliner else y_valid
     
-    # Add trend line
-    if len(fit_x) >= 3:  # At least 3 points for quadratic fit
-        # Try both linear and quadratic fits
-        linear_coeffs = np.polyfit(fit_x, fit_y, 1)
-        quadratic_coeffs = np.polyfit(fit_x, fit_y, 2)
-        
-        # Calculate R² for both fits
-        linear_pred = np.polyval(linear_coeffs, fit_x)
-        quadratic_pred = np.polyval(quadratic_coeffs, fit_x)
-        
-        # Calculate R² with protection measures
-        denominator = np.sum((fit_y - np.mean(fit_y)) ** 2)
-        if denominator > 0:
-            linear_r2 = 1 - (np.sum((fit_y - linear_pred) ** 2) / denominator)
-            quadratic_r2 = 1 - (np.sum((fit_y - quadratic_pred) ** 2) / denominator)
-        else:
-            # Denominator is 0 means all y values are identical
-            print("Warning: All accuracy values are identical, R² calculation is not meaningful")
-            linear_r2 = 0
-            quadratic_r2 = 0
-        
-        # Choose the better fit based on R²
-        if quadratic_r2 > linear_r2:
-            coeffs = quadratic_coeffs
-            r2 = quadratic_r2
-            fit_type = "Quadratic"
-        else:
-            coeffs = linear_coeffs
-            r2 = linear_r2
-            fit_type = "Linear"
-        
-        # Plot the trend line
-        x_fit = np.linspace(min(fit_x), max(fit_x), 100)
-        y_fit = np.polyval(coeffs, x_fit)
-        plt.plot(x_fit, y_fit, 'r-', linewidth=2, 
-                 label=f"{fit_type} Fit (R² = {r2:.3f})")
+    # Add trend line using sns.regplot
+    if len(fit_x) >= 3:  # At least 3 points for regression
+        try:
+            # Try both linear and quadratic fits using seaborn
+            import pandas as pd
+            df_fit = pd.DataFrame({'x': fit_x, 'y': fit_y})
+            
+            # Add polynomial order 1 (linear) fit
+            print(f"Fitting regression with {len(fit_x)} data points")
+            
+            # 确保拟合线更加明显，增加线宽，降低散点透明度
+            sns.regplot(x='x', y='y', data=df_fit, 
+                       scatter=False, line_kws={'color': 'r', 'linewidth': 3, 'alpha': 1.0}, 
+                       label="Regression Fit", order=2, ci=95)
+            
+            # 在绘图完成后，打印确认信息
+            print("Regression line added to plot successfully!")
+            
+            # Calculate R² for the fit (using scikit-learn for consistency)
+            from sklearn.metrics import r2_score
+            from sklearn.preprocessing import PolynomialFeatures
+            from sklearn.linear_model import LinearRegression
+            from sklearn.pipeline import make_pipeline
+            
+            # Create and fit the model
+            model = make_pipeline(PolynomialFeatures(2), LinearRegression())
+            model.fit(fit_x.reshape(-1, 1), fit_y)
+            
+            # Make predictions
+            y_pred = model.predict(fit_x.reshape(-1, 1))
+            
+            # Calculate R²
+            r2 = r2_score(fit_y, y_pred)
+            
+            # Add the R² value to the plot
+            plt.annotate(f"R² = {r2:.3f}", xy=(0.05, 0.95), xycoords='axes fraction',
+                        bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="gray", alpha=0.8))
+        except Exception as e:
+            print(f"Error during regression plotting: {e}")
     else:
         print(f"Warning: Too few valid data points for fitting ({len(fit_x)} points)")
         
@@ -257,7 +315,7 @@ def plot_model_accuracy(data, output_file=None, title=None, exclude_outliner=Fal
     plt.ylabel('Accuracy (%)')
     plt.title(title or 'Model Accuracy vs Normalized Order Across Samples')
     plt.grid(True, linestyle='--', alpha=0.6)
-    plt.ylim(50, 90)
+    plt.ylim(y_limits[0], y_limits[1])
     
     # if len(unique_samples) <= 20:
     #     plt.legend(loc='lower right')
@@ -311,7 +369,7 @@ def plot_model_accuracy_with_ci(data, output_file=None, title=None):
     else:
         plt.show()
 
-def plot_model_mse(data, output_file=None, title=None, exclude_outliner=True):
+def plot_model_mse(data, output_file=None, title=None, exclude_outliner=True, y_limits=(1e-2, 1)):
     """Create a scatter plot of model MSE vs normalized order."""
     clear_existing_plots()
     
@@ -356,12 +414,12 @@ def plot_model_mse(data, output_file=None, title=None, exclude_outliner=True):
         if points:
             sample_orders, sample_mse = zip(*points)
             plt.scatter(sample_orders, sample_mse, 
-                       color=colors[i], alpha=0.7, label=f"Sample {sample_idx}" if i == 0 else "")
+                       color=colors[i], alpha=0.7, label=f"Sample {sample_idx}" if i == 0 else "", zorder=5)
     
     # Plot outliers in black if any
     if exclude_outliner and np.any(outliers_mask):
         plt.scatter(x_outliers, y_outliers, color='black', marker='x', alpha=0.7, 
-                   label='Outliers (excluded from fit)')
+                   label='Outliers (excluded from fit)', zorder=5)
     
     print(f"Original data points: {len(x)}, Valid data points after filtering: {len(x_valid)}")
     
@@ -369,72 +427,126 @@ def plot_model_mse(data, output_file=None, title=None, exclude_outliner=True):
     fit_x = x_clean if exclude_outliner else x_valid
     fit_y = y_clean if exclude_outliner else y_valid
     
-    # 确保有足够的数据点进行拟合
-    if len(fit_x) >= 3:  # 至少需要3个点进行二次拟合
+    # Add trend line using sns.regplot
+    if len(fit_x) >= 3:  # At least 3 points for regression
         try:
-            # Try both linear and quadratic fits
-            linear_coeffs = np.polyfit(fit_x, fit_y, 1)
-            quadratic_coeffs = np.polyfit(fit_x, fit_y, 2)
+            # Create DataFrame for seaborn
+            import pandas as pd
+            df_fit = pd.DataFrame({'x': fit_x, 'y': fit_y})
             
-            # Calculate R² for both fits
-            linear_pred = np.polyval(linear_coeffs, fit_x)
-            quadratic_pred = np.polyval(quadratic_coeffs, fit_x)
-            
-            # 计算R²，添加防护措施
-            denominator = np.sum((fit_y - np.mean(fit_y)) ** 2)
-            if denominator > 0:
-                linear_r2 = 1 - (np.sum((fit_y - linear_pred) ** 2) / denominator)
-                quadratic_r2 = 1 - (np.sum((fit_y - quadratic_pred) ** 2) / denominator)
+            # Check for log scale and transform data if needed
+            use_log_scale = not np.any(np.array(mse_values) <= 0)
+            if use_log_scale:
+                # For log scale, we fit on log-transformed data
+                df_fit['y_log'] = np.log(df_fit['y'])
+                
+                # 增加调试信息
+                print(f"Fitting log-scale MSE regression with {len(fit_x)} data points")
+                
+                # Use sns.regplot with order=2 (quadratic) on log-transformed data
+                sns.regplot(x='x', y='y_log', data=df_fit, 
+                           scatter=False, 
+                           line_kws={'color': 'r', 'linewidth': 3, 'alpha': 1.0, 'zorder': 10},
+                           ci=95,  # 显示95%置信区间 
+                           order=2,
+                           color='r')  # 确保填充区域颜色与线条一致
+                
+                # 添加确认信息
+                print("Log-scale regression line added to plot successfully with 95% confidence interval!")
+                
+                # Calculate R² for the fit using scikit-learn
+                from sklearn.metrics import r2_score
+                from sklearn.preprocessing import PolynomialFeatures
+                from sklearn.linear_model import LinearRegression
+                from sklearn.pipeline import make_pipeline
+                
+                # Create and fit the model on log-transformed data
+                model = make_pipeline(PolynomialFeatures(2), LinearRegression())
+                model.fit(fit_x.reshape(-1, 1), np.log(fit_y))
+                
+                # Make predictions
+                y_pred_log = model.predict(fit_x.reshape(-1, 1))
+                
+                # Calculate R² on log scale
+                r2 = r2_score(np.log(fit_y), y_pred_log)
+                
+                # Add the R² value to the plot
+                plt.annotate(f"R² = {r2:.3f} (log scale)", xy=(0.05, 0.95), xycoords='axes fraction',
+                            bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="gray", alpha=0.8))
+                
+                # Transform the plot back to the original scale
+                plt.yscale('log')
+                
+                # 生成平滑曲线并在原始尺度上绘制拟合线
+                x_smooth = np.linspace(0, 1, 100)
+                y_pred_smooth_log = model.predict(x_smooth.reshape(-1, 1))
+                y_pred_smooth = np.exp(y_pred_smooth_log)
+                
+                # 添加原始尺度的拟合线
+                plt.plot(x_smooth, y_pred_smooth, 'r-', linewidth=3, alpha=1.0, zorder=10, 
+                         label='Regression Fit (transformed back)')
+                print("Added transformed back regression line for better visibility in log scale")
             else:
-                # 分母为0意味着所有y值都相同
-                print("Warning: All y values are identical, R² calculation is not meaningful")
-                linear_r2 = 0
-                quadratic_r2 = 0
-            
-            # Choose the better fit based on R²
-            if quadratic_r2 > linear_r2:
-                coeffs = quadratic_coeffs
-                r2 = quadratic_r2
-                fit_type = "Quadratic"
-            else:
-                coeffs = linear_coeffs
-                r2 = linear_r2
-                fit_type = "Linear"
-            
-            # Plot the trend line
-            x_fit = np.linspace(min(fit_x), max(fit_x), 100)
-            y_fit = np.polyval(coeffs, x_fit)
-            
-            plt.plot(x_fit, y_fit, 'r-', linewidth=3, 
-                     label=f"{fit_type} Fit (R² = {r2:.3f})")
-            
-            print(f"Fit coefficients: {coeffs}")
+                # 增加调试信息
+                print(f"Fitting MSE regression with {len(fit_x)} data points")
+                
+                # For linear scale, use sns.regplot directly on original data
+                sns.regplot(x='x', y='y', data=df_fit, 
+                           scatter=False, 
+                           line_kws={'color': 'r', 'linewidth': 3, 'alpha': 1.0, 'zorder': 10},
+                           ci=95,  # 显示95%置信区间
+                           order=2,
+                           color='r')  # 确保填充区域颜色与线条一致
+                
+                # 添加确认信息
+                print("MSE regression line added to plot successfully with 95% confidence interval!")
+                
+                # Calculate R² for the fit
+                from sklearn.metrics import r2_score
+                from sklearn.preprocessing import PolynomialFeatures
+                from sklearn.linear_model import LinearRegression
+                from sklearn.pipeline import make_pipeline
+                
+                # Create and fit the model
+                model = make_pipeline(PolynomialFeatures(2), LinearRegression())
+                model.fit(fit_x.reshape(-1, 1), fit_y)
+                
+                # Make predictions
+                y_pred = model.predict(fit_x.reshape(-1, 1))
+                
+                # Calculate R²
+                r2 = r2_score(fit_y, y_pred)
+                
+                # Add the R² value to the plot
+                plt.annotate(f"R² = {r2:.3f}", xy=(0.05, 0.95), xycoords='axes fraction',
+                            bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="gray", alpha=0.8))
+                
             print(f"R² value: {r2}")
             
         except Exception as e:
-            print(f"Error during curve fitting: {e}")
-            coeffs = None
-            r2 = 0
+            print(f"Error during regression plotting: {e}")
     else:
         print(f"Warning: Too few valid data points for fitting ({len(fit_x)} points)")
-        coeffs = None
-        r2 = 0
     
     plt.xlabel('Normalized Model Order')
     plt.ylabel('Mean Squared Error (MSE)')
     plt.title(title or 'Model MSE vs Normalized Order Across Samples')
     plt.grid(True, linestyle='--', alpha=0.6)
     
-    # 检查是否有非正值，如果有则使用线性尺度
+    # Check for non-positive values to determine scale
     if np.any(np.array(mse_values) <= 0):
         print("Warning: Data contains zero or negative values, using linear scale")
         plt.yscale('linear')
     else:
         # Set y-axis to be logarithmic for better visualization of MSE values
         plt.yscale('log')
-    
-    # 添加图例
-    # plt.legend(loc='best')
+        
+    # 设置y轴限制
+    if y_limits[0] is not None or y_limits[1] is not None:
+        ymin = y_limits[0] if y_limits[0] is not None else plt.ylim()[0]
+        ymax = y_limits[1] if y_limits[1] is not None else plt.ylim()[1]
+        plt.ylim(ymin, ymax)
+        print(f"Setting y-axis limits to: [{ymin}, {ymax}]")
     
     plt.tight_layout()
     
@@ -444,7 +556,7 @@ def plot_model_mse(data, output_file=None, title=None, exclude_outliner=True):
     else:
         plt.show()
 
-def plot_model_mse_with_ci(data, output_file=None, title=None):
+def plot_model_mse_with_ci(data, output_file=None, title=None, y_limits=(1e-2, None)):
     """Create a scatter plot with mean line and confidence intervals for MSE using seaborn."""
     clear_existing_plots()
     
@@ -503,11 +615,120 @@ def plot_model_mse_with_ci(data, output_file=None, title=None):
         # Set y-axis to be logarithmic for better visualization of MSE values
         plt.yscale('log')
     
+    # 设置y轴限制
+    if y_limits[0] is not None or y_limits[1] is not None:
+        ymin = y_limits[0] if y_limits[0] is not None else plt.ylim()[0]
+        ymax = y_limits[1] if y_limits[1] is not None else plt.ylim()[1]
+        plt.ylim(ymin, ymax)
+        print(f"Setting y-axis limits to: [{ymin}, {ymax}]")
+    
     plt.tight_layout()
     
     if output_file:
         plt.savefig(output_file, dpi=300, bbox_inches='tight')
         print(f"Plot saved to: {output_file}")
+    else:
+        plt.show()
+
+def plot_accuracy_ratio(ratio_data, output_file=None, title=None, exclude_outliner=False):
+    """Create a scatter plot of accuracy ratio (model/sklearn) vs normalized order."""
+    clear_existing_plots()
+    
+    if not ratio_data:
+        print("No accuracy ratio data available")
+        return
+    
+    # Reuse the existing plot_model_accuracy function with ratio data
+    plot_model_accuracy(
+        ratio_data, 
+        output_file, 
+        title or 'Accuracy Ratio (Model/Sklearn) vs Normalized Order', 
+        exclude_outliner,
+        y_limits=(0.5, 1.5)  # Set appropriate y-axis range for ratio plots
+    )
+    
+    # Override y-axis label to reflect ratio
+    plt.ylabel('Accuracy Ratio (Model/Sklearn)')
+    plt.axhline(y=1.0, color='g', linestyle='--', alpha=0.5, label='Ratio = 1.0')
+    
+    if output_file:
+        plt.savefig(output_file, dpi=300, bbox_inches='tight')
+        print(f"Ratio plot saved to: {output_file}")
+    else:
+        plt.show()
+
+def plot_mse_difference(diff_data, output_file=None, title=None, exclude_outliner=True):
+    """Create a scatter plot of MSE difference (|best_mse - mse|) vs normalized order."""
+    clear_existing_plots()
+    
+    if not diff_data:
+        print("No MSE difference data available")
+        return
+    
+    # Reuse plot_model_mse function
+    plot_model_mse(
+        diff_data,
+        output_file,
+        title or 'MSE Difference |Best MSE - Model MSE| vs Normalized Order',
+        exclude_outliner
+    )
+    
+    # Override y-axis label
+    plt.ylabel('MSE Difference |Best MSE - Model MSE|')
+    
+    # Save image again (as plot_model_mse may have already saved it once)
+    if output_file:
+        plt.savefig(output_file, dpi=300, bbox_inches='tight')
+        print(f"Difference plot saved to: {output_file}")
+    else:
+        plt.show()
+
+def plot_model_count_distribution(model_counts, output_file=None, title=None):
+    """Create a histogram showing the distribution of model counts across samples.
+    
+    Args:
+        model_counts: List of model counts for each sample
+        output_file: Output image file path
+        title: Chart title
+    """
+    clear_existing_plots()
+    
+    if not model_counts:
+        print("No model count data available")
+        return
+    
+    # Set appropriate number of bins, using Sturges' rule as a starting point
+    min_count = min(model_counts)
+    max_count = max(model_counts)
+    bin_count = min(int(1 + math.log2(len(model_counts))), 20)  # Limit maximum bins to 20
+    
+    # Calculate distribution statistics
+    mean_count = np.mean(model_counts)
+    median_count = np.median(model_counts)
+    
+    # Draw histogram
+    plt.hist(model_counts, bins=bin_count, alpha=0.7, color='skyblue', edgecolor='black')
+    
+    # Add statistical information
+    stats_text = f"Total samples: {len(model_counts)}\nAverage models: {mean_count:.2f}\nMedian: {median_count:.1f}"
+    plt.annotate(stats_text, xy=(0.70, 0.85), xycoords='axes fraction',
+                bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="gray", alpha=0.8))
+    
+    # Add mean and median lines
+    plt.axvline(x=mean_count, color='r', linestyle='--', label=f'Mean ({mean_count:.2f})')
+    plt.axvline(x=median_count, color='g', linestyle='-.', label=f'Median ({median_count:.1f})')
+    
+    plt.xlabel('Number of models per sample')
+    plt.ylabel('Number of samples')
+    plt.title(title or 'Sample Model Count Distribution')
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.legend()
+    
+    plt.tight_layout()
+    
+    if output_file:
+        plt.savefig(output_file, dpi=300, bbox_inches='tight')
+        print(f"Model count distribution plot saved to: {output_file}")
     else:
         plt.show()
 
@@ -518,8 +739,9 @@ def main():
                         help='Base path to save the plots (if not specified, save in input file directory)')
     parser.add_argument('--title', '-t', type=str, default=None,
                         help='Custom title for the plots')
-    parser.add_argument('--plot-type', choices=['trend', 'ci', 'both'], default='both',
-                        help='Type of plot to generate: trend (with fitted line), ci (with confidence intervals), or both')
+    parser.add_argument('--plot-type', choices=['trend', 'ci', 'both', 'ratio', 'diff', 'count', 'all'], default='all',
+                        help='Type of plot to generate: trend (with fitted line), ci (with confidence intervals), '
+                             'both, ratio (accuracy ratio or MSE difference), count (model count distribution), or all')
     parser.add_argument('--data_type', choices=['classification', 'regression'], default='classification',
                         help='Type of data to analyze: classification (accuracy) or regression (MSE)')
     
@@ -535,11 +757,11 @@ def main():
     # Check JSON file to determine data type if not specified
     if args.data_type == 'classification':
         print("Extracting classification model accuracy data...")
-        data, filtered_count = extract_model_accuracy_data(args.input)
+        data, best_data, ratio_data, filtered_count, sample_model_counts = extract_model_accuracy_data(args.input)
         metric_name = "accuracy"
     elif args.data_type == 'regression':
         print("Extracting regression model MSE data...")
-        data, filtered_count = extract_model_mse_data(args.input)
+        data, best_data, diff_data, filtered_count, sample_model_counts = extract_model_mse_data(args.input)
         metric_name = "MSE"
     else:
         raise NotImplementedError(f"Data type '{args.data_type}' not implemented")
@@ -549,35 +771,111 @@ def main():
         return 1
     
     print(f"Plotting {len(data)} {metric_name} data points from {len(set(d[2] for d in data))} samples")
+    if best_data:
+        print(f"Found {len(best_data)} sklearn best {metric_name} data points")
+    if args.data_type == 'classification' and ratio_data:
+        print(f"Found {len(ratio_data)} accuracy ratio data points")
+    elif args.data_type == 'regression' and diff_data:
+        print(f"Found {len(diff_data)} MSE difference data points")
     if filtered_count > 0:
         print(f"Filtered out {filtered_count} data points with non-numeric order values")
+    if sample_model_counts:
+        print(f"Found {len(sample_model_counts)} samples with valid model counts")
+        print(f"Average models per sample: {np.mean(sample_model_counts):.2f}, Median: {np.median(sample_model_counts):.1f}")
+        print(f"Min models: {min(sample_model_counts)}, Max models: {max(sample_model_counts)}")
     
     input_stem = input_path.stem
     output_dir = input_path.parent
     
-    if args.plot_type in ['trend', 'both']:
+    # Generate plots based on the requested plot type
+    if args.plot_type in ['trend', 'both', 'all']:
+        # Plot model data
         if args.output is None:
             trend_output = output_dir / f"{input_stem}_{args.data_type}_trend_plot.png"
         else:
-            trend_output = args.output
+            trend_output = Path(args.output).with_suffix('.trend.png')
         print(f"\nGenerating {args.data_type} trend plot...")
         
         if args.data_type == 'classification':
-            plot_model_accuracy(data, trend_output, args.title)
+            plot_model_accuracy(data, trend_output, args.title, y_limits=(55, 90))
         else:
             plot_model_mse(data, trend_output, args.title)
+            
+        # Also plot sklearn best data
+        if best_data:
+            if args.output is None:
+                best_trend_output = output_dir / f"{input_stem}_{args.data_type}_sklearn_best_trend_plot.png"
+            else:
+                best_trend_output = Path(args.output).with_suffix('.sklearn_best_trend.png')
+            print(f"\nGenerating sklearn best {args.data_type} trend plot...")
+            
+            sklearn_title = f"Sklearn Best {args.title}" if args.title else f"Sklearn Best {args.data_type.capitalize()} vs Normalized Order"
+            
+            if args.data_type == 'classification':
+                plot_model_accuracy(best_data, best_trend_output, sklearn_title, y_limits=(40, 100))
+            else:
+                plot_model_mse(best_data, best_trend_output, sklearn_title)
     
-    if args.plot_type in ['ci', 'both']:
+    if args.plot_type in ['ci', 'both', 'all']:
+        # Plot model data with confidence intervals
         if args.output is None:
             ci_output = output_dir / f"{input_stem}_{args.data_type}_ci_plot.png"
         else:
-            ci_output = args.output
+            ci_output = Path(args.output).with_suffix('.ci.png')
         print(f"\nGenerating {args.data_type} confidence interval plot...")
         
         if args.data_type == 'classification':
             plot_model_accuracy_with_ci(data, ci_output, args.title)
         else:
-            plot_model_mse_with_ci(data, ci_output, args.title)
+            plot_model_mse_with_ci(data, ci_output, args.title, y_limits=(1e-2, None))
+            
+        # Also plot sklearn best data with confidence intervals
+        if best_data:
+            if args.output is None:
+                best_ci_output = output_dir / f"{input_stem}_{args.data_type}_sklearn_best_ci_plot.png"
+            else:
+                best_ci_output = Path(args.output).with_suffix('.sklearn_best_ci.png')
+            print(f"\nGenerating sklearn best {args.data_type} confidence interval plot...")
+            
+            sklearn_title = f"Sklearn Best {args.title}" if args.title else f"Sklearn Best {args.data_type.capitalize()} with Confidence Intervals"
+            
+            if args.data_type == 'classification':
+                plot_model_accuracy_with_ci(best_data, best_ci_output, sklearn_title)
+            else:
+                plot_model_mse_with_ci(best_data, best_ci_output, sklearn_title, y_limits=(1e-2, None))
+    
+    # Plot ratio data for classification or difference data for regression
+    if args.plot_type in ['ratio', 'diff', 'all']:
+        if args.data_type == 'classification' and ratio_data:
+            if args.output is None:
+                ratio_output = output_dir / f"{input_stem}_accuracy_ratio_plot.png"
+            else:
+                ratio_output = Path(args.output).with_suffix('.accuracy_ratio.png')
+            print(f"\nGenerating accuracy ratio plot...")
+            
+            ratio_title = f"Accuracy Ratio for {args.title}" if args.title else "Accuracy Ratio (Model/Sklearn) vs Normalized Order"
+            plot_accuracy_ratio(ratio_data, ratio_output, ratio_title)
+            
+        elif args.data_type == 'regression' and diff_data:
+            if args.output is None:
+                diff_output = output_dir / f"{input_stem}_mse_difference_plot.png"
+            else:
+                diff_output = Path(args.output).with_suffix('.mse_difference.png')
+            print(f"\nGenerating MSE difference plot...")
+            
+            diff_title = f"MSE Difference for {args.title}" if args.title else "MSE Difference |Best MSE - Model MSE| vs Normalized Order"
+            plot_mse_difference(diff_data, diff_output, diff_title)
+    
+    # Plot model count distribution
+    if args.plot_type in ['count', 'all']:
+        if args.output is None:
+            count_output = output_dir / f"{input_stem}_model_count_distribution.png"
+        else:
+            count_output = Path(args.output).with_suffix('.model_count_distribution.png')
+        print(f"\nGenerating model count distribution plot...")
+        
+        count_title = f"Model Count Distribution for {args.title}" if args.title else "Sample Model Count Distribution"
+        plot_model_count_distribution(sample_model_counts, count_output, count_title)
     
     return 0
 

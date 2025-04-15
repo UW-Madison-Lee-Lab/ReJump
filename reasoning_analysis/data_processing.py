@@ -1047,7 +1047,7 @@ def compute_model_family_best_mse(model_family, predictions):
             from sklearn.pipeline import Pipeline
             
             best_mse = float('inf')
-            for degree in [2, 3]:
+            for degree in [2]:
                 model = Pipeline([
                     ('poly', PolynomialFeatures(degree=degree)),
                     ('linear', LinearRegression())
@@ -1073,7 +1073,7 @@ def compute_model_family_best_mse(model_family, predictions):
         elif 'sklearn.tree' in model_family or 'decision tree' in model_family.lower():
             from sklearn.tree import DecisionTreeRegressor
             best_mse = float('inf')
-            for max_depth in [2, 3, 5, None]:
+            for max_depth in [2]:
                 model = DecisionTreeRegressor(max_depth=max_depth)
                 model.fit(X, y)
                 y_pred = model.predict(X)
@@ -1090,12 +1090,12 @@ def compute_model_family_best_mse(model_family, predictions):
             best_mse = mean_squared_error(y, y_pred)
             
         # Fallback to simple linear regression if model family not recognized
-        else:
-            from sklearn.linear_model import LinearRegression
-            model = LinearRegression()
-            model.fit(X, y)
-            y_pred = model.predict(X)
-            best_mse = mean_squared_error(y, y_pred)
+        # elif "custom" in model_family.lower():
+        #     from sklearn.linear_model import LinearRegression
+        #     model = LinearRegression()
+        #     model.fit(X, y)
+        #     y_pred = model.predict(X)
+        #     best_mse = mean_squared_error(y, y_pred)
             
         return best_mse
         
@@ -1104,6 +1104,49 @@ def compute_model_family_best_mse(model_family, predictions):
         import traceback
         traceback.print_exc()
         return None
+
+def leave_one_out_cv(model_class, X, y, **model_params):
+    """
+    使用留一验证(Leave-One-Out Cross Validation)评估模型性能
+    
+    Args:
+        model_class: 模型类(如KNeighborsClassifier)
+        X: 特征数据，形状为(n_samples, n_features)
+        y: 标签数据，形状为(n_samples,)
+        **model_params: 传递给模型的参数
+        
+    Returns:
+        准确率(正确预测的比例)
+    """
+    import numpy as np
+    
+    n_samples = len(X)
+    correct = 0
+    
+    # 对每个样本进行留一验证
+    for i in range(n_samples):
+        # 获取训练数据(排除当前样本)
+        X_train = np.delete(X, i, axis=0)
+        y_train = np.delete(y, i)
+        
+        # 获取测试数据(当前样本)
+        X_test = X[i:i+1]
+        y_test = y[i]
+        
+        # 训练模型
+        model = model_class(**model_params)
+        model.fit(X_train, y_train)
+        
+        # 预测
+        y_pred = model.predict(X_test)[0]
+        
+        # 检查是否正确
+        if y_pred == y_test:
+            correct += 1
+    
+    # 计算准确率
+    accuracy = correct / n_samples if n_samples > 0 else 0
+    return accuracy
 
 def compute_model_family_best_accuracy(model_family, predictions):
     """
@@ -1167,7 +1210,7 @@ def compute_model_family_best_accuracy(model_family, predictions):
         elif 'sklearn.tree' in model_family or 'decision tree' in model_family.lower():
             from sklearn.tree import DecisionTreeClassifier
             best_accuracy = 0.0
-            for max_depth in [2, 3, 5, None]:
+            for max_depth in [2]:
                 model = DecisionTreeClassifier(max_depth=max_depth)
                 model.fit(X, y)
                 y_pred = model.predict(X)
@@ -1175,43 +1218,43 @@ def compute_model_family_best_accuracy(model_family, predictions):
                 if acc > best_accuracy:
                     best_accuracy = acc
                     
-        elif 'sklearn.ensemble.RandomForest' in model_family or 'random forest' in model_family.lower():
-            from sklearn.ensemble import RandomForestClassifier
-            best_accuracy = 0.0
-            for n_estimators in [10, 50, 100]:
-                for max_depth in [2, 5, None]:
-                    model = RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth)
-                    model.fit(X, y)
-                    y_pred = model.predict(X)
-                    acc = accuracy_score(y, y_pred)
-                    if acc > best_accuracy:
-                        best_accuracy = acc
+        # elif 'sklearn.ensemble.RandomForest' in model_family or 'random forest' in model_family.lower():
+        #     from sklearn.ensemble import RandomForestClassifier
+        #     best_accuracy = 0.0
+        #     for n_estimators in [10, 50, 100]:
+        #         for max_depth in [2, 5, None]:
+        #             model = RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth)
+        #             model.fit(X, y)
+        #             y_pred = model.predict(X)
+        #             acc = accuracy_score(y, y_pred)
+        #             if acc > best_accuracy:
+        #                 best_accuracy = acc
                         
         elif 'sklearn.neighbors' in model_family or 'knn' in model_family.lower():
             from sklearn.neighbors import KNeighborsClassifier
             best_accuracy = 0.0
-            for n_neighbors in [3, 5, 7]:
-                model = KNeighborsClassifier(n_neighbors=n_neighbors)
-                model.fit(X, y)
-                y_pred = model.predict(X)
-                acc = accuracy_score(y, y_pred)
+            X_np = np.array(X)
+            y_np = np.array(y)
+            for n_neighbors in [1,2,3,4,5,6,7]:
+                # 使用留一验证评估KNN模型
+                acc = leave_one_out_cv(KNeighborsClassifier, X_np, y_np, n_neighbors=n_neighbors)
                 if acc > best_accuracy:
                     best_accuracy = acc
                     
-        elif 'sklearn.naive_bayes' in model_family or 'naive bayes' in model_family.lower():
-            from sklearn.naive_bayes import GaussianNB
-            model = GaussianNB()
-            model.fit(X, y)
-            y_pred = model.predict(X)
-            best_accuracy = accuracy_score(y, y_pred)
+        # elif 'sklearn.naive_bayes' in model_family or 'naive bayes' in model_family.lower():
+        #     from sklearn.naive_bayes import GaussianNB
+        #     model = GaussianNB()
+        #     model.fit(X, y)
+        #     y_pred = model.predict(X)
+        #     best_accuracy = accuracy_score(y, y_pred)
             
         # Fallback to simple logistic regression if model family not recognized
-        else:
-            from sklearn.linear_model import LogisticRegression
-            model = LogisticRegression(max_iter=1000)
-            model.fit(X, y)
-            y_pred = model.predict(X)
-            best_accuracy = accuracy_score(y, y_pred)
+        # elif "custom" in model_family.lower():
+        #     from sklearn.linear_model import LogisticRegression
+        #     model = LogisticRegression(max_iter=1000)
+        #     model.fit(X, y)
+        #     y_pred = model.predict(X)
+        #     best_accuracy = accuracy_score(y, y_pred)
             
         return best_accuracy * 100  # Convert to percentage to match the accuracy field
         
