@@ -81,7 +81,6 @@ def get_result_dir(
     dataset_name, 
     model_name, 
     shot, 
-    query,
     template_type, 
     response_length,
     num_samples, 

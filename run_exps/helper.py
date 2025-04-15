@@ -213,7 +213,6 @@ def inference(
     dataset_dir = get_dataset_dir(
         dataset_name=dataset_name,
         shot=shot,
-        query=query,
         template_type=template_type,
         num_samples=num_samples,
         feature_noise=feature_noise,
@@ -225,7 +224,6 @@ def inference(
         dataset_name=dataset_name,
         model_name=model_name,
         shot=shot,
-        query=query,
         template_type=template_type,
         response_length=response_length,
         num_samples=num_samples,
