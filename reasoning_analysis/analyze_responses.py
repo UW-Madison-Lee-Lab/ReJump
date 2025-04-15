@@ -10,6 +10,7 @@ import numpy as np
 from pathlib import Path
 from tqdm import tqdm
 from typing import Dict, Any, Optional, Union, List
+import concurrent.futures
 
 # Import from llm_apis module
 from llm_apis import ResponseAnalyzer, get_available_llm_types
@@ -122,16 +123,54 @@ def read_instruction_file(file_path: str) -> str:
         raise ValueError(f"Could not read instruction file: {file_path}")
 
 
+def process_row(args):
+    """
+    Process a single row from the dataframe using LLM API
+    
+    Args:
+        args: Tuple containing (row_idx, row_data, instruction, analyzer, column_prefix, continue_on_error)
+        
+    Returns:
+        Tuple of (row_idx, raw_output, extracted_json, error)
+    """
+    row_idx, row, instruction, analyzer, column_prefix, continue_on_error = args
+    
+    try:
+        # Handle responses based on its type (could be string or list)
+        response = row['responses'][0]
+        # Create the prompt by appending the response to the instruction
+        # Replace the placeholder with the actual response
+        prompt = instruction.replace("<INSERT MODEL OUTPUT TRANSCRIPT HERE>", response)
+        
+        # Call LLM API with instruction + response
+        raw_output = analyzer.analyze_response(prompt)
+        
+        # Extract JSON
+        extracted_json = extract_json(raw_output)
+        
+        return row_idx, raw_output, json.dumps(extracted_json), None
+    except Exception as e:
+        error_msg = f"Error processing row {row_idx}: {str(e)}"
+        logger.error(error_msg)
+        
+        if not continue_on_error:
+            return row_idx, None, None, error_msg
+        else:
+            logger.warning(f"Continuing due to --continue-on-error flag for row {row_idx}...")
+            return row_idx, f"ERROR: {str(e)}", "{}", None
+
+
 def process_file(
     input_file: str,
     output_file: str,
     instruction_file: str,
-    llm_type: str = "claude",
+    llm_type: str = "gemini",
     temperature: float = 0.8,
     max_tokens: int = 40000,
     max_retries: int = 5,
     delay: int = 1,
-    continue_on_error: bool = False
+    continue_on_error: bool = False,
+    batch_size: int = 10
 ) -> None:
     """
     Process a parquet file and analyze responses
@@ -146,6 +185,7 @@ def process_file(
         max_retries: Maximum number of retry attempts for API calls
         delay: Delay between API calls in seconds
         continue_on_error: Whether to continue processing after an error
+        batch_size: Size of batches for parallel processing and saving
     """
     logger.info(f"Reading input file: {input_file}")
     df = pd.read_parquet(input_file)
@@ -156,6 +196,7 @@ def process_file(
     
     # Create analyzer
     analyzer = ResponseAnalyzer(llm_type, temperature, max_tokens, max_retries)
+    analyzer.set_rate_limit(delay)  # Set delay between API calls
     
     # Create new columns for analysis results
     column_prefix = "llm_analysis"
@@ -163,46 +204,56 @@ def process_file(
     df[f'{column_prefix}_raw_output'] = None
     df[f'{column_prefix}_extracted_json'] = None
     
-    logger.info(f"Processing {len(df)} rows using {llm_type} API")
+    logger.info(f"Processing {len(df)} rows using {llm_type} API with batch size {batch_size}")
     
-    # Process each row
-    for i, row in tqdm(df.iterrows(), total=len(df)):
-        try:
-            # Handle responses based on its type (could be string or list)
-            response = row['responses'][0]
-            # Create the prompt by appending the response to the instruction
-            # Replace the placeholder with the actual response
-            prompt = instruction.replace("<INSERT MODEL OUTPUT TRANSCRIPT HERE>", response)
+    # Create progress bar for overall progress
+    pbar = tqdm(total=len(df), desc="Overall Progress")
+    processed_count = 0
+    
+    # Process in batches using ThreadPoolExecutor
+    with concurrent.futures.ThreadPoolExecutor(max_workers=batch_size) as executor:
+        # Process all rows in batches
+        for batch_start in range(0, len(df), batch_size):
+            batch_end = min(batch_start + batch_size, len(df))
+            logger.info(f"Processing batch: rows {batch_start} to {batch_end-1}")
             
-            # Call LLM API with instruction + response
-            raw_output = analyzer.analyze_response(prompt)
-            df.at[i, f'{column_prefix}_raw_output'] = raw_output
+            # Create list of tasks for this batch
+            tasks = [
+                (i, df.iloc[i], instruction, analyzer, column_prefix, continue_on_error)
+                for i in range(batch_start, batch_end)
+            ]
             
-            # Extract JSON
-            extracted_json = extract_json(raw_output)
-            df.at[i, f'{column_prefix}_extracted_json'] = json.dumps(extracted_json)
+            # Submit all tasks for this batch
+            future_to_idx = {executor.submit(process_row, task): task[0] for task in tasks}
             
-            # Save intermediate results after each successful processing
-            if i > 0 and i % 5 == 0:
-                logger.info(f"Saving intermediate results after processing {i} rows...")
-                df.to_parquet(output_file)
+            # Process completed tasks as they finish
+            batch_errors = []
+            for future in concurrent.futures.as_completed(future_to_idx):
+                row_idx, raw_output, extracted_json, error = future.result()
                 
-        except Exception as e:
-            error_msg = f"Error processing row {i}: {str(e)}"
-            logger.error(error_msg)
+                if error and not continue_on_error:
+                    batch_errors.append(error)
+                    continue
+                    
+                df.at[row_idx, f'{column_prefix}_raw_output'] = raw_output
+                df.at[row_idx, f'{column_prefix}_extracted_json'] = extracted_json
+                
+                # Update progress bar
+                processed_count += 1
+                pbar.update(1)
             
-            if not continue_on_error:
-                logger.error("Stopping due to error. Use --continue-on-error flag to continue despite errors.")
-                raise RuntimeError(error_msg)
-            else:
-                logger.warning("Continuing to next row due to --continue-on-error flag...")
-                df.at[i, f'{column_prefix}_raw_output'] = f"ERROR: {str(e)}"
-                df.at[i, f'{column_prefix}_extracted_json'] = "{}"
-
-        
+            # Check if we had any errors and should stop
+            if batch_errors and not continue_on_error:
+                pbar.close()
+                logger.error("Stopping due to errors. Use --continue-on-error flag to continue despite errors.")
+                raise RuntimeError(batch_errors[0])
+                
+            # Save after each batch
+            logger.info(f"Saving results after processing batch up to row {batch_end-1}...")
+            df.to_parquet(output_file)
     
-
-    
+    # Close progress bar
+    pbar.close()
     logger.info(f"Analysis complete using {llm_type} API")
 
 
@@ -218,10 +269,10 @@ def parse_arguments():
     
     parser.add_argument('--instruction', '-p', type=str, 
                         # default="classification-fitting_model_extraction_prompt.txt",
-                        default="regression-fitting_model_extraction_prompt.txt",
+                        # default="regression-fitting_model_extraction_prompt.txt",
                         help='Path to instruction file')
     
-    parser.add_argument('--llm', '-l', type=str, default='claude',
+    parser.add_argument('--llm', '-l', type=str, default='gemini',
                         choices=get_available_llm_types(),
                         help=f'LLM API to use for analysis')
     
@@ -239,6 +290,9 @@ def parse_arguments():
     
     parser.add_argument('--continue_on_error', '-c', action='store_true',
                         help='Continue processing after errors (default: False)')
+    
+    parser.add_argument('--batch_size', '-b', type=int, default=10,
+                        help='Batch size for parallel processing and saving (default: 10)')
     
     parser.add_argument('--verbose', '-v', action='store_true',
                         help='Enable verbose logging')
@@ -270,7 +324,8 @@ def main():
         max_tokens=args.max_tokens,
         max_retries=args.max_retries,
         delay=args.delay,
-        continue_on_error=args.continue_on_error
+        continue_on_error=args.continue_on_error,
+        batch_size=args.batch_size
     )
 
 

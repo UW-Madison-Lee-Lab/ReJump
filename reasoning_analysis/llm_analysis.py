@@ -2,6 +2,14 @@
 """
 Process LLM analysis data from model responses
 This module handles the extraction and evaluation of model functions from LLM analysis JSON data.
+
+The module also computes:
+- model_family_best_mse for regression tasks: Calculates the MSE achieved by using 
+  scikit-learn's implementation of the corresponding model family.
+- model_family_best_accuracy for classification tasks: Calculates the accuracy achieved by using
+  scikit-learn's implementation of the corresponding model family.
+
+These metrics help compare LLM-generated models with their scikit-learn counterparts.
 """
 
 import json
@@ -157,7 +165,7 @@ def main():
                         help='Directory to save the output file (default: same as input file)')
     parser.add_argument('--max-samples', type=int, default=0,
                         help='Maximum number of samples to include (default: 0 = all samples)')
-    parser.add_argument('--data_type', type=str, default='regression',
+    parser.add_argument('--data_type', type=str,
                         choices=['regression', 'classification'],
                         help='Data type to extract')
     

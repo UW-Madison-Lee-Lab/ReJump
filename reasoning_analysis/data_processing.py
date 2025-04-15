@@ -961,6 +961,266 @@ def extract_and_execute_model_functions(extracted_json: str, ground_truth: Dict[
     print(f"\nProcessed {len(model_results)} models")
     return model_results
 
+def compute_model_family_best_mse(model_family, predictions):
+    """
+    Compute the best MSE using scikit-learn's implementation of the model family.
+    
+    Args:
+        model_family: String indicating scikit-learn model family (e.g., 'sklearn.linear_model.LinearRegression')
+        predictions: List of prediction dictionaries with features and true_value
+        
+    Returns:
+        Best MSE achieved by scikit-learn implementation, or None if computation fails
+    """
+    try:
+        # Skip if no predictions or model_family is unknown
+        if not predictions or model_family == "unknown" or model_family == "custom":
+            return None
+            
+        # Extract features and targets from predictions
+        X = []
+        y = []
+        for pred in predictions:
+            if 'features' in pred and 'true_value' in pred and pred['features'] and len(pred['features']) >= 2:
+                # For simplicity, we only use the first two features x and y
+                X.append(pred['features'][:2])
+                y.append(pred['true_value'])
+                
+        # Skip if not enough data points
+        if len(X) < 2:
+            return None
+            
+        # Import scikit-learn dynamically
+        import importlib
+        import numpy as np
+        from sklearn.metrics import mean_squared_error
+        
+        # Handle common model families
+        best_mse = None
+        
+        if 'sklearn.linear_model.LinearRegression' in model_family or 'linear' in model_family.lower():
+            from sklearn.linear_model import LinearRegression
+            model = LinearRegression()
+            model.fit(X, y)
+            y_pred = model.predict(X)
+            best_mse = mean_squared_error(y, y_pred)
+            
+        elif 'sklearn.linear_model.Ridge' in model_family or 'ridge' in model_family.lower():
+            from sklearn.linear_model import Ridge
+            # Try different alpha values and pick the best
+            best_mse = float('inf')
+            for alpha in [0.01, 0.1, 1.0, 10.0]:
+                model = Ridge(alpha=alpha)
+                model.fit(X, y)
+                y_pred = model.predict(X)
+                mse = mean_squared_error(y, y_pred)
+                if mse < best_mse:
+                    best_mse = mse
+                    
+        elif 'sklearn.linear_model.Lasso' in model_family or 'lasso' in model_family.lower():
+            from sklearn.linear_model import Lasso
+            # Try different alpha values and pick the best
+            best_mse = float('inf')
+            for alpha in [0.01, 0.1, 1.0]:
+                model = Lasso(alpha=alpha)
+                model.fit(X, y)
+                y_pred = model.predict(X)
+                mse = mean_squared_error(y, y_pred)
+                if mse < best_mse:
+                    best_mse = mse
+                    
+        elif 'sklearn.linear_model.ElasticNet' in model_family or 'elasticnet' in model_family.lower():
+            from sklearn.linear_model import ElasticNet
+            best_mse = float('inf')
+            for alpha in [0.01, 0.1, 1.0]:
+                for l1_ratio in [0.1, 0.5, 0.9]:
+                    model = ElasticNet(alpha=alpha, l1_ratio=l1_ratio)
+                    model.fit(X, y)
+                    y_pred = model.predict(X)
+                    mse = mean_squared_error(y, y_pred)
+                    if mse < best_mse:
+                        best_mse = mse
+                        
+        elif 'sklearn.preprocessing.PolynomialFeatures' in model_family or 'polynomial' in model_family.lower():
+            from sklearn.preprocessing import PolynomialFeatures
+            from sklearn.linear_model import LinearRegression
+            from sklearn.pipeline import Pipeline
+            
+            best_mse = float('inf')
+            for degree in [2, 3]:
+                model = Pipeline([
+                    ('poly', PolynomialFeatures(degree=degree)),
+                    ('linear', LinearRegression())
+                ])
+                model.fit(X, y)
+                y_pred = model.predict(X)
+                mse = mean_squared_error(y, y_pred)
+                if mse < best_mse:
+                    best_mse = mse
+                    
+        elif 'sklearn.svm' in model_family or 'svm' in model_family.lower():
+            from sklearn.svm import SVR
+            best_mse = float('inf')
+            for C in [0.1, 1.0, 10.0]:
+                for kernel in ['linear', 'rbf']:
+                    model = SVR(kernel=kernel, C=C)
+                    model.fit(X, y)
+                    y_pred = model.predict(X)
+                    mse = mean_squared_error(y, y_pred)
+                    if mse < best_mse:
+                        best_mse = mse
+                        
+        elif 'sklearn.tree' in model_family or 'decision tree' in model_family.lower():
+            from sklearn.tree import DecisionTreeRegressor
+            best_mse = float('inf')
+            for max_depth in [2, 3, 5, None]:
+                model = DecisionTreeRegressor(max_depth=max_depth)
+                model.fit(X, y)
+                y_pred = model.predict(X)
+                mse = mean_squared_error(y, y_pred)
+                if mse < best_mse:
+                    best_mse = mse
+                    
+        # If no specific model family was matched but we have "linear" in the name
+        elif 'linear' in model_family.lower():
+            from sklearn.linear_model import LinearRegression
+            model = LinearRegression()
+            model.fit(X, y)
+            y_pred = model.predict(X)
+            best_mse = mean_squared_error(y, y_pred)
+            
+        # Fallback to simple linear regression if model family not recognized
+        else:
+            from sklearn.linear_model import LinearRegression
+            model = LinearRegression()
+            model.fit(X, y)
+            y_pred = model.predict(X)
+            best_mse = mean_squared_error(y, y_pred)
+            
+        return best_mse
+        
+    except Exception as e:
+        print(f"Error computing best MSE for model family {model_family}: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+def compute_model_family_best_accuracy(model_family, predictions):
+    """
+    Compute the best accuracy using scikit-learn's implementation of the model family.
+    
+    Args:
+        model_family: String indicating scikit-learn model family (e.g., 'sklearn.linear_model.LogisticRegression')
+        predictions: List of prediction dictionaries with features and true_label
+        
+    Returns:
+        Best accuracy achieved by scikit-learn implementation, or None if computation fails
+    """
+    try:
+        # Skip if no predictions or model_family is unknown
+        if not predictions or model_family == "unknown" or model_family == "custom":
+            return None
+            
+        # Extract features and targets from predictions
+        X = []
+        y = []
+        for pred in predictions:
+            if 'features' in pred and 'true_label' in pred and pred['features'] and len(pred['features']) >= 2:
+                # For simplicity, we only use the first two features x and y
+                X.append(pred['features'][:2])
+                y.append(pred['true_label'])
+                
+        # Skip if not enough data points
+        if len(X) < 2:
+            return None
+            
+        # Import scikit-learn dynamically
+        import numpy as np
+        from sklearn.metrics import accuracy_score
+        
+        # Handle common model families
+        best_accuracy = None
+        
+        if 'sklearn.linear_model.LogisticRegression' in model_family or 'logistic' in model_family.lower():
+            from sklearn.linear_model import LogisticRegression
+            best_accuracy = 0.0
+            for C in [0.01, 0.1, 0.5, 1.0, 10.0, 100.0]:
+                model = LogisticRegression(C=C, max_iter=1000)
+                model.fit(X, y)
+                y_pred = model.predict(X)
+                acc = accuracy_score(y, y_pred)
+                if acc > best_accuracy:
+                    best_accuracy = acc
+                    
+        elif 'sklearn.svm' in model_family or 'svm' in model_family.lower():
+            from sklearn.svm import SVC
+            best_accuracy = 0.0
+            for C in [0.1, 1.0, 10.0]:
+                for kernel in ['linear', 'rbf']:
+                    model = SVC(kernel=kernel, C=C)
+                    model.fit(X, y)
+                    y_pred = model.predict(X)
+                    acc = accuracy_score(y, y_pred)
+                    if acc > best_accuracy:
+                        best_accuracy = acc
+                        
+        elif 'sklearn.tree' in model_family or 'decision tree' in model_family.lower():
+            from sklearn.tree import DecisionTreeClassifier
+            best_accuracy = 0.0
+            for max_depth in [2, 3, 5, None]:
+                model = DecisionTreeClassifier(max_depth=max_depth)
+                model.fit(X, y)
+                y_pred = model.predict(X)
+                acc = accuracy_score(y, y_pred)
+                if acc > best_accuracy:
+                    best_accuracy = acc
+                    
+        elif 'sklearn.ensemble.RandomForest' in model_family or 'random forest' in model_family.lower():
+            from sklearn.ensemble import RandomForestClassifier
+            best_accuracy = 0.0
+            for n_estimators in [10, 50, 100]:
+                for max_depth in [2, 5, None]:
+                    model = RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth)
+                    model.fit(X, y)
+                    y_pred = model.predict(X)
+                    acc = accuracy_score(y, y_pred)
+                    if acc > best_accuracy:
+                        best_accuracy = acc
+                        
+        elif 'sklearn.neighbors' in model_family or 'knn' in model_family.lower():
+            from sklearn.neighbors import KNeighborsClassifier
+            best_accuracy = 0.0
+            for n_neighbors in [3, 5, 7]:
+                model = KNeighborsClassifier(n_neighbors=n_neighbors)
+                model.fit(X, y)
+                y_pred = model.predict(X)
+                acc = accuracy_score(y, y_pred)
+                if acc > best_accuracy:
+                    best_accuracy = acc
+                    
+        elif 'sklearn.naive_bayes' in model_family or 'naive bayes' in model_family.lower():
+            from sklearn.naive_bayes import GaussianNB
+            model = GaussianNB()
+            model.fit(X, y)
+            y_pred = model.predict(X)
+            best_accuracy = accuracy_score(y, y_pred)
+            
+        # Fallback to simple logistic regression if model family not recognized
+        else:
+            from sklearn.linear_model import LogisticRegression
+            model = LogisticRegression(max_iter=1000)
+            model.fit(X, y)
+            y_pred = model.predict(X)
+            best_accuracy = accuracy_score(y, y_pred)
+            
+        return best_accuracy * 100  # Convert to percentage to match the accuracy field
+        
+    except Exception as e:
+        print(f"Error computing best accuracy for model family {model_family}: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
 def create_model_evaluation_table(model_results, models_data, data_type):
     """Create model evaluation table from results."""
     evaluation_table = []
@@ -982,6 +1242,11 @@ def create_model_evaluation_table(model_results, models_data, data_type):
             mse = result.get('mse', float('inf'))
             total_count = result.get('total_count', 0)
             valid_predictions = result.get('valid_predictions', 0)
+            model_family = result.get("model_family", "unknown")
+            predictions = result.get("predictions", [])
+            
+            # Compute model_family_best_mse
+            model_family_best_mse = compute_model_family_best_mse(model_family, predictions)
             
             table_row = {
                 "order": model_order,
@@ -992,13 +1257,19 @@ def create_model_evaluation_table(model_results, models_data, data_type):
                 "details": f"MSE: {mse:.6f} ({valid_predictions} valid)" if not has_error else "Error",
                 "has_error": has_error,
                 "model_code": result.get("model_func", ""),
-                "model_family": result.get("model_family", "unknown"),
-                "predictions": result.get("predictions", [])[:10]  # Include first 10 predictions
+                "model_family": model_family,
+                "model_family_best_mse": model_family_best_mse,
+                "predictions": predictions[:10]  # Include first 10 predictions
             }
         elif data_type == 'classification':
             accuracy = result.get('accuracy', 0.0)
             correct_count = result.get('correct_count', 0)
             total_count = result.get('total_count', 0)
+            model_family = result.get("model_family", "unknown")
+            predictions = result.get("predictions", [])
+            
+            # Compute model_family_best_accuracy
+            model_family_best_accuracy = compute_model_family_best_accuracy(model_family, predictions)
             
             table_row = {
                 "order": model_order,
@@ -1009,8 +1280,9 @@ def create_model_evaluation_table(model_results, models_data, data_type):
                 "details": f"{correct_count} of {total_count} correct" if not has_error else "Error",
                 "has_error": has_error,
                 "model_code": result.get("model_func", ""),
-                "model_family": result.get("model_family", "unknown"),
-                "predictions": result.get("predictions", [])[:10]  # Include first 10 predictions
+                "model_family": model_family,
+                "model_family_best_accuracy": model_family_best_accuracy,
+                "predictions": predictions[:10]  # Include first 10 predictions
             }
         else:
             raise NotImplementedError(f"Data type {data_type} not implemented")

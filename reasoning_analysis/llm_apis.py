@@ -65,7 +65,7 @@ class ResponseAnalyzer:
             # api_key = os.getenv("GOOGLE_API_KEY")
             #key is in environment.py
             from environment import GEMINI_API_KEY
-            api_key = GEMINI_API_KEY['yz']
+            api_key = GEMINI_API_KEY
             
             if not api_key:
                 raise ValueError("GOOGLE_API_KEY environment variable is not set")

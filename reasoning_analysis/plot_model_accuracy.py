@@ -157,7 +157,7 @@ def clear_existing_plots():
     plt.figure(figsize=(12, 8))
     return
 
-def plot_model_accuracy(data, output_file=None, title=None):
+def plot_model_accuracy(data, output_file=None, title=None, exclude_outliner=False):
     """Create a scatter plot of model accuracy vs normalized order."""
     clear_existing_plots()
     
@@ -165,45 +165,93 @@ def plot_model_accuracy(data, output_file=None, title=None):
     unique_samples = set(sample_indices)
     colors = plt.cm.viridis(np.linspace(0, 1, len(unique_samples)))
     
-    # Plot individual points
+    # Convert to numpy arrays for easier manipulation
+    x = np.array(norm_orders)
+    y = np.array(accuracies)
+    
+    # Filter nan values and infinities
+    valid_mask = ~np.isnan(x) & ~np.isnan(y) & np.isfinite(x) & np.isfinite(y)
+    x_valid = x[valid_mask]
+    y_valid = y[valid_mask]
+    valid_indices = np.array(sample_indices)[valid_mask]
+    
+    # Detect outliers if exclude_outliner is True
+    outliers_mask = np.zeros_like(x_valid, dtype=bool)
+    if exclude_outliner and len(x_valid) > 4:
+        # Using IQR method to detect outliers in accuracy values
+        q1 = np.percentile(y_valid, 25)
+        q3 = np.percentile(y_valid, 75)
+        iqr = q3 - q1
+        outlier_threshold = 1.5 * iqr
+        outliers_mask = (y_valid < q1 - outlier_threshold) | (y_valid > q3 + outlier_threshold)
+        print(f"Detected {np.sum(outliers_mask)} outliers out of {len(x_valid)} valid points")
+    
+    # Separate outliers and non-outliers
+    x_outliers = x_valid[outliers_mask]
+    y_outliers = y_valid[outliers_mask]
+    outlier_indices = valid_indices[outliers_mask]
+    
+    x_clean = x_valid[~outliers_mask]
+    y_clean = y_valid[~outliers_mask]
+    clean_indices = valid_indices[~outliers_mask]
+    
+    # Plot individual points (excluding outliers)
     for i, sample_idx in enumerate(unique_samples):
-        points = [(o, a) for o, a, s in data if s == sample_idx]
+        # Regular points
+        points = [(x, y) for x, y, s in zip(x_clean, y_clean, clean_indices) if s == sample_idx]
         if points:
             sample_orders, sample_accuracies = zip(*points)
             plt.scatter(sample_orders, sample_accuracies, 
                        color=colors[i], alpha=0.7, label=f"Sample {sample_idx}")
     
+    # Plot outliers in black if any
+    if exclude_outliner and np.any(outliers_mask):
+        plt.scatter(x_outliers, y_outliers, color='black', marker='x', alpha=0.7, 
+                   label='Outliers (excluded from fit)')
+    
+    # Use either clean data or all valid data for fitting based on exclude_outliner
+    fit_x = x_clean if exclude_outliner else x_valid
+    fit_y = y_clean if exclude_outliner else y_valid
+    
     # Add trend line
-    x = np.array(norm_orders)
-    y = np.array(accuracies)
-    
-    # Try both linear and quadratic fits
-    linear_coeffs = np.polyfit(x, y, 1)
-    quadratic_coeffs = np.polyfit(x, y, 2)
-    
-    # Calculate R² for both fits
-    linear_pred = np.polyval(linear_coeffs, x)
-    quadratic_pred = np.polyval(quadratic_coeffs, x)
-    
-    linear_r2 = 1 - (np.sum((y - linear_pred) ** 2) / np.sum((y - np.mean(y)) ** 2))
-    quadratic_r2 = 1 - (np.sum((y - quadratic_pred) ** 2) / np.sum((y - np.mean(y)) ** 2))
-    
-    # Choose the better fit based on R²
-    if quadratic_r2 > linear_r2:
-        coeffs = quadratic_coeffs
-        r2 = quadratic_r2
-        fit_type = "Quadratic"
+    if len(fit_x) >= 3:  # At least 3 points for quadratic fit
+        # Try both linear and quadratic fits
+        linear_coeffs = np.polyfit(fit_x, fit_y, 1)
+        quadratic_coeffs = np.polyfit(fit_x, fit_y, 2)
+        
+        # Calculate R² for both fits
+        linear_pred = np.polyval(linear_coeffs, fit_x)
+        quadratic_pred = np.polyval(quadratic_coeffs, fit_x)
+        
+        # Calculate R² with protection measures
+        denominator = np.sum((fit_y - np.mean(fit_y)) ** 2)
+        if denominator > 0:
+            linear_r2 = 1 - (np.sum((fit_y - linear_pred) ** 2) / denominator)
+            quadratic_r2 = 1 - (np.sum((fit_y - quadratic_pred) ** 2) / denominator)
+        else:
+            # Denominator is 0 means all y values are identical
+            print("Warning: All accuracy values are identical, R² calculation is not meaningful")
+            linear_r2 = 0
+            quadratic_r2 = 0
+        
+        # Choose the better fit based on R²
+        if quadratic_r2 > linear_r2:
+            coeffs = quadratic_coeffs
+            r2 = quadratic_r2
+            fit_type = "Quadratic"
+        else:
+            coeffs = linear_coeffs
+            r2 = linear_r2
+            fit_type = "Linear"
+        
+        # Plot the trend line
+        x_fit = np.linspace(min(fit_x), max(fit_x), 100)
+        y_fit = np.polyval(coeffs, x_fit)
+        plt.plot(x_fit, y_fit, 'r-', linewidth=2, 
+                 label=f"{fit_type} Fit (R² = {r2:.3f})")
     else:
-        coeffs = linear_coeffs
-        r2 = linear_r2
-        fit_type = "Linear"
-    
-    # Plot the trend line
-    x_fit = np.linspace(min(x), max(x), 100)
-    y_fit = np.polyval(coeffs, x_fit)
-    plt.plot(x_fit, y_fit, 'r-', linewidth=2, 
-             label=f"{fit_type} Fit (R² = {r2:.3f})")
-    
+        print(f"Warning: Too few valid data points for fitting ({len(fit_x)} points)")
+        
     plt.axhline(y=100, color='r', linestyle='--', alpha=0.3)
     plt.xlabel('Normalized Model Order')
     plt.ylabel('Accuracy (%)')
@@ -263,7 +311,7 @@ def plot_model_accuracy_with_ci(data, output_file=None, title=None):
     else:
         plt.show()
 
-def plot_model_mse(data, output_file=None, title=None):
+def plot_model_mse(data, output_file=None, title=None, exclude_outliner=True):
     """Create a scatter plot of model MSE vs normalized order."""
     clear_existing_plots()
     
@@ -271,41 +319,72 @@ def plot_model_mse(data, output_file=None, title=None):
     unique_samples = set(sample_indices)
     colors = plt.cm.viridis(np.linspace(0, 1, len(unique_samples)))
     
-    # Plot individual points
-    for i, sample_idx in enumerate(unique_samples):
-        points = [(o, m) for o, m, s in data if s == sample_idx]
-        if points:
-            sample_orders, sample_mse = zip(*points)
-            plt.scatter(sample_orders, sample_mse, 
-                       color=colors[i], alpha=0.7, label=f"Sample {sample_idx}")
-    
-    # Add trend line
+    # Convert to numpy arrays for easier manipulation
     x = np.array(norm_orders)
     y = np.array(mse_values)
     
-    # 过滤nan值和无穷大值
+    # Filter nan values and infinities
     valid_mask = ~np.isnan(x) & ~np.isnan(y) & np.isfinite(x) & np.isfinite(y)
     x_valid = x[valid_mask]
     y_valid = y[valid_mask]
+    valid_indices = np.array(sample_indices)[valid_mask]
+    
+    # Detect outliers if exclude_outliner is True
+    outliers_mask = np.zeros_like(x_valid, dtype=bool)
+    if exclude_outliner and len(x_valid) > 4:
+        # Using IQR method to detect outliers in MSE values
+        q1 = np.percentile(y_valid, 25)
+        q3 = np.percentile(y_valid, 75)
+        iqr = q3 - q1
+        outlier_threshold = 100 * iqr
+        outliers_mask = (y_valid < q1 - outlier_threshold) | (y_valid > q3 + outlier_threshold)
+        print(f"Detected {np.sum(outliers_mask)} outliers out of {len(x_valid)} valid points")
+    
+    # Separate outliers and non-outliers
+    x_outliers = x_valid[outliers_mask]
+    y_outliers = y_valid[outliers_mask]
+    outlier_indices = valid_indices[outliers_mask]
+    
+    x_clean = x_valid[~outliers_mask]
+    y_clean = y_valid[~outliers_mask]
+    clean_indices = valid_indices[~outliers_mask]
+    
+    # Plot individual points (excluding outliers)
+    for i, sample_idx in enumerate(unique_samples):
+        # Regular points
+        points = [(x, y) for x, y, s in zip(x_clean, y_clean, clean_indices) if s == sample_idx]
+        if points:
+            sample_orders, sample_mse = zip(*points)
+            plt.scatter(sample_orders, sample_mse, 
+                       color=colors[i], alpha=0.7, label=f"Sample {sample_idx}" if i == 0 else "")
+    
+    # Plot outliers in black if any
+    if exclude_outliner and np.any(outliers_mask):
+        plt.scatter(x_outliers, y_outliers, color='black', marker='x', alpha=0.7, 
+                   label='Outliers (excluded from fit)')
     
     print(f"Original data points: {len(x)}, Valid data points after filtering: {len(x_valid)}")
     
+    # Use either clean data or all valid data for fitting based on exclude_outliner
+    fit_x = x_clean if exclude_outliner else x_valid
+    fit_y = y_clean if exclude_outliner else y_valid
+    
     # 确保有足够的数据点进行拟合
-    if len(x_valid) >= 3:  # 至少需要3个点进行二次拟合
+    if len(fit_x) >= 3:  # 至少需要3个点进行二次拟合
         try:
             # Try both linear and quadratic fits
-            linear_coeffs = np.polyfit(x_valid, y_valid, 1)
-            quadratic_coeffs = np.polyfit(x_valid, y_valid, 2)
+            linear_coeffs = np.polyfit(fit_x, fit_y, 1)
+            quadratic_coeffs = np.polyfit(fit_x, fit_y, 2)
             
             # Calculate R² for both fits
-            linear_pred = np.polyval(linear_coeffs, x_valid)
-            quadratic_pred = np.polyval(quadratic_coeffs, x_valid)
+            linear_pred = np.polyval(linear_coeffs, fit_x)
+            quadratic_pred = np.polyval(quadratic_coeffs, fit_x)
             
             # 计算R²，添加防护措施
-            denominator = np.sum((y_valid - np.mean(y_valid)) ** 2)
+            denominator = np.sum((fit_y - np.mean(fit_y)) ** 2)
             if denominator > 0:
-                linear_r2 = 1 - (np.sum((y_valid - linear_pred) ** 2) / denominator)
-                quadratic_r2 = 1 - (np.sum((y_valid - quadratic_pred) ** 2) / denominator)
+                linear_r2 = 1 - (np.sum((fit_y - linear_pred) ** 2) / denominator)
+                quadratic_r2 = 1 - (np.sum((fit_y - quadratic_pred) ** 2) / denominator)
             else:
                 # 分母为0意味着所有y值都相同
                 print("Warning: All y values are identical, R² calculation is not meaningful")
@@ -323,7 +402,7 @@ def plot_model_mse(data, output_file=None, title=None):
                 fit_type = "Linear"
             
             # Plot the trend line
-            x_fit = np.linspace(min(x_valid), max(x_valid), 100)
+            x_fit = np.linspace(min(fit_x), max(fit_x), 100)
             y_fit = np.polyval(coeffs, x_fit)
             
             plt.plot(x_fit, y_fit, 'r-', linewidth=3, 
@@ -337,7 +416,7 @@ def plot_model_mse(data, output_file=None, title=None):
             coeffs = None
             r2 = 0
     else:
-        print(f"Warning: Too few valid data points for fitting ({len(x_valid)} points)")
+        print(f"Warning: Too few valid data points for fitting ({len(fit_x)} points)")
         coeffs = None
         r2 = 0
     

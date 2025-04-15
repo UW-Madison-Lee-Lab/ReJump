@@ -128,3 +128,4 @@ reasoning_analysis/deepseek-r1-cosreg_claude_analysis.parquet
 reasoning_analysis/*.json
 reasoning_analysis/*.parquet
 reasoning_analysis/*.png
+multi-query-results/*
