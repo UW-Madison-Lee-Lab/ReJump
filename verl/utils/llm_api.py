@@ -42,7 +42,6 @@ class APIRewardManager:
 
             # select rm_score
             compute_score_fn = _select_rm_score_fn(data_source)
-
             score = compute_score_fn(solution_str=sequences_str, ground_truth=ground_truth)
             reward_tensor[i] = score
 

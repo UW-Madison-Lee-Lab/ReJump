@@ -40,7 +40,7 @@ def gen_dataset(
         """
             icl_examples.append(icl_example_prompt)
             
-        max_length = 20000 if supported_datasets[dataset_name]["type"] == "regression" else 40000
+        max_length = 40000 if supported_datasets[dataset_name]["type"] == "regression" else 80000
         icl_examples_prompt = ''.join(icl_examples).replace('\n', '')
         command = f"""
 python -m icl_reasoning.icl_reasoning \
@@ -72,6 +72,8 @@ python -m icl_reasoning.icl_reasoning \
             feature_noise = 0.1 if feature_noise is None else feature_noise
         elif dataset_name == "circles":
             feature_noise = 0.01 if feature_noise is None else feature_noise
+        else:
+            feature_noise = 0
         command = f"""
 python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --template_type={template_type} \
@@ -80,9 +82,10 @@ python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --n_query={n_query} \
     --feature_noise={feature_noise} \
     --test_ratio=0.2 \
-        --label_noise={label_noise} \
-        --data_mode={data_mode}
+    --label_noise={label_noise} \
+    --data_mode={data_mode}
             """ 
+            
     return command
 
 

@@ -260,6 +260,12 @@ supported_llms = {
         "type": "api",
         "api_key": OPENAI_API_KEY,
     },
+    "openai/gpt-4o-mini-2024-07-18": {
+        "template_type": "standard_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": OPENAI_API_KEY,
+    },
     "openai/o1-pro": {
         "template_type": "reasoning_api",
         "model_size": 0,
@@ -286,6 +292,12 @@ supported_llms = {
     },
     "claude/claude-3-7-sonnet-20250219-thinking": {
         "template_type": "reasoning_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": ANTHROPIC_API_KEY,
+    },
+    "claude/claude-3-5-haiku-20241022": {
+        "template_type": "standard_api",
         "model_size": 0,
         "type": "api",
         "api_key": ANTHROPIC_API_KEY,
@@ -427,14 +439,12 @@ supported_datasets = {
         "type": "regression",
         "difficulty": 2,
     },
-    "regression": {
+    "gsm8k": {
         "num_classes": None,
-        "num_features": 2,
-        "feature_noise": 0.1,
-        "label_noise": 0.0,
-        "type": "regression",
-        "difficulty": 2,
-    },
-    "classification": {
-    },
+        "num_features": None,
+        "feature_noise": None,
+        "label_noise": None,
+        "type": "classification",
+        "difficulty": None,
+    }
 }

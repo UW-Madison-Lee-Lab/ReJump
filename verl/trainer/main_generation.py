@@ -142,7 +142,7 @@ def main(config):
 
     # Use RLHFDataset for both API and non-API modes
     if use_api:
-        max_prompt_length = 40_000
+        max_prompt_length = 100_000
     else:
         max_prompt_length = config.rollout.prompt_length
         

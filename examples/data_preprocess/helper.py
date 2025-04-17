@@ -126,6 +126,7 @@ def flip_label(y, label_noise, n_classes):
             possible_labels.remove(y[i])
             y[i] = np.random.choice(possible_labels)
     return y
+    
 
 def make_classification_prefix(
     dp, 
@@ -188,11 +189,21 @@ def make_classification_prefix(
         Let me solve this step by step.
         <think>
         """
+    elif template_type == 'qwen-instruct_no_reasoning':
+        prefix = f"""
+        <|im_start|>system
+        You are a helpful assistant. You always provide the user directly with the answer without any reasoning.
+        <|im_end|>
+        <|im_start|>user
+        The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} {query} Your response should contain only the final answer enclosed in <answer> and </answer> tags, with no additional text—specifically, just {label_str}, for example: {answer_example}
+        <|im_end|>
+        <|im_start|>assistant
+        """
     elif template_type == 'base_no_reasoning':
         prefix = f"""
         A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
 
-        User: The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} {query} Your final answer should be enclosed in <answer> and </answer> tags, containing only {label_str} with no additional text—for example, {answer_example}
+        User: The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} {query} Your response should contain only the final answer enclosed in <answer> and </answer> tags, with no additional text—specifically, just {label_str}, for example: {answer_example}
         Assistant: 
         """
     elif template_type == 'reasoning_api':
