@@ -39,7 +39,7 @@ def run_analysis_pipeline(base_dir="/home/szhang967/liftr/multi-query-results"):
                 data_type = get_data_type(input_file)
             #     if data_type == "classification":
             #         continue
-            #     subprocess.run(["python", analysis_script, "--input", input_file, "--data_type", data_type], check=True)
+                subprocess.run(["python", analysis_script, "--input", input_file, "--data_type", data_type], check=True)
                 
                 # Get the output file path (same directory as input)
                 output_dir = os.path.dirname(input_file)

@@ -57,19 +57,6 @@ Each fitting model must include:
     "validation_original_text": "But [0.514, 0.858] (x positive, y positive) is label 0. That's conflicting..."
   },
   {
-    "order": 1,
-    "description": "Linear split on x or y → Class 1",
-    "rule": {
-      "1": ["x > 0.5 or y > 0.5"],
-      "0": ["else"]
-    },
-    "model_family": "sklearn.linear_model.LogisticRegression",
-    "function": "def model(x, y, data):\n    if x > 0.5 or y > 0.5:\n        return 1\n    return 0",
-    "extracted_parameter": ["threshold=0.5"],
-    "rule_original_text": "So maybe the line isn't purely based on x or y.",
-    "validation_original_text": ""
-  },
-  {
     "order": 2,
     "description": "x < 0 and y > 0 → Class 0",
     "rule": {

@@ -128,6 +128,8 @@ def process_parquet_file(input_file: str, output_dir: Optional[str] = None,
             sample_data = {
                 "index": int(idx),
                 "data_source": data_source,
+                "prompt": row.get('prompt', ''),
+                "model_responses": row.get('responses', []),
                 "model_evaluation_table": evaluation_table
             }
             
