@@ -134,3 +134,4 @@ multi-query-results/*
 multi-query-results
 reasoning_analysis/*.parquet
 reasoning_analysis/*.json
+reasoning_analysis/*.html
