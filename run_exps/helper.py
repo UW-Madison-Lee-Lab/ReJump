@@ -75,7 +75,7 @@ python -m icl_reasoning.icl_reasoning \
         else:
             feature_noise = 0
         command = f"""
-python {root_dir}/examples/data_preprocess/{dataset_name}.py \
+python -m examples.data_preprocess.{dataset_name} \
     --template_type={template_type} \
     --num_samples={num_samples} \
     --n_shot={shot} \

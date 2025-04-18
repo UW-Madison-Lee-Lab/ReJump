@@ -444,7 +444,23 @@ supported_datasets = {
         "num_features": None,
         "feature_noise": None,
         "label_noise": None,
-        "type": "classification",
+        "type": "other",
         "difficulty": None,
-    }
+    },
+    "aime": {
+        "num_classes": None,
+        "num_features": None,
+        "feature_noise": None,
+        "label_noise": None,
+        "type": "other",
+        "difficulty": None,
+    },
+    "math": {
+        "num_classes": None,
+        "num_features": None,
+        "feature_noise": None,
+        "label_noise": None,
+        "type": "other",
+        "difficulty": None,
+    },
 }

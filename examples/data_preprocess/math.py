@@ -12,27 +12,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-Preprocess the GSM8k dataset to parquet format
+Preprocess the MATH dataset to parquet format
 """
 
-import re
 import os
-import datasets
+from environment import root_dir
+import numpy as np
+import urllib.request
+import zipfile
+import json
+import glob
 import pdb
 from verl.utils.hdfs_io import copy, makedirs
 import argparse
 from constants import get_dataset_dir
-import numpy as np
 from utils import set_seed
+
+from verl.utils.reward_score.math import remove_boxed, last_boxed_only_string
+from datasets import Dataset
 from examples.data_preprocess.helper import make_other_prefix
 
 def extract_solution(solution_str):
-    solution = re.search("#### (\\-?[0-9\\.\\,]+)", solution_str)
-    assert solution is not None
-    final_solution = solution.group(0)
-    final_solution = final_solution.split('#### ')[1].replace(',', '')
     return {
-        "label": [int(final_solution)],
+        "label": [remove_boxed(last_boxed_only_string(solution_str))],
     }
 
 
@@ -47,27 +49,69 @@ if __name__ == '__main__':
     parser.add_argument('--template_type', type=str, default="reasoning_api")
     parser.add_argument('--label_noise', type=float, default=None)
     parser.add_argument('--data_mode', type=str, default="default", choices=["default"])
-    
+
     args = parser.parse_args()
     
-    data_source = 'gsm8k'
+    data_source = "math"
     set_seed(42)
     
     if args.n_query != 1:
-        raise ValueError("n_query must be 1 for GSM8k")
+        raise ValueError("n_query must be 1 for MATH dataset")
     if args.n_shot != 0:
-        raise ValueError("n_shot must be 0 for GSM8k")
+        raise ValueError("n_shot must be 0 for MATH dataset")
     if args.feature_noise is not None and args.feature_noise != 0:
-        raise ValueError("feature_noise must be 0 or None for GSM8k")
+        raise ValueError("feature_noise must be 0 or None for MATH dataset")
     if args.label_noise is not None and args.label_noise != 0:
-        raise ValueError("label_noise must be 0 or None for GSM8k")
-    
+        raise ValueError("label_noise must be 0 or None for MATH dataset")
 
-    dataset = datasets.load_dataset(data_source, 'main')
+
+    source_dir = f"{root_dir}/datasets/math"
+    if not os.path.exists(f"{source_dir}/MATH"):
+        # Create the directory for the math dataset
+        makedirs(source_dir)
+        
+        # Download the dataset
+        math_zip_path = os.path.join(source_dir, "MATH.zip")
+        if not os.path.exists(math_zip_path):
+            print(f"Downloading MATH dataset to {math_zip_path}...")
+            urllib.request.urlretrieve(
+                "https://www.modelscope.cn/datasets/opencompass/competition_math/resolve/master/data/MATH.zip",
+                math_zip_path
+            )
+        
+        # Extract the dataset
+        with zipfile.ZipFile(math_zip_path, 'r') as zip_ref:
+            zip_ref.extractall(source_dir)
+        
     
+    # Load the MATH dataset
+    math_dir = os.path.join(source_dir, "MATH")
+    train_data = []
+    test_data = []
     
-    train_dataset = dataset['train']
-    test_dataset = dataset['test']
+    # Load train data
+    train_path = os.path.join(math_dir, "train")
+    for category_dir in glob.glob(os.path.join(train_path, "*")):
+        if os.path.isdir(category_dir):
+            for problem_file in glob.glob(os.path.join(category_dir, "*.json")):
+                with open(problem_file, 'r') as f:
+                    problem_data = json.load(f)
+                    train_data.append(problem_data)
+    
+    # Load test data
+    test_path = os.path.join(math_dir, "test")
+    for category_dir in glob.glob(os.path.join(test_path, "*")):
+        if os.path.isdir(category_dir):
+            for problem_file in glob.glob(os.path.join(category_dir, "*.json")):
+                with open(problem_file, 'r') as f:
+                    problem_data = json.load(f)
+                    test_data.append(problem_data)
+    
+    # Convert to Dataset objects
+    train_dataset = Dataset.from_list(train_data)
+    test_dataset = Dataset.from_list(test_data)
+    
+    print(f"Loaded {len(train_dataset)} training examples and {len(test_dataset)} test examples")
     
     n_test = int(args.num_samples * args.test_ratio)
     n_train = args.num_samples - n_test
@@ -77,16 +121,15 @@ if __name__ == '__main__':
     train_dataset = train_dataset.select(idx_train)
     test_dataset = test_dataset.select(idx_test)
 
-    
     # add a row to each data item that represents a unique id
     def make_map_fn(split):
 
         def process_fn(example, idx):
-            question_raw = example.pop('question')
-
+            question_raw = example.pop('problem')
+            
             question = make_other_prefix(question_raw, args.template_type)
 
-            answer_raw = example.pop('answer')
+            answer_raw = example.pop('solution')
             solution = extract_solution(answer_raw)
             data = {
                 "data_source": data_source,
@@ -103,7 +146,7 @@ if __name__ == '__main__':
                     'split': split,
                     'index': idx,
                     'answer': answer_raw,
-                    "question": question_raw,
+                    'question': question_raw,
                 }
             }
             return data
@@ -112,10 +155,9 @@ if __name__ == '__main__':
 
     train_dataset = train_dataset.map(function=make_map_fn('train'), with_indices=True)
     test_dataset = test_dataset.map(function=make_map_fn('test'), with_indices=True)
-    
 
     local_dir = get_dataset_dir(
-        dataset_name='gsm8k',
+        dataset_name='math',
         shot=args.n_shot,
         template_type=args.template_type,
         num_samples=args.num_samples,

@@ -363,8 +363,9 @@ def main(config):
                 f'valid_mse@{k}': valid_mse,
                 f'valid_r2@{k}': valid_r2,
             })
-    else:
+    elif task_type == 'classification':
         strict_accuracy = accuracy_score(np.ones(total_samples), np.all(y_pred == y_true, axis=1))
+        y_true = y_true.flatten()
         accuracy = accuracy_score(y_true.flatten(), y_pred.flatten())
         print(f'pass@{k}: {accuracy: .3f}')
         print(f'strict_pass@{k}: {strict_accuracy: .3f}')
@@ -380,6 +381,20 @@ def main(config):
                 f'valid_pass@{k}': valid_accuracy,
                 f'valid_strict_pass@{k}': valid_strict_accuracy,
             })
+            
+    else:
+        reward_lst = []
+        for i in range(total_samples):
+            reward_lst.append(max(reward_tensor_lst[i]))
+        reward_lst = np.array(reward_lst)
+        passk = reward_lst.mean()
+        print(f'pass@{k}: {passk: .3f}')
+        if config.trainer.wandb:
+            wandb.log({
+                f'pass@{k}': passk,
+            })
+        valid_prompts = [1]
+                
             
     valid_ratio = np.mean(valid_prompts)
     print(f'valid_ratio@{k}: {valid_ratio: .3f}')

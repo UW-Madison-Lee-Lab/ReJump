@@ -334,6 +334,63 @@ def make_regression_prefix(
     
     return prefix, in_context_samples
 
+def make_other_prefix(question, template_type):
+        if "reasoning_api" in template_type or "standard_api_no_reasoning" in template_type:
+            answer_example = "0"
+        else:
+            answer_example = "<answer>0</answer>"
+        if template_type == 'base':
+            instruction_following = f"""
+            A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
+            User: {question} Please provide your thinking process in <think> </think> tags. Your final answer should be enclosed in <answer> and </answer> tags, containing only answer with no additional text—for example, {answer_example}
+            Assistant: Let me solve this step by step.
+            <think>
+            """
+        elif template_type == 'base_no_reasoning':
+            instruction_following = """
+            A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
+            User: {question} Your final answer should be enclosed in <answer> and </answer> tags, containing only answer with no additional text—for example, {answer_example}
+            Assistant: 
+            """
+        elif template_type == "qwen-instruct":
+            instruction_following = """
+            <|im_start|>system
+            You are a helpful assistant. You first think about the reasoning process in your mind and then provide the user with the answer.
+            <|im_end|>
+            <|im_start|>user
+            {question} Please provide your thinking process in <think> </think> tags. Your final answer should be enclosed in <answer> and </answer> tags, containing only answer with no additional text—for example, {answer_example}
+            <|im_end|>
+            <|im_start|>assistant
+            Let me solve this step by step.
+            <think>
+            """
+        elif template_type == "qwen-instruct_no_reasoning":
+            instruction_following = """
+            <|im_start|>system
+            You are a helpful assistant. You always provide the user directly with the answer without any reasoning.
+            <|im_end|>
+            <|im_start|>user
+            {question} Your response should contain only the final answer enclosed in <answer> and </answer> tags, with no additional text—specifically, just {label_str}, for example: {answer_example}
+            <|im_end|>
+            <|im_start|>assistant
+            """
+        elif template_type == "reasoning_api":
+            instruction_following = f"""
+            {question} Your response should just be the answer with no additional text—for example, {answer_example}
+            """
+        elif template_type == "standard_api_no_reasoning":
+            instruction_following = f"""
+            {question} Your response should just be the answer, containing only answer with no additional text—for example, {answer_example}
+            """
+        elif template_type == "standard_api":
+            instruction_following = f"""
+            {question} Please provide your thinking process in <think> </think> tags. Your final answer should be enclosed in <answer> and </answer> tags, containing only answer with no additional text—for example, {answer_example}
+            """
+        else:
+            raise ValueError(f"Template type {template_type} is not supported for GSM8k")
+
+        return instruction_following
+
 def make_prefix(
     dp, 
     template_type, 
@@ -704,7 +761,7 @@ def _select_rm_score_fn(data_source):
     if data_source == 'openai/gsm8k':
         from verl.utils.reward_score import gsm8k
         return gsm8k.compute_score
-    elif data_source == 'lighteval/MATH':
+    elif data_source == 'math':
         from verl.utils.reward_score import math
         return math.compute_score
     elif "multiply" in data_source or "arithmetic" in data_source:
