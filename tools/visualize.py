@@ -22,7 +22,7 @@ try:
 except ImportError:
     print("Warning: Could not import AutoTokenizer from transformers")
     AutoTokenizer = None
-
+import numpy as np
 # Initialize tokenizer
 def get_tokenizer(tokenizer_name="Qwen/Qwen2.5-3B-Instruct"):
     """
@@ -1123,9 +1123,14 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
                         
                         # Extract features and label if available
                         if 'features' in example_data and isinstance(example_data['features'], list):
-                            features = example_data['features']
-                            features_str = ", ".join([f"{x:.3f}" for x in features])
-                            html_content.append(f'<div><b>Features:</b> [{features_str}]</div>')
+                            if isinstance(example_data['features'][0], list):
+                                for example in example_data['features']:
+                                    features_str = ", ".join([f"{x:.3f}" for x in example])
+                                    html_content.append(f'<div><b>Features:</b> [{features_str}]</div>')
+                            else:
+                                features = example_data['features']
+                                features_str = ", ".join([f"{x:.3f}" for x in features])
+                                html_content.append(f'<div><b>Features:</b> [{features_str}]</div>')
                         
                         if 'ground_truth' in example_data and isinstance(example_data['ground_truth'], dict):
                             ground_truth = example_data['ground_truth']
@@ -1193,7 +1198,7 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
             
             prompt = row.get('prompt', None)
             if prompt is not None:
-                if isinstance(prompt, list):
+                if isinstance(prompt, list) or isinstance(prompt, np.ndarray):
                     # Handle list of prompt items
                     html_content.append(f'<details>')
                     html_content.append(f'<summary>Show Input Prompt</summary>')
@@ -1209,8 +1214,9 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
                                     # Escape HTML content
                                     escaped_content = html.escape(content)
                                     html_content.append(f'{escaped_content}<br><br>')
-                        else:
-                            html_content.append(f'{str(prompt_item)}<br>')
+                        elif isinstance(prompt_item, list):
+                            for item in prompt_item:
+                                html_content.append(f"{str(item['content'])}<br>")
                     html_content.append(f'</div>')
                     html_content.append(f'</details>')
                 else:

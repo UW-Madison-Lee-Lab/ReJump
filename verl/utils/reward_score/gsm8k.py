@@ -57,7 +57,7 @@ def compute_score(solution_str, ground_truth, method='strict', format_score=0., 
     if answer is None:
         return 0
     else:
-        if answer == ground_truth:
+        if answer == ground_truth["label"]:
             return score
         else:
             return format_score

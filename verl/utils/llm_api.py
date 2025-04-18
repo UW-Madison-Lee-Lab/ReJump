@@ -63,7 +63,6 @@ class APIRewardManager:
 
             # select rm_score
             compute_score_fn = _select_rm_score_fn(data_source)
-
             score = compute_score_fn(solution_str=sequences_str, ground_truth=ground_truth)
             reward_tensor[i] = score
 
@@ -178,6 +177,7 @@ class LLMAPI:
                         output = response.content[1].text
                     else:
                         output = response.content[0].text
+                        reasoning = ""
                         
                 elif self.client_type == "google":
                     response = self.client.models.generate_content(
@@ -231,6 +231,27 @@ class LLMAPI:
             except json.decoder.JSONDecodeError as e:
                 print(f"JSONDecodeError: {e}")
                 time.sleep(timeout)
+                
+            except IndexError as e:
+                print(f"IndexError: {e}")
+                return "", "", ""
+            
+            except httpx.ReadError as e:
+                print(f"ReadError: {e}")
+                time.sleep(timeout)
+                
+            except genai.errors.ServerError as e:
+                print(f"ServerError: {e}")
+                time.sleep(timeout)
+                
+            except genai.errors.ClientError as e:
+                print(f"ClientError: {e}")
+                time.sleep(timeout)
+                
+                
+            except Exception as e:
+                print(type(e))
+                pdb.set_trace()
                 
             print(f"Failed to generate response after {attempt} attempts, max_retries: {max_retries}")
             
