@@ -127,15 +127,7 @@ def flip_label(y, label_noise, n_classes):
             y[i] = np.random.choice(possible_labels)
     return y
 
-def make_classification_prefix(
-    dp, 
-    template_type, 
-    n_classes, 
-    n_shot=0, 
-    n_query=1,
-    in_context_dataset=None, 
-    customized_prompt=None,
-):
+def make_prefix(dp, template_type, n_classes, n_shot=0, in_context_dataset=None, customized_prompt=None):
     features = dp['features']
     label = dp['label']
 
@@ -303,11 +295,11 @@ def make_regression_prefix(
         """
     elif template_type == 'reasoning_api':
         prefix = f"""
-        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Your response should contain only {target_str} with no additional text—for example, {answer_example}
+        The dataset has {len(features)} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. Your answer should be just the class label, without any other text or punctuation.
         """
     elif template_type == "reasoning_api_customized":
         prefix = f"""
-        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} {customized_prompt} Your response should contain only {target_str} with no additional text—for example, {answer_example}
+        The dataset has {len(features)} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. \n{customized_prompt}\n Your answer should be just the class label, without any other text or punctuation.
         """
     elif template_type == "standard_api_no_reasoning":
         prefix = f"""
@@ -323,40 +315,10 @@ def make_regression_prefix(
     
     return prefix, in_context_samples
 
-def make_prefix(
-    dp, 
-    template_type, 
-    n_classes, 
-    task_type,
-    n_shot=0, 
-    n_query=1,
-    in_context_dataset=None, 
-    customized_prompt=None,
-):
-    if task_type == "classification":
-        return make_classification_prefix(
-            dp = dp, 
-            template_type = template_type, 
-            n_classes = n_classes, 
-            n_shot = n_shot, 
-            n_query = n_query,
-            in_context_dataset = in_context_dataset, 
-            customized_prompt = customized_prompt
-        )
-    elif task_type == "regression":
-        return make_regression_prefix(
-            dp = dp, 
-            template_type = template_type, 
-            n_classes = n_classes, 
-            n_shot = n_shot, 
-            n_query = n_query,
-            in_context_dataset = in_context_dataset, 
-            customized_prompt = customized_prompt)
-    else:
-        raise ValueError(f"Invalid task type: {task_type}")
 
 def make_map_fn(split, args, n_classes, in_context_dataset, data_source, data_mode, customized_prompt=None):
-   
+
+    
     def process_fn(example, idx):
         if data_mode in ["grid", "default"]:
             in_context_dataset_ = in_context_dataset[split]
@@ -371,7 +333,6 @@ def make_map_fn(split, args, n_classes, in_context_dataset, data_source, data_mo
             n_classes=n_classes, 
             task_type = supported_datasets[data_source]['type'],
             n_shot=args.n_shot, 
-            n_query=args.n_query,
             in_context_dataset=in_context_dataset_,
             customized_prompt=customized_prompt
         )

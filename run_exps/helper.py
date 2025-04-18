@@ -8,68 +8,17 @@ def gen_dataset(
     shot,
     template_type="qwen-instruct",
     num_samples=10000,
-    n_query=10,
-    feature_noise=None,
-    label_noise=0.0,
-    data_mode="default",
+    noise_level=None,
+    label_flip_rate=0.0,
+    data_mode="default"
 ):
-    if "ricl" in template_type:
-        if supported_datasets[dataset_name]["type"] == "regression":
-            example_datasets = ["l1normreg", "cosreg", "quadreg", "expreg"]
-        else:
-            example_datasets = ["circles", "moons", "linear", "blobs"]
-            
-        if dataset_name in example_datasets:
-            example_datasets.remove(dataset_name)
-        ricl_shot = int(re.match(r".*?ricl_(\d+)", template_type).group(1))
-        example_datasets = example_datasets[:ricl_shot]
-        
-        icl_examples = []
-        for i, example_dataset in enumerate(example_datasets):
-            icl_example_prompt = f"""
-    "+icl_examples.{i}.dataset_name={example_dataset}" \
-    "+icl_examples.{i}.label_noise={label_noise}" \
-    "+icl_examples.{i}.feature_noise={supported_datasets[example_dataset]['feature_noise']}" \
-    "+icl_examples.{i}.shot=50" \
-    "+icl_examples.{i}.response_length=3046" \
-    "+icl_examples.{i}.num_samples=500" \
-    "+icl_examples.{i}.num_examples=1" \
-    "+icl_examples.{i}.train_step=0" \
-    "+icl_examples.{i}.data_mode={data_mode}"
-        """
-            icl_examples.append(icl_example_prompt)
-            
-        max_length = 20000 if supported_datasets[dataset_name]["type"] == "regression" else 10000
-        icl_examples_prompt = ''.join(icl_examples).replace('\n', '')
-        command = f"""
-python -m icl_reasoning.icl_reasoning \
-    "+icl_examples=[]" \
-    {icl_examples_prompt} \
-    "+mode=reasoning" \
-    "+template_type={template_type}" \
-    "+tokenizer_name=Qwen/Qwen2.5-3B-Instruct" \
-    "+icl_example_seed=42" \
-    "+test_data_seed=42" \
-    "+train_step=0" \
-    "+data_mode=default" \
-    "+icl_example_maxlength={max_length}" \
-    "+test_data.dataset_name={dataset_name}" \
-    "+test_data.label_noise={label_noise}" \
-    "+test_data.feature_noise={feature_noise}" \
-    "+test_data.num_samples={num_samples}" \
-    "+test_data_examples.dataset_name={dataset_name}" \
-    "+test_data_examples.label_noise={label_noise}" \
-    "+test_data_examples.feature_noise={feature_noise}" \
-    "+test_data_examples.shot={shot}"
-        """
-    else:
-        if dataset_name == "blobs":
-            feature_noise = 1.0 if feature_noise is None else feature_noise
-        elif dataset_name in ["moons", "linear"]:
-            feature_noise = 0.1 if feature_noise is None else feature_noise
-        elif dataset_name == "circles":
-            feature_noise = 0.01 if feature_noise is None else feature_noise
-        command = f"""
+    if dataset_name == "blobs":
+        noise_level = 1.0 if noise_level is None else noise_level
+    elif dataset_name in ["moons", "linear"]:
+        noise_level = 0.1 if noise_level is None else noise_level
+    elif dataset_name == "circles":
+        noise_level = 0.01 if noise_level is None else noise_level
+    return f"""
 python {root_dir}/examples/data_preprocess/{dataset_name}.py \
     --template_type={template_type} \
     --num_samples={num_samples} \
