@@ -344,10 +344,11 @@ def get_experiment_name(exp_path):
     """
     Get experiment name from the path  
     """
+    print(f"Experiment path: {exp_path}")
     parts = exp_path.split('/')
-    if len(parts) >= 3:
-        first = parts[1]
-        second = parts[2].split('_')[0]
+    if len(parts) >= 4:
+        first = parts[2]
+        second = parts[3].split('_')[0]
         return f"{first}_{second}"
     return "Unknown_Experiment"
 
