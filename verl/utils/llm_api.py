@@ -6,12 +6,33 @@ import time
 import numpy as np
 import torch
 import pdb
-import re, openai
+import re
 import json
+from verl.utils.reward_score import gsm8k, math, multiply, countdown
 
-from examples.data_preprocess.helper import _select_rm_score_fn
-from google import genai 
-import httpx
+def _select_rm_score_fn(data_source):
+    if data_source == 'openai/gsm8k':
+        return gsm8k.compute_score
+    elif data_source == 'lighteval/MATH':
+        return math.compute_score
+    elif "multiply" in data_source or "arithmetic" in data_source:
+        return multiply.compute_score
+    elif "countdown" in data_source:
+        return countdown.compute_score
+    elif "linear" in data_source:
+        from examples.data_preprocess.linear import linear_reward_fn
+        return linear_reward_fn
+    elif "blobs" in data_source:
+        from examples.data_preprocess.blobs import blobs_reward_fn
+        return blobs_reward_fn
+    elif "moons" in data_source:
+        from examples.data_preprocess.moons import moons_reward_fn
+        return moons_reward_fn
+    elif "circles" in data_source:
+        from examples.data_preprocess.circles import circles_reward_fn
+        return circles_reward_fn
+    else:
+        raise NotImplementedError
 
 class APIRewardManager:
     """The reward manager for API outputs.
@@ -42,7 +63,6 @@ class APIRewardManager:
 
             # select rm_score
             compute_score_fn = _select_rm_score_fn(data_source)
-
             score = compute_score_fn(solution_str=sequences_str, ground_truth=ground_truth)
             reward_tensor[i] = score
 
@@ -123,10 +143,10 @@ class LLMAPI:
             self.thinking = "cot"
         
 
-    def generate(self, messages: List[Dict[str, str]], max_tokens: int = 8000, temperature: float = 0.1) -> str:
-        max_retries = 1000  # Increased retry count
+    def generate(self, messages: List[Dict[str, str]], max_tokens: int = 8000, temperature: float = 0.7) -> str:
+        max_retries = 10  # Very large number of retries
         if max_retries <= 0: raise ValueError("max_retries must be greater than 0")
-        timeout = 120  # Increased timeout to 120 seconds
+        timeout = 10  # 60 seconds timeout
         
         # Ensure messages is a list
         if not isinstance(messages, list):
@@ -157,6 +177,7 @@ class LLMAPI:
                         output = response.content[1].text
                     else:
                         output = response.content[0].text
+                        reasoning = ""
                         
                 elif self.client_type == "google":
                     response = self.client.models.generate_content(
@@ -227,6 +248,7 @@ class LLMAPI:
                 print(f"ClientError: {e}")
                 time.sleep(timeout)
                 
+                
             except Exception as e:
                 print(type(e))
                 pdb.set_trace()
@@ -235,6 +257,18 @@ class LLMAPI:
             
         raise Exception("Failed to generate response")
 
+            # except KeyboardInterrupt:
+            #     raise KeyboardInterrupt
+            # except pdb.bdb.BdbQuit:
+            #     raise pdb.bdb.BdbQuit
+            # except Exception as e:
+            #     if attempt < max_retries - 1:
+            #         time.sleep(5)
+            #         continue
+                    
+            #     if "maximum context length" in str(e).lower():
+            #         return (response.choices[0].message.content, getattr(response.choices[0].message, 'reasoning_content', None)) if 'response' in locals() else ("", None)
+            #     raise
 
     def process_batch(self, batch_chat_lst: List[Dict[str, str]], n_samples: int = 1, config=None, batch_idx: int = 0, wandb=None, ground_truths=None, data_sources=None) -> List[List[str]]:
         """Process a batch of chat messages in parallel using threading."""

@@ -31,6 +31,7 @@ def gen_dataset(
     "+icl_examples.{i}.label_noise={label_noise}" \
     "+icl_examples.{i}.feature_noise={supported_datasets[example_dataset]['feature_noise']}" \
     "+icl_examples.{i}.shot=50" \
+    "+icl_examples.{i}.n_query={n_query}" \
     "+icl_examples.{i}.response_length=3046" \
     "+icl_examples.{i}.num_samples=500" \
     "+icl_examples.{i}.num_examples=1" \
@@ -39,7 +40,7 @@ def gen_dataset(
         """
             icl_examples.append(icl_example_prompt)
             
-        max_length = 20000 if supported_datasets[dataset_name]["type"] == "regression" else 10000
+        max_length = 40000 if supported_datasets[dataset_name]["type"] == "regression" else 80000
         icl_examples_prompt = ''.join(icl_examples).replace('\n', '')
         command = f"""
 python -m icl_reasoning.icl_reasoning \
@@ -57,10 +58,12 @@ python -m icl_reasoning.icl_reasoning \
     "+test_data.label_noise={label_noise}" \
     "+test_data.feature_noise={feature_noise}" \
     "+test_data.num_samples={num_samples}" \
+    "+test_data.test_ratio=0.2" \
     "+test_data_examples.dataset_name={dataset_name}" \
     "+test_data_examples.label_noise={label_noise}" \
     "+test_data_examples.feature_noise={feature_noise}" \
-    "+test_data_examples.shot={shot}"
+    "+test_data_examples.shot={shot}" \
+    "+test_data_examples.n_query={n_query}"
         """
     else:
         if dataset_name == "blobs":
@@ -69,17 +72,20 @@ python -m icl_reasoning.icl_reasoning \
             feature_noise = 0.1 if feature_noise is None else feature_noise
         elif dataset_name == "circles":
             feature_noise = 0.01 if feature_noise is None else feature_noise
+        else:
+            feature_noise = 0
         command = f"""
-python {root_dir}/examples/data_preprocess/{dataset_name}.py \
+python -m examples.data_preprocess.{dataset_name} \
     --template_type={template_type} \
     --num_samples={num_samples} \
     --n_shot={shot} \
     --n_query={n_query} \
     --feature_noise={feature_noise} \
     --test_ratio=0.2 \
-        --label_noise={label_noise} \
-        --data_mode={data_mode}
+    --label_noise={label_noise} \
+    --data_mode={data_mode}
             """ 
+            
     return command
 
 

@@ -12,18 +12,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # Adapted from https://github.com/EleutherAI/lm-evaluation-harness/blob/main/lm_eval/tasks/hendrycks_math/utils.py
+import re
+import pdb
+
+def last_answer_string(string):
+    """Extract the last answer from a string, looking for <answer></answer> tags."""
+    
+    # Find all matches of content between <answer> and </answer> tags
+    answer_matches = re.findall(r'<answer>(.*?)</answer>', string, re.DOTALL)
+    
+    # Return the last match if any were found, otherwise return None
+    if answer_matches:
+        return answer_matches[-1].strip()
+    return None
 
 
 def compute_score(solution_str, ground_truth) -> float:
     retval = 0.
     try:
-        string_in_last_boxed = last_boxed_only_string(solution_str)
-        if string_in_last_boxed is not None:
-            answer = remove_boxed(string_in_last_boxed)
-            if is_equiv(answer, ground_truth):
-                retval = 1.
+        string_in_last_boxed = last_answer_string(solution_str)
+        # if string_in_last_boxed is not None:
+        #     answer = remove_boxed(string_in_last_boxed)
+
+        if is_equiv(string_in_last_boxed, ground_truth["label"][0]):
+            retval = 1.
     except Exception as e:
-        print(e)
+        print(type(e))
+        pdb.set_trace()
 
     return retval
 
@@ -37,12 +52,15 @@ def is_equiv(str1, str2, verbose=False):
         return False
 
     try:
+        print(str1, str2)
         ss1 = strip_string(str1)
         ss2 = strip_string(str2)
         if verbose:
             print(ss1, ss2)
         return ss1 == ss2
-    except Exception:
+    except Exception as e:
+        print(type(e))
+        pdb.set_trace()
         return str1 == str2
 
 

@@ -126,6 +126,7 @@ def flip_label(y, label_noise, n_classes):
             possible_labels.remove(y[i])
             y[i] = np.random.choice(possible_labels)
     return y
+    
 
 def make_classification_prefix(
     dp, 
@@ -167,6 +168,96 @@ def make_classification_prefix(
     else:
         answer_example = f"<answer>{', '.join([str(x) for x in answer_example_number])}</answer>"
     
+    if 'inductive' in template_type:
+        rule_example = " <answer>the class label is 1 if the first feature is greater than the second, otherwise 0</answer> "
+        # 1. base_inductive
+        if template_type == 'base_inductive':
+            datasample = f"""
+A conversation between User and Assistant. The user asks a question, and the Assistant solves it.
+User: The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples}
+Please infer a rule that maps the features to the class labels.
+Your final answer should be enclosed in <answer> and </answer> tags. For example, {rule_example}.
+"""
+            question = f"""
+Good job! 
+{query}
+Your final answer should be enclosed in <answer> and </answer> tags, containing only the {label_str}, for example {rule_example}
+"""
+        # 2. qwen-instruct_inductive
+        elif template_type == 'qwen-instruct_inductive':
+            datasample = f"""
+<|im_start|>system
+You are a helpful assistant. You first infer a classification rule from the examples in your mind and then provide the answer.
+<|im_end|>
+<|im_start|>user
+The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples}
+Please infer a rule that maps the features to the class labels.
+Your final answer should be enclosed in <answer> and </answer> tags. For example, {rule_example}.
+<|im_end|>
+<|im_start|>assistant
+"""
+            question = f"""
+{query}
+Your final answer should be enclosed in <answer> and </answer> tags, containing only the {label_str}, for example {rule_example}
+"""
+        # 3. qwen-instruct_no_reasoning_inductive
+        elif template_type == 'qwen-instruct_no_reasoning_inductive':
+            datasample = f"""
+<|im_start|>system
+You are a helpful assistant. You infer the classification rule yourself but do not show your reasoning, only give the final label.
+<|im_end|>
+<|im_start|>user
+The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples}
+Please infer a rule that maps the features to the class labels.
+Your final answer should be enclosed in <answer> and </answer> tags. For example, {rule_example}.
+<|im_end|>
+<|im_start|>assistant
+<answer>
+"""
+            question = f"""
+{query}
+<answer>
+"""
+        # 4. base_no_reasoning_inductive
+        elif template_type == 'base_no_reasoning_inductive':
+            datasample = f"""
+A conversation between User and Assistant. The user gives examples but the assistant does not show its inner reasoning.
+User: The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples}
+Please infer a rule that maps the features to the class labels.
+Your final answer should be enclosed in <answer> and </answer> tags. For example, {rule_example}.
+Assistant:
+"""
+            question = f"""
+{query}
+Your final answer should be enclosed in <answer> and </answer> tags, containing only the {label_str}, for example {rule_example}
+"""
+        # 5. standard_api_inductive
+        elif template_type == 'standard_api_inductive':
+            datasample = f"""
+The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. Here are some examples:
+{in_context_examples}
+Please infer a rule that maps the features to the class labels.
+Return your final answer in <answer> and </answer> tags. For example, {rule_example}.
+"""
+            question = f"""
+{query}
+Your response should contain only the {label_str} in <answer> tags, with no extra text—for example, {rule_example}
+"""
+        # 6. standard_api_no_reasoning_inductive
+        elif template_type == 'standard_api_no_reasoning_inductive':
+            datasample = f"""
+The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples}
+Please infer a rule that maps the features to the class labels.
+Your final answer should be enclosed in <answer> and </answer> tags. For example, {rule_example}.
+"""
+            question = f"""
+{query}
+<answer>
+"""
+        else:
+            raise ValueError(f"Invalid template type: {template_type}")
+
+        return datasample, question, in_context_dataset
 
     if template_type == 'base':
         prefix = f"""
@@ -188,11 +279,21 @@ def make_classification_prefix(
         Let me solve this step by step.
         <think>
         """
+    elif template_type == 'qwen-instruct_no_reasoning':
+        prefix = f"""
+        <|im_start|>system
+        You are a helpful assistant. You always provide the user directly with the answer without any reasoning.
+        <|im_end|>
+        <|im_start|>user
+        The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} {query} Your response should contain only the final answer enclosed in <answer> and </answer> tags, with no additional text—specifically, just {label_str}, for example: {answer_example}
+        <|im_end|>
+        <|im_start|>assistant
+        """
     elif template_type == 'base_no_reasoning':
         prefix = f"""
         A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
 
-        User: The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} {query} Your final answer should be enclosed in <answer> and </answer> tags, containing only {label_str} with no additional text—for example, {answer_example}
+        User: The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} {query} Your response should contain only the final answer enclosed in <answer> and </answer> tags, with no additional text—specifically, just {label_str}, for example: {answer_example}
         Assistant: 
         """
     elif template_type == 'reasoning_api':
@@ -247,7 +348,10 @@ def make_regression_prefix(
     
     # prompt construction
     if n_query > 1:
-        query = "Given the following data points with features:\n"
+        if 'inductive' in template_type:
+            query = "Given the following data points with features:\n"
+        else:
+            query = "Now, please apply your rule to the following data points::\n"
         for i in range(n_query):
             query += f"{i+1}. Features: {format_features(features[i])}\n"
         query += "predict target values for each data point, separated by commas. "
@@ -256,72 +360,225 @@ def make_regression_prefix(
     else:
         query = f"Given the data point with features {format_features(features[0])}, predict the target value. "
         target_str = "predicted value"
-
+    
+    # Generate random target values for the example
     random_targets = [np.round(np.random.uniform(0, 10), 3) for _ in range(n_query)]
     if "reasoning_api" in template_type or "standard_api_no_reasoning" in template_type:
         answer_example = f"{', '.join(str(x) for x in random_targets)}"
     else:
         answer_example = f"<answer>{', '.join(str(x) for x in random_targets)}</answer>"
 
-    if template_type == 'base':
-        prefix = f"""
-        A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
 
-        User: The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Please provide your thinking process in <think> </think> tags. Your final answer should be enclosed in <answer> and </answer> tags, containing only {target_str} with no additional text—for example, {answer_example}
-        Assistant: Let me solve this step by step.
-        <think>
-        """
-    elif template_type == 'qwen-instruct':
-        prefix = f"""
+    if 'inductive' in template_type:   
+        rule_example = f" <answer>the target is just the average of the two features</answer> "
+        if template_type == 'base_inductive':
+            datasample = f"""
+            A conversation between User and Assistant. The user asks a question, and the Assistant solves it. 
+            The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
+            User: The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples}. 
+            Please infer a rule that maps the features to the target values. 
+            Your final answer should be enclosed in <answer> and </answer> tags. for example, {rule_example}.
+            """
+            question = f"""
+            Good job! {query} Your final answer should be enclosed in <answer> and </answer> tags, containing only {target_str} with no additional text—for example, {answer_example}"
+            """
+        elif template_type == 'qwen-instruct_inductive':
+            datasample = f"""
         <|im_start|>system
-        You are a helpful assistant. You first think about the reasoning process in your mind and then provide the user with the answer.
+        You are a helpful assistant. You first infer a mapping rule from the examples in your mind and then provide the answer.
         <|im_end|>
         <|im_start|>user
-        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Please provide your thinking process in <think> </think> tags. Your final answer should be enclosed in <answer> and </answer> tags, containing only {target_str} with no additional text—for example, {answer_example}
+        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples}
+        Please infer a rule that maps the features to the target values.
+        Your final answer should be enclosed in <answer> and </answer> tags—for example, {rule_example}.
         <|im_end|>
         <|im_start|>assistant
-        Let me solve this step by step.
-        <think>
         """
-    elif template_type == 'qwen-instruct_no_reasoning':
-        prefix = f"""
+            question = f"""
+        {query}
+        Your final answer should be enclosed in <answer> and </answer> tags, containing only {target_str} with no additional text—for example, {answer_example}.
+        """
+
+        # 2. qwen-instruct_no_reasoning_inductive
+        elif template_type == 'qwen-instruct_no_reasoning_inductive':
+            datasample = f"""
         <|im_start|>system
-        You are a helpful assistant. You always provide the user directly with the answer without any reasoning.
+        You are a helpful assistant. You always infer the rule yourself but do not show your reasoning, only give the final mapped value.
         <|im_end|>
         <|im_start|>user
-        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Your final answer should be enclosed in <answer> and </answer> tags, containing only {target_str} with no additional text—for example, {answer_example}
+        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples}
+        Please infer a rule that maps the features to the target values.
+        Your final answer should be enclosed in <answer> and </answer> tags—for example, {rule_example}.
         <|im_end|>
         <|im_start|>assistant
         <answer>
         """
-    elif template_type == 'base_no_reasoning':
-        prefix = f"""
-        A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
+            question = f"""
+        {query}
+        <answer>
+        """
 
-        User: The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Your final answer should be enclosed in <answer> and </answer> tags, containing only {target_str} with no additional text—for example, {answer_example}
-        Assistant: 
+        # 3. base_no_reasoning_inductive
+        elif template_type == 'base_no_reasoning_inductive':
+            datasample = f"""
+        A conversation between User and Assistant. The user gives examples but the assistant does not show its inner reasoning.
+
+        User: The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples}
+        Please infer a rule that maps the features to the target values.
+        Your final answer should be enclosed in <answer> and </answer> tags—for example, {rule_example}.
+        Assistant:
         """
-    elif template_type == 'reasoning_api':
-        prefix = f"""
-        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Your response should contain only {target_str} with no additional text—for example, {answer_example}
+            question = f"""
+        {query}
+        Your final answer should be enclosed in <answer> and </answer> tags, containing only {target_str} with no additional text—for example, {answer_example}.
         """
-    elif template_type == "reasoning_api_customized":
-        prefix = f"""
-        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} {customized_prompt} Your response should contain only {target_str} with no additional text—for example, {answer_example}
+
+        # 4. standard_api_inductive
+        elif template_type == 'standard_api_inductive':
+            datasample = f"""
+        The dataset has {len(features[0])} features and 1 target attribute. Here are some examples:
+        {in_context_examples}
+        Please infer a rule that maps the features to the target values.
+        Return your final answer in <answer> and </answer> tags—for example, {rule_example}.
         """
-    elif template_type == "standard_api_no_reasoning":
-        prefix = f"""
-        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Your response should contain only {target_str} with no additional text—for example, {answer_example}
+            question = f"""
+        {query}
+        Your response should contain only the predicted {target_str} in <answer> tags, with no extra text—for example, {answer_example}.
         """
-    elif template_type == "standard_api":
-        prefix = f"""
-        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Let's think step by step. 
-        Please provide your thinking process in <think> </think> tags. Your final answer should be enclosed in <answer> and </answer> tags, containing only {target_str} with no additional text—for example, {answer_example}
+
+        # 5. standard_api_no_reasoning_inductive
+        elif template_type == 'standard_api_no_reasoning_inductive':
+            datasample = f"""
+        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples}
+        Please infer a rule that maps the features to the target values.
+        Your final answer should be enclosed in <answer> and </answer> tags—for example, {rule_example}.
         """
+            question = f"""
+        {query}
+        <answer>
+        """
+        else:
+            raise ValueError(f"Invalid template type: {template_type}")
+        return datasample, question, in_context_dataset
     else:
-        raise ValueError(f"Invalid template type: {template_type}")
+        if template_type == 'base':
+            prefix = f"""
+            A conversation between User and Assistant. The user asks a question, and the Assistant solves it. 
+            The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
+            User: The dataset has {len(features[0])} features and 1 target attribute. 
+            {in_context_examples} {query} Please provide your thinking process in <think> </think> tags. 
+            Your final answer should be enclosed in <answer> and </answer> tags, containing only {target_str} with no additional text—for example, {answer_example}
+            Assistant: Let me solve this step by step.
+            <think>
+            """
+        elif template_type == 'qwen-instruct':
+            prefix = f"""
+            <|im_start|>system
+            You are a helpful assistant. You first think about the reasoning process in your mind and then provide the user with the answer.
+            <|im_end|>
+            <|im_start|>user
+            The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Please provide your thinking process in <think> </think> tags. Your final answer should be enclosed in <answer> and </answer> tags, containing only {target_str} with no additional text—for example, {answer_example}
+            <|im_end|>
+            <|im_start|>assistant
+            Let me solve this step by step.
+            <think>
+            """
+        elif template_type == 'qwen-instruct_no_reasoning':
+            prefix = f"""
+            <|im_start|>system
+            You are a helpful assistant. You always provide the user directly with the answer without any reasoning.
+            <|im_end|>
+            <|im_start|>user
+            The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Your final answer should be enclosed in <answer> and </answer> tags, containing only {target_str} with no additional text—for example, {answer_example}
+            <|im_end|>
+            <|im_start|>assistant
+            <answer>
+            """
+        elif template_type == 'base_no_reasoning':
+            prefix = f"""
+            A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
+
+            User: The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Your final answer should be enclosed in <answer> and </answer> tags, containing only {target_str} with no additional text—for example, {answer_example}
+            Assistant: 
+            """
+        elif template_type == 'reasoning_api':
+            prefix = f"""
+            The dataset has {len(features)} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. Your answer should be just the class label, without any other text or punctuation.
+            """
+        elif template_type == "reasoning_api_customized":
+            prefix = f"""
+            The dataset has {len(features)} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. \n{customized_prompt}\n Your answer should be just the class label, without any other text or punctuation.
+            """
+        elif template_type == "standard_api_no_reasoning":
+            prefix = f"""
+            The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Your response should contain only {target_str} with no additional text—for example, {answer_example}
+            """
+        elif template_type == "standard_api":
+            prefix = f"""
+            The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Let's think step by step. 
+            Please provide your thinking process in <think> </think> tags. Your final answer should be enclosed in <answer> and </answer> tags, containing only {target_str} with no additional text—for example, {answer_example}
+            """
+        else:
+            raise ValueError(f"Invalid template type: {template_type}")
     
     return prefix, in_context_samples
+
+def make_other_prefix(question, template_type):
+        if "reasoning_api" in template_type or "standard_api_no_reasoning" in template_type:
+            answer_example = "0"
+        else:
+            answer_example = "<answer>0</answer>"
+        if template_type == 'base':
+            instruction_following = f"""
+            A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
+            User: {question} Please provide your thinking process in <think> </think> tags. Your final answer should be enclosed in <answer> and </answer> tags, containing only answer with no additional text—for example, {answer_example}
+            Assistant: Let me solve this step by step.
+            <think>
+            """
+        elif template_type == 'base_no_reasoning':
+            instruction_following = """
+            A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
+            User: {question} Your final answer should be enclosed in <answer> and </answer> tags, containing only answer with no additional text—for example, {answer_example}
+            Assistant: 
+            """
+        elif template_type == "qwen-instruct":
+            instruction_following = """
+            <|im_start|>system
+            You are a helpful assistant. You first think about the reasoning process in your mind and then provide the user with the answer.
+            <|im_end|>
+            <|im_start|>user
+            {question} Please provide your thinking process in <think> </think> tags. Your final answer should be enclosed in <answer> and </answer> tags, containing only answer with no additional text—for example, {answer_example}
+            <|im_end|>
+            <|im_start|>assistant
+            Let me solve this step by step.
+            <think>
+            """
+        elif template_type == "qwen-instruct_no_reasoning":
+            instruction_following = """
+            <|im_start|>system
+            You are a helpful assistant. You always provide the user directly with the answer without any reasoning.
+            <|im_end|>
+            <|im_start|>user
+            {question} Your response should contain only the final answer enclosed in <answer> and </answer> tags, with no additional text—specifically, just {label_str}, for example: {answer_example}
+            <|im_end|>
+            <|im_start|>assistant
+            """
+        elif template_type == "reasoning_api":
+            instruction_following = f"""
+            {question} Your response should just be the answer with no additional text—for example, {answer_example}
+            """
+        elif template_type == "standard_api_no_reasoning":
+            instruction_following = f"""
+            {question} Your response should just be the answer, containing only answer with no additional text—for example, {answer_example}
+            """
+        elif template_type == "standard_api":
+            instruction_following = f"""
+            {question} Please provide your thinking process in <think> </think> tags. Your final answer should be enclosed in <answer> and </answer> tags, containing only answer with no additional text—for example, {answer_example}
+            """
+        else:
+            raise ValueError(f"Template type {template_type} is not supported for GSM8k")
+
+        return instruction_following
 
 def make_prefix(
     dp, 
@@ -356,7 +613,8 @@ def make_prefix(
         raise ValueError(f"Invalid task type: {task_type}")
 
 def make_map_fn(split, args, n_classes, in_context_dataset, data_source, data_mode, customized_prompt=None):
-   
+
+    
     def process_fn(example, idx):
         if data_mode in ["grid", "default"]:
             in_context_dataset_ = in_context_dataset[split]
@@ -365,17 +623,28 @@ def make_map_fn(split, args, n_classes, in_context_dataset, data_source, data_mo
                 "features": [in_context_dataset[split][idx][i][0] for i in range(len(in_context_dataset[split][idx]))],
                 "label": [in_context_dataset[split][idx][i][1] for i in range(len(in_context_dataset[split][idx]))]
             })
-        question, in_context_samples = make_prefix(
-            example, 
-            template_type=args.template_type, 
-            n_classes=n_classes, 
-            task_type = supported_datasets[data_source]['type'],
-            n_shot=args.n_shot, 
-            n_query=args.n_query,
-            in_context_dataset=in_context_dataset_,
-            customized_prompt=customized_prompt
-        )
-        
+        datasample=None
+        if "inductive" in args.template_type:   
+            datasample, question, in_context_samples = make_prefix(
+                example, 
+                template_type=args.template_type, 
+                n_classes=n_classes, 
+                task_type = supported_datasets[data_source]['type'],
+                n_shot=args.n_shot, 
+                in_context_dataset=in_context_dataset_,
+                customized_prompt=customized_prompt
+            )
+        else:
+            question, in_context_samples = make_prefix(
+                example, 
+                template_type=args.template_type, 
+                n_classes=n_classes, 
+                task_type = supported_datasets[data_source]['type'],
+                n_shot=args.n_shot, 
+                in_context_dataset=in_context_dataset_,
+                customized_prompt=customized_prompt
+            )
+            
         solution = {
             "features": example['features'],
             "label": example['label'],
@@ -385,7 +654,8 @@ def make_map_fn(split, args, n_classes, in_context_dataset, data_source, data_mo
             "data_source": data_source,
             "prompt": [{
                 "role": "user",
-                "content": question,
+                "datasample": datasample,
+                "content": question
             }],
             "ability": "classification",
             "reward_model": {
@@ -395,6 +665,7 @@ def make_map_fn(split, args, n_classes, in_context_dataset, data_source, data_mo
             "extra_info": {
                 'split': split,
                 'index': idx,
+                'inductive': "inductive" in args.template_type,
             }
         }
         return data
@@ -693,7 +964,7 @@ def _select_rm_score_fn(data_source):
     if data_source == 'openai/gsm8k':
         from verl.utils.reward_score import gsm8k
         return gsm8k.compute_score
-    elif data_source == 'lighteval/MATH':
+    elif data_source == 'math':
         from verl.utils.reward_score import math
         return math.compute_score
     elif "multiply" in data_source or "arithmetic" in data_source:

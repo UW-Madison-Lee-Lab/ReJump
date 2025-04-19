@@ -70,8 +70,13 @@ for model in model_list:
             for dataset, shot, feature_noise, label_noise, dataset_ratio in zip(dataset_list, shot_list, feature_noise_list, label_noise_list, dataset_ratio_list):    
                 prompt_length = int((24 * shot + 185) * 1.1)
             
-                if feature_noise is None:
-                    feature_noise = supported_datasets[dataset]["feature_noise"]
+                if noise_level is None:
+                    if dataset == "blobs":
+                        noise_level = 1.0
+                    elif dataset in ["moons", "linear"]:
+                        noise_level = 0.1
+                    else:
+                        noise_level = 0.01
                 if mode == "reasoning":
                     template_type = supported_llms[model]["template_type"]
                     response_length = int(prompt_length * args.response_length_thinking_factor)
