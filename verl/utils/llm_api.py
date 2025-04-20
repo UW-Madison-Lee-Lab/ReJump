@@ -273,7 +273,6 @@ class LLMAPI:
             gen_start_time = time.time()
             all_metrics = {}
             errors = []
-            # 初始化返回列表
             response_contents = []
             reasoning_contents = []
             answer_contents = []
@@ -286,9 +285,7 @@ class LLMAPI:
                 content_content = chat.get('content')
 
                 if datasample_content is not None:
-                    # 如果 datasample 存在，它优先作为第一条消息
                     first_message_text = datasample_content
-                    # 如果 content 也存在，它作为第二条消息
                     if content_content is not None:
                         second_message_text = content_content
                     else:
@@ -296,16 +293,12 @@ class LLMAPI:
 
                         pass
                 elif content_content is not None:
-                    # 如果 datasample 不存在，但 content 存在，则 content 是第一条 (也是唯一一条) 消息
                     first_message_text = content_content
                 else:
-                    # 如果两者都不存在，则抛出错误
                     raise ValueError("Chat dictionary must contain 'content'.")
 
-                # --- 第一次调用 ---
                 messages_1 = [{"role": "user", "content": first_message_text}]
 
-                # 调用 generate 获取第一个回答
                 resp1, reason1, ans1 = self.generate(
                     messages=messages_1,
                     max_tokens=config.rollout.response_length,
@@ -341,7 +334,6 @@ class LLMAPI:
                     'sample_idx': sample_idx
                 }
                 all_metrics.update(metrics)
-                # 返回包含所有步骤结果的列表
                 return response_contents, reasoning_contents, answer_contents, all_metrics, None
 
             except Exception as e:
