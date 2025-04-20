@@ -120,6 +120,27 @@ class LLMAPI:
             self.thinking = "disabled"
         else:
             self.thinking = "cot"
+
+    def _convert_messages_to_genai_format(self, messages: List[Dict[str, str]]) -> List[Dict[str, Any]]:
+        """Converts standard message list to Google GenAI contents format."""
+        genai_contents = []
+        for msg in messages:
+            role = msg.get("role")
+            content = msg.get("content")
+            if not role or not content:
+                print(f"Warning: Skipping invalid message format: {msg}")
+                continue
+            genai_role = "model" if role == "assistant" else role if role == "user" else None
+
+            if genai_role:
+                genai_contents.append({
+                    "role": genai_role,
+                    "parts": [{"text": content}]
+                })
+            else:
+                 print(f"Warning: Skipping message with unhandled role: {role}")
+
+        return genai_contents
         
 
     def generate(self, messages: List[Dict[str, str]], max_tokens: int = 8000, temperature: float = 0.1) -> str:
@@ -159,10 +180,12 @@ class LLMAPI:
                         reasoning = ""
                         
                 elif self.client_type == "google":
+                    genai_contents = self._convert_messages_to_genai_format(messages) # messages 是标准格式输入
+
                     response = self.client.models.generate_content(
                         model=self.model,
-                        contents = [messages[0]['content']],
-                    )
+                        contents=genai_contents,                    
+                        )
                     if response is None or response.candidates is None or len(response.candidates) == 0: 
                         reasoning, output = "", ""
                     else:
@@ -240,38 +263,99 @@ class LLMAPI:
     def process_batch(self, batch_chat_lst: List[Dict[str, str]], n_samples: int = 1, config=None, batch_idx: int = 0, wandb=None, ground_truths=None, data_sources=None) -> List[List[str]]:
         """Process a batch of chat messages in parallel using threading."""
         batch_output_lst = [[] for _ in range(n_samples)]
-        
-        def process_single_chat(chat, sample_idx):
-            # try:
+     
+        def process_single_chat(self, chat: Dict[str, str], sample_idx: int, config=None, batch_idx: int = 0):
+            """
+            Processes a single chat.
+            If 'datasample' exists, it's processed first, then 'content'.
+            If only 'content' exists, it's processed.
+            """
             gen_start_time = time.time()
+            all_metrics = {}
+            errors = []
+            # 初始化返回列表
+            response_contents = []
+            reasoning_contents = []
+            answer_contents = []
+            rule_contents = []
+
+            try:
+                first_message_text = None
+                second_message_text = None
+                datasample_content = chat.get('datasample')
+                content_content = chat.get('content')
+
+                if datasample_content is not None:
+                    # 如果 datasample 存在，它优先作为第一条消息
+                    first_message_text = datasample_content
+                    # 如果 content 也存在，它作为第二条消息
+                    if content_content is not None:
+                        second_message_text = content_content
+                    else:
+                        raise ValueError("Chat dictionary must contain at least 'content'.")
+
+                        pass
+                elif content_content is not None:
+                    # 如果 datasample 不存在，但 content 存在，则 content 是第一条 (也是唯一一条) 消息
+                    first_message_text = content_content
+                else:
+                    # 如果两者都不存在，则抛出错误
+                    raise ValueError("Chat dictionary must contain 'content'.")
+
+                # --- 第一次调用 ---
+                messages_1 = [{"role": "user", "content": first_message_text}]
+
+                # 调用 generate 获取第一个回答
+                resp1, reason1, ans1 = self.generate(
+                    messages=messages_1,
+                    max_tokens=config.rollout.response_length,
+                    temperature=config.rollout.temperature if config else 0.7
+                )
+                response_contents.append(resp1)
+                reasoning_contents.append(reason1)
+                answer_contents.append(ans1)
+
+                if second_message_text is not None:
+                    messages_2 = messages_1 + [
+                        {"role": "assistant", "content": resp1},
+                        {"role": "user", "content": second_message_text}
+                    ]
+                    resp2, reason2, ans2 = self.generate(
+                        messages=messages_2,
+                        max_tokens=config.rollout.response_length,
+                        temperature=config.rollout.temperature if config else 0.7
+                    )
+                    response_contents.append(resp2)
+                    reasoning_contents.append(reason2)
+                    answer_contents.append(ans2)
+
+                generation_time = time.time() - gen_start_time
+                total_response_length = sum(len(str(r).split()) for r in response_contents)
+
+                metrics = {
+                    f'sample_{sample_idx}/generation_time': generation_time,
+                    f'sample_{sample_idx}/tokens_per_second': total_response_length / max(generation_time, 1e-6),
+                    f'sample_{sample_idx}/response_length': total_response_length,
+                    f'sample_{sample_idx}/num_responses': len(response_contents),
+                    'batch': batch_idx,
+                    'sample_idx': sample_idx
+                }
+                all_metrics.update(metrics)
+                # 返回包含所有步骤结果的列表
+                return response_contents, reasoning_contents, answer_contents, all_metrics, None
+
+            except Exception as e:
+                print(f"Error processing chat in sample {sample_idx}, batch {batch_idx}: {str(e)}")
+                return [], [], [], all_metrics, e
             
-            response_content, reasoning_content, answer_content = self.generate(
-                messages=chat,
-                max_tokens=config.rollout.response_length,
-                temperature=config.rollout.temperature if config else 0.7
-            )
-            response_length = len(response_content.split())
-            generation_time = time.time() - gen_start_time
-            
-            metrics = {
-                f'sample_{sample_idx}/generation_time': generation_time,
-                f'sample_{sample_idx}/tokens_per_second': response_length / max(generation_time, 1e-6),
-                f'sample_{sample_idx}/response_length': response_length,
-                'batch': batch_idx,
-                'sample_idx': sample_idx
-            }
-            return response_content, reasoning_content, answer_content, metrics, None
-            # except Exception as e:
-            #     print(f"Error processing chat {sample_idx}: {str(e)}")
-            #     return None, None, None, None, e
 
         # Create a thread pool for parallel processing
         max_workers = min(len(batch_chat_lst), config.rollout.api_workers)
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = []
             for i in range(n_samples):
-                for j, chat in enumerate(batch_chat_lst):
-                    future = executor.submit(process_single_chat, chat, i)
+                for j, chat in enumerate(batch_chat_lst):                  
+                    future = executor.submit(process_single_chat, self, chat, i, config, batch_idx)
                     futures.append((future, i, j))
 
             batch_reasoning_lst = [[] for _ in range(n_samples)]
@@ -286,14 +370,15 @@ class LLMAPI:
                         wandb.log(metrics)
                 else:
                     print(f"Error in batch {batch_idx}, sample {sample_idx}, chat {chat_idx}: {str(error)}")
-                    batch_output_lst[sample_idx].append("")  # Append empty string for failed generations
-                    batch_reasoning_lst[sample_idx].append(None)
+                    batch_output_lst[sample_idx].append([])  # Append empty string for failed generations
+                    batch_reasoning_lst[sample_idx].append([])
+                    batch_answer_lst[sample_idx].append([])
 
         # If ground truths and data sources are provided, compute rewards
         if ground_truths is not None and data_sources is not None:
             reward_manager = APIRewardManager(num_examine=0, return_dict=True)
             reward_dict = reward_manager(
-                sequences_lst=[seq for samples in batch_output_lst for seq in samples],
+                sequences_lst=[seq[-1] for samples in batch_output_lst for seq in samples],
                 ground_truths=ground_truths,
                 data_sources=data_sources
             )
@@ -328,10 +413,29 @@ class LLMAPI:
                                 content = inner_dict['content']
                         except:
                             pass
-                    converted_chats.append({
-                        "role": "user",
-                        "content": content
-                    })
+
+                    if 'datasample' in chat:
+                        datasample = chat['datasample']
+                        # If content is a string that looks like a dictionary, extract the inner content
+                        if isinstance(datasample, str) and datasample.startswith('{') and datasample.endswith('}'):
+                            try:
+                                import ast
+                                inner_dict = ast.literal_eval(datasample)
+                                if isinstance(inner_dict, dict) and 'datasample' in inner_dict:
+                                    datasample = inner_dict['datasample']
+                            except:
+                                pass
+                        converted_chats.append({
+                            "role": "user",
+                            "datasample": datasample,
+                            "content": content
+                        })
+                    else:
+                        # If there's no content, convert the whole dict to string
+                        converted_chats.append({
+                            "role": "user",
+                            "content": content
+                        })
                 else:
                     # If it's a dict but doesn't have content, convert the whole dict to string
                     converted_chats.append({

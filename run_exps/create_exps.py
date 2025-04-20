@@ -29,6 +29,7 @@ parser.add_argument("--data_mode", type=str, default="default", choices=["defaul
 parser.add_argument("--wandb", type=int, default=2, choices=[0, 1, 2])
 parser.add_argument("--api_workers", type=int, default=16)
 parser.add_argument("--exp_name", type=str, default="")
+parser.add_argument("--inductive", type=bool, default=False)
 args = parser.parse_args()
 
 if args.load_train_step:
@@ -46,6 +47,7 @@ dataset_list = args.dataset
 model_list = args.model
 mode_list = args.mode
 shot_list = args.shot
+inductive = args.inductive
 n_samples_list = args.n_samples
 feature_noise_list = args.feature_noise
 if args.dataset == ["regression"]:
@@ -75,6 +77,8 @@ for dataset in dataset_list:
                         else:
                             raise ValueError(f"Mode {mode} not supported, should be in [reasoning, no_reasoning, customized, ricl]")
                         
+                        if inductive:
+                            template_type = template_type + "_inductive"
                         if feature_noise is None:
                             feature_noise = supported_datasets[dataset]["feature_noise"]
                         

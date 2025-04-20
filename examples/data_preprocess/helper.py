@@ -180,11 +180,11 @@ def make_classification_prefix(
         # 1. base_inductive
         if template_type == 'base_inductive':
             datasample = f"""
-A conversation between User and Assistant. The user asks a question, and the Assistant solves it.
-User: The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples}
-Please infer a rule that maps the features to the class labels.
-Your final answer should be enclosed in <answer> and </answer> tags. For example, {rule_example}.
-"""
+            A conversation between User and Assistant. The user asks a question, and the Assistant solves it.
+            User: The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples}
+            Please infer a rule that maps the features to the class labels.
+            Your final answer should be enclosed in <answer> and </answer> tags. For example, {rule_example}.
+            """
             question = f"""
             Good job! 
             {query}
@@ -384,9 +384,11 @@ def make_regression_prefix(
             query += f"{i+1}. Features: {format_features(features[i])}\n"
         query += "predict target values for each data point, separated by commas. "
         target_str = "predicted values for all samples"
-
     else:
-        query = f"Given the data point with features {format_features(features[0])}, predict the target value. "
+        if 'inductive' in template_type:
+            query = f"Now, please apply your rule to the data point {format_features(features[0])}, and predict its target values. "
+        else:
+            query = f"Given the data point with features {format_features(features[0])} and predict its target values. "
         target_str = "predicted value"
     
     # Generate random target values for the example
@@ -423,6 +425,7 @@ def make_regression_prefix(
         <|im_start|>assistant
         """
             question = f"""
+        Good job!
         {query}
         Your final answer should be enclosed in <answer> and </answer> tags, containing only {target_str} with no additional text—for example, {answer_example}.
         """
@@ -442,52 +445,63 @@ def make_regression_prefix(
         <answer>
         """
             question = f"""
+        <|im_start|>system
+        You are a helpful assistant. You always infer the rule yourself but do not show your reasoning, only give the final mapped value.   
+        <|im_end|>
+        <|im_start|>user
+        Good job!
         {query}
+        Your final answer should be enclosed in <answer> and </answer> tags—for example, {answer_example}.
+        <|im_end|>
+        <|im_start|>assistant
         <answer>
         """
 
         # 3. base_no_reasoning_inductive
         elif template_type == 'base_no_reasoning_inductive':
             datasample = f"""
-        A conversation between User and Assistant. The user gives examples but the assistant does not show its inner reasoning.
+            A conversation between User and Assistant. The user gives examples but the assistant does not show its inner reasoning.
 
-        User: The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples}
-        Please infer a rule that maps the features to the target values.
-        Your final answer should be enclosed in <answer> and </answer> tags—for example, {rule_example}.
-        Assistant:
-        """
+            User: The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples}
+            Please infer a rule that maps the features to the target values.
+            Your final answer should be enclosed in <answer> and </answer> tags—for example, {rule_example}.
+            Assistant:
+            """
             question = f"""
-        {query}
-        Your final answer should be enclosed in <answer> and </answer> tags, containing only {target_str} with no additional text—for example, {answer_example}.
-        """
+            Good job!
+            {query}
+            Your final answer should be enclosed in <answer> and </answer> tags, containing only {target_str} with no additional text—for example, {answer_example}.
+            """
 
         # 4. standard_api_inductive
         elif template_type == 'standard_api_inductive':
             datasample = f"""
-        The dataset has {len(features[0])} features and 1 target attribute. Here are some examples:
-        {in_context_examples}
-        Please infer a rule that maps the features to the target values.
-        Return your final answer in <answer> and </answer> tags—for example, {rule_example}.
-        """
+            The dataset has {len(features[0])} features and 1 target attribute. Here are some examples:
+            {in_context_examples}
+            Please infer a rule that maps the features to the target values.
+            Return your final answer in <answer> and </answer> tags—for example, {rule_example}.
+            """
             question = f"""
-        {query}
-        Your response should contain only the predicted {target_str} in <answer> tags, with no extra text—for example, {answer_example}.
-        """
+            Good job!
+            {query}
+            Your response should contain only the predicted {target_str} in <answer> tags, with no extra text—for example, {answer_example}.
+            """
 
         # 5. standard_api_no_reasoning_inductive
         elif template_type == 'standard_api_no_reasoning_inductive':
             datasample = f"""
-        The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples}
-        Please infer a rule that maps the features to the target values.
-        Your final answer should be enclosed in <answer> and </answer> tags—for example, {rule_example}.
-        """
+            The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples}
+            Please infer a rule that maps the features to the target values.
+            Your final answer should be enclosed in <answer> and </answer> tags—for example, {rule_example}.
+            """
             question = f"""
-        {query}
-        <answer>
+            Good job!
+            {query}
+            Your response should contain only {target_str} with no additional text—for example, {answer_example}
         """
         else:
             raise ValueError(f"Invalid template type: {template_type}")
-        return datasample, question, in_context_dataset
+        return datasample, question, in_context_samples
     else:
         if template_type == 'base':
             prefix = f"""
@@ -680,13 +694,20 @@ def make_map_fn(split, args, n_classes, in_context_dataset, data_source, data_mo
             "label": example['label'],
             "in_context_samples": in_context_samples
         }
-        data = {
-            "data_source": data_source,
-            "prompt": [{
+        if datasample is None:
+            prompt={
+                "role": "user",
+                "content": question
+            }
+        else:
+            prompt={
                 "role": "user",
                 "datasample": datasample,
                 "content": question
-            }],
+            }
+        data = {
+            "data_source": data_source,
+            "prompt": [prompt],
             "ability": "classification",
             "reward_model": {
                 "style": "rule",

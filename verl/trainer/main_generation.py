@@ -220,10 +220,11 @@ def main(config):
             #breakpoint()
             # Add batch outputs and rewards to the main lists
             for i in range(config.data.n_samples):
-                output_lst[i].extend(batch_output_lst[i])
+                output_lst[i].extend([seq[-1] for seq in batch_output_lst[i]])
                 reward_tensor_lst[i].extend(reward_dict['reward_tensor'].tolist())
-                reasonings_lst[i].extend(batch_reasoning_lst[i])
-                answer_lst[i].extend(batch_answer_lst[i])
+                print("batch_reasoning_lst[i]:", batch_reasoning_lst[i])
+                reasonings_lst[i].extend([seq[-1] for seq in batch_reasoning_lst[i]])
+                answer_lst[i].extend([seq[-1] for seq in batch_answer_lst[i]])
         else:
             # Process with HuggingFace model
             test_batch = DataProto.from_single_dict(test_data)
@@ -261,6 +262,7 @@ def main(config):
             
     # convert output_lst from (n_samples, n_data) to (n_data, n_sampels)
     output_lst = np.array(output_lst, dtype=object)
+    # output_lst = np.array(output_lst, dtype=object)
     output_lst = np.transpose(output_lst, axes=(1, 0)).tolist() 
     
     dataset["responses"] = output_lst
@@ -341,6 +343,7 @@ def main(config):
         valid_prompts[i] = valid_flag
         y_pred.append(best_answer)
         y_true.append(true_labels)
+
             
     y_pred, y_true = np.array(y_pred), np.array(y_true)
     valid_prompts = valid_prompts.astype(bool)
@@ -365,11 +368,10 @@ def main(config):
             })
     elif task_type == 'classification':
         strict_accuracy = accuracy_score(np.ones(total_samples), np.all(y_pred == y_true, axis=1))
-        y_true = y_true.flatten()
         accuracy = accuracy_score(y_true.flatten(), y_pred.flatten())
         print(f'pass@{k}: {accuracy: .3f}')
         print(f'strict_pass@{k}: {strict_accuracy: .3f}')
-        
+
         valid_strict_accuracy = accuracy_score(np.ones(valid_prompts.sum()), np.all(y_pred[valid_prompts] == y_true[valid_prompts], axis=1))
         valid_accuracy = accuracy_score(y_true[valid_prompts].flatten(), y_pred[valid_prompts].flatten())
         print(f'valid_pass@{k}: {valid_accuracy: .3f}')

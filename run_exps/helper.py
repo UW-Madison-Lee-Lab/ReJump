@@ -66,14 +66,7 @@ python -m icl_reasoning.icl_reasoning \
     "+test_data_examples.n_query={n_query}"
         """
     else:
-        if dataset_name == "blobs":
-            feature_noise = 1.0 if feature_noise is None else feature_noise
-        elif dataset_name in ["moons", "linear"]:
-            feature_noise = 0.1 if feature_noise is None else feature_noise
-        elif dataset_name == "circles":
-            feature_noise = 0.01 if feature_noise is None else feature_noise
-        else:
-            feature_noise = 0
+        feature_noise = 0 if feature_noise is None else feature_noise
         command = f"""
 python -m examples.data_preprocess.{dataset_name} \
     --template_type={template_type} \
