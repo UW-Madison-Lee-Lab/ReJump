@@ -15,7 +15,7 @@ shot_list = [10, 50, 100, 200]
 parser = argparse.ArgumentParser()
 parser.add_argument("--dataset", type=str, nargs="+", default=["blobs", "moons", "linear", "circles"], choices=supported_datasets.keys())
 parser.add_argument("--model", type=str, nargs="+", default=supported_model_list, choices=supported_model_list)
-parser.add_argument("--mode", type=str, nargs="+", default=["reasoning", "no_reasoning", "customized"], choices=["reasoning", "no_reasoning", "customized"])
+parser.add_argument("--mode", type=str, nargs="+", default=["reasoning", "no_reasoning"], choices=["reasoning", "no_reasoning", "customized", "ricl_1", "ricl_2", "ricl_3"])
 parser.add_argument("--shot", type=int, nargs="+", default=shot_list)
 parser.add_argument("--train", action="store_true")
 parser.add_argument("--n_gpus", type=int, default=2)
@@ -69,16 +69,14 @@ for dataset in dataset_list:
                         elif mode == "customized":
                             template_type = supported_llms[model]["template_type"] + "_customized"
                             response_length = 100
+                        elif "ricl" in mode:
+                            template_type = supported_llms[model]["template_type"] + "_" + mode
+                            response_length = int(prompt_length * args.response_length_thinking_factor)
                         else:
-                            raise ValueError(f"Mode {mode} not supported, should be in [reasoning, no_reasoning, customized]")
+                            raise ValueError(f"Mode {mode} not supported, should be in [reasoning, no_reasoning, customized, ricl]")
                         
-                        if noise_level is None:
-                            if dataset == "blobs":
-                                noise_level = 1.0
-                            elif dataset in ["moons", "linear"]:
-                                noise_level = 0.1
-                            else:
-                                noise_level = 0.01
+                        if feature_noise is None:
+                            feature_noise = supported_datasets[dataset]["feature_noise"]
                         
                         
                         command_list = []

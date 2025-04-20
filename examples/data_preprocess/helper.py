@@ -154,14 +154,21 @@ def make_classification_prefix(
             in_context_samples.append({"features": example_features, "label": example_label})
     # prompt construction
     if n_query > 1:
-        query = "Given the following data points:\n"
+        if 'inductive' in template_type:
+            query = "Now, please apply your rule to the following data points:\n"
+        else:
+            query = "Given the following data points:\n"
         for i in range(n_query):
             query += f"{i+1}. Features: {format_features(features[i])}\n"
         query += "Classify each data point into one of the possible classes, and list the corresponding class labels separated by commas."
         label_str = "class labels"
     else:
-        query = f"Given the data point with features {format_features(features[0])}, classify it into one of the possible classes. "
+        if 'inductive' in template_type:
+            query = f"Now, please apply your rule to the data point {format_features(features[0])}, classify it into one of the possible classes. "
+        else:
+            query = f"Given the data point with features {format_features(features[0])}, classify it into one of the possible classes. "
         label_str = "class label"
+
     answer_example_number = np.random.choice(range(n_classes), n_query, replace=True)
     if "reasoning_api" in template_type or "standard_api_no_reasoning" in template_type:
         answer_example = f"{', '.join([str(x) for x in answer_example_number])}"
@@ -179,85 +186,106 @@ Please infer a rule that maps the features to the class labels.
 Your final answer should be enclosed in <answer> and </answer> tags. For example, {rule_example}.
 """
             question = f"""
-Good job! 
-{query}
-Your final answer should be enclosed in <answer> and </answer> tags, containing only the {label_str}, for example {rule_example}
-"""
+            Good job! 
+            {query}
+            Your final answer should be enclosed in <answer> and </answer> tags, containing only the {label_str}, for example {answer_example}
+            """
         # 2. qwen-instruct_inductive
         elif template_type == 'qwen-instruct_inductive':
             datasample = f"""
-<|im_start|>system
-You are a helpful assistant. You first infer a classification rule from the examples in your mind and then provide the answer.
-<|im_end|>
-<|im_start|>user
-The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples}
-Please infer a rule that maps the features to the class labels.
-Your final answer should be enclosed in <answer> and </answer> tags. For example, {rule_example}.
-<|im_end|>
-<|im_start|>assistant
-"""
+            <|im_start|>system
+            You are a helpful assistant. You first infer a classification rule from the examples in your mind and then provide the answer.
+            <|im_end|>
+            <|im_start|>user
+            The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples}
+            Please infer a rule that maps the features to the class labels.
+            Your final answer should be enclosed in <answer> and </answer> tags. For example, {rule_example}.
+            <|im_end|>
+            <|im_start|>assistant
+            """
             question = f"""
-{query}
-Your final answer should be enclosed in <answer> and </answer> tags, containing only the {label_str}, for example {rule_example}
-"""
+            Good job!
+            {query}
+            Your final answer should be enclosed in <answer> and </answer> tags, containing only the {label_str}, for example {answer_example}
+            """
         # 3. qwen-instruct_no_reasoning_inductive
         elif template_type == 'qwen-instruct_no_reasoning_inductive':
             datasample = f"""
-<|im_start|>system
-You are a helpful assistant. You infer the classification rule yourself but do not show your reasoning, only give the final label.
-<|im_end|>
-<|im_start|>user
-The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples}
-Please infer a rule that maps the features to the class labels.
-Your final answer should be enclosed in <answer> and </answer> tags. For example, {rule_example}.
-<|im_end|>
-<|im_start|>assistant
-<answer>
-"""
+            <|im_start|>system
+            You are a helpful assistant. You infer the classification rule yourself but do not show your reasoning, only give the final label.
+            <|im_end|>
+            <|im_start|>user
+            The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples}
+            Please infer a rule that maps the features to the class labels.
+            Your final answer should be enclosed in <answer> and </answer> tags. For example, {rule_example}.
+            <|im_end|>
+            <|im_start|>assistant
+            <answer>
+            """
             question = f"""
-{query}
-<answer>
-"""
+            <|im_start|>system
+            You are a helpful assistant. You infer the classification rule yourself but do not show your reasoning, only give the final label.
+            <|im_end|>
+            <|im_start|>user
+            {query} Your response should contain only the final answer enclosed in <answer> and </answer> tags, with no additional text—specifically, just {label_str}, for example: {answer_example}
+            <|im_end|>
+            <|im_start|>assistant
+            """
+        elif template_type == 'reasoning_api_inductive':
+            datasample = f"""
+            The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. Here are some examples:
+            {in_context_examples}
+            Please infer a rule that maps the features to the class labels.
+            Return your final answer in <answer> and </answer> tags. For example, {rule_example}.
+            """
+            question = f"""
+            Good job!
+            {query}
+            Your final answer should just be the {label_str}, without any other text, e.g., {answer_example}
+            """
         # 4. base_no_reasoning_inductive
         elif template_type == 'base_no_reasoning_inductive':
             datasample = f"""
-A conversation between User and Assistant. The user gives examples but the assistant does not show its inner reasoning.
-User: The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples}
-Please infer a rule that maps the features to the class labels.
-Your final answer should be enclosed in <answer> and </answer> tags. For example, {rule_example}.
-Assistant:
-"""
+            A conversation between User and Assistant. The user gives examples but the assistant does not show its inner reasoning.
+            User: The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples}
+            Please infer a rule that maps the features to the class labels.
+            Your final answer should be enclosed in <answer> and </answer> tags. For example, {rule_example}.
+            Assistant:
+            """
             question = f"""
-{query}
-Your final answer should be enclosed in <answer> and </answer> tags, containing only the {label_str}, for example {rule_example}
-"""
+            Good job!
+            {query}
+            Your final answer should be enclosed in <answer> and </answer> tags, containing only the {label_str}, for example {answer_example}
+            """
         # 5. standard_api_inductive
         elif template_type == 'standard_api_inductive':
             datasample = f"""
-The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. Here are some examples:
-{in_context_examples}
-Please infer a rule that maps the features to the class labels.
-Return your final answer in <answer> and </answer> tags. For example, {rule_example}.
-"""
+            The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. Here are some examples:
+            {in_context_examples}
+            Please infer a rule that maps the features to the class labels.
+            Return your final answer in <answer> and </answer> tags. For example, {rule_example}.
+            """
             question = f"""
-{query}
-Your response should contain only the {label_str} in <answer> tags, with no extra text—for example, {rule_example}
-"""
+            Good job!
+            {query}
+            Your response should contain only the {label_str} in <answer> tags, with no extra text—for example, {answer_example}
+            """
         # 6. standard_api_no_reasoning_inductive
         elif template_type == 'standard_api_no_reasoning_inductive':
             datasample = f"""
-The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples}
-Please infer a rule that maps the features to the class labels.
-Your final answer should be enclosed in <answer> and </answer> tags. For example, {rule_example}.
-"""
+            The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples}
+            Please infer a rule that maps the features to the class labels.
+            Your final answer should be enclosed in <answer> and </answer> tags. For example, {rule_example}.
+            """
             question = f"""
-{query}
-<answer>
-"""
+            Good job!
+            {query} 
+            Your answer should be just the {label_str}, without any other text, e.g., {answer_example}
+            """
         else:
             raise ValueError(f"Invalid template type: {template_type}")
 
-        return datasample, question, in_context_dataset
+        return datasample, question, in_context_samples
 
     if template_type == 'base':
         prefix = f"""
@@ -631,6 +659,7 @@ def make_map_fn(split, args, n_classes, in_context_dataset, data_source, data_mo
                 n_classes=n_classes, 
                 task_type = supported_datasets[data_source]['type'],
                 n_shot=args.n_shot, 
+                n_query=args.n_query,
                 in_context_dataset=in_context_dataset_,
                 customized_prompt=customized_prompt
             )
@@ -641,6 +670,7 @@ def make_map_fn(split, args, n_classes, in_context_dataset, data_source, data_mo
                 n_classes=n_classes, 
                 task_type = supported_datasets[data_source]['type'],
                 n_shot=args.n_shot, 
+                n_query=args.n_query,
                 in_context_dataset=in_context_dataset_,
                 customized_prompt=customized_prompt
             )
