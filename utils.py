@@ -68,3 +68,6 @@ def check_results(
         print(f"response: {test_dataset.iloc[idx]['responses'][0]}")
         print('-'*100)
         
+def load_json(file_path):
+    with open(file_path, 'r') as f:
+        return json.load(f)

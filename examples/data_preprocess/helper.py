@@ -758,7 +758,7 @@ def regression_reward_fn(solution_str, ground_truth):
     
     
 def _select_rm_score_fn(data_source):
-    if data_source == 'openai/gsm8k':
+    if data_source == 'gsm8k':
         from verl.utils.reward_score import gsm8k
         return gsm8k.compute_score
     elif data_source == 'math':
@@ -780,12 +780,9 @@ def _select_rm_score_fn(data_source):
         raise NotImplementedError
     
 def _select_parse_fn(data_source):
-    if data_source == 'openai/gsm8k':
-        from verl.utils.reward_score import gsm8k
-        return gsm8k.extract_solution
-    elif data_source == 'lighteval/MATH':
+    if data_source in ['gsm8k', 'math']:
         from verl.utils.reward_score import math
-        return math.extract_solution
+        return math.last_answer_string
     elif "multiply" in data_source or "arithmetic" in data_source:
         from verl.utils.reward_score import multiply
         return multiply.extract_solution

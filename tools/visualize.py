@@ -487,7 +487,6 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
         parsed_prediction = extract_answer(cleaned_response_text)
 
         
-
         if parsed_prediction != [] and len(parsed_prediction) == len(ground_truth['label']):
             parseable_correct += 1  
             parseable_predictions += 1
@@ -551,7 +550,7 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
         r2 = r2_score(ground_truths_list, predictions_list)
         r2_parseable = r2_score(parseable_ground_truths_list, parseable_predictions_list) if parseable_predictions_list != [] else 0
     
-    if task_type == "classification":
+    if task_type in ["classification", "other"]:
         metrics_dict = {
             "overall_accuracy": accuracy * 100,
             "accuracy_per_point": refined_accuracy * 100,
@@ -559,7 +558,7 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
             "parseable_accuracy_per_point": parseable_refined_accuracy * 100,
             "parseableporporation": parseable_porporation * 100
         }
-    else:
+    elif task_type == "regression":
         # 对回归任务：
         metrics_dict = {
             "overall_accuracy": accuracy * 100,  # 如果需要百分比，可以乘以 100
@@ -587,7 +586,7 @@ def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", 
                 writer.writeheader()
             writer.writerow(row)
         
-    if task_type == "classification":
+    if task_type in ["classification", "other"]:
         print(f"Overall accuracy from all {total_data_size} samples: {accuracy*100:.2f}%")
         print(f"Accuracy for each point: {refined_accuracy*100:.2f}%")
         print(f"Parseable accuracy (excluding unparseable): {parseable_accuracy*100:.2f}% ({parseable_predictions}/{total_data_size} samples)")

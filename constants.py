@@ -387,7 +387,7 @@ supported_datasets = {
         "num_classes": 2,
         "num_features": 2,
         "feature_noise": 0.01,
-        "label_noise": 0.01,
+        "label_noise": 0.0,
         "type": "classification",
         "difficulty": 3,
     },
