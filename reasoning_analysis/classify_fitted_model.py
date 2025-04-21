@@ -296,7 +296,7 @@ def main():
                         help="Maximum number of parallel workers (default: 1000)")
     parser.add_argument("--delay", type=float, default=0.5, 
                         help="Delay between API calls in seconds (default: 0.5)")
-    
+     
     args = parser.parse_args()
     
     # Set default output file if not provided

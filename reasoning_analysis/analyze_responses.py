@@ -294,6 +294,9 @@ def parse_arguments():
     parser.add_argument('--batch_size', '-b', type=int, default=10,
                         help='Batch size for parallel processing and saving (default: 10)')
     
+    parser.add_argument('--output_suffix', '-s', type=str, default='',
+                        help='Suffix to append to the output filename (default: empty)')
+    
     parser.add_argument('--verbose', '-v', action='store_true',
                         help='Enable verbose logging')
     
@@ -311,7 +314,7 @@ def main():
     # Create output file path if not provided
     if args.output is None:
         input_path = Path(args.input)
-        output_path = input_path.parent / f"{input_path.stem}_{args.llm}_analysis.parquet"
+        output_path = input_path.parent / f"{input_path.stem}_{args.llm}_analysis{args.output_suffix}.parquet"
         args.output = str(output_path)
     
     # Process file
