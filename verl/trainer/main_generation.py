@@ -168,6 +168,7 @@ def main(config):
     output_lst = [[] for _ in range(config.data.n_samples)]
     reasonings_lst = [[] for _ in range(config.data.n_samples)]
     answer_lst = [[] for _ in range(config.data.n_samples)]
+    rule_lst = [[] for _ in range(config.data.n_samples)]
     if not use_api:
         reward_fn = RewardManager(
             tokenizer=tokenizer, 
@@ -222,9 +223,10 @@ def main(config):
             for i in range(config.data.n_samples):
                 output_lst[i].extend([seq[-1] for seq in batch_output_lst[i]])
                 reward_tensor_lst[i].extend(reward_dict['reward_tensor'].tolist())
-                print("batch_reasoning_lst[i]:", batch_reasoning_lst[i])
                 reasonings_lst[i].extend([seq[-1] for seq in batch_reasoning_lst[i]])
                 answer_lst[i].extend([seq[-1] for seq in batch_answer_lst[i]])
+                if len(batch_output_lst[0][0]) >1:
+                    rule_lst[i].extend([seq[0] for seq in batch_output_lst[i]])
         else:
             # Process with HuggingFace model
             test_batch = DataProto.from_single_dict(test_data)
@@ -264,7 +266,6 @@ def main(config):
     output_lst = np.array(output_lst, dtype=object)
     # output_lst = np.array(output_lst, dtype=object)
     output_lst = np.transpose(output_lst, axes=(1, 0)).tolist() 
-    
     dataset["responses"] = output_lst
     
     # convert answer_lst from (n_samples, n_data) to (n_data, n_samples)
@@ -275,7 +276,13 @@ def main(config):
     reasonings_lst = np.array(reasonings_lst, dtype=object)
     reasonings_lst = np.transpose(reasonings_lst, axes=(1, 0)).tolist()
     dataset["reasonings"] = reasonings_lst
-    
+
+
+    if rule_lst[0][0] is not None:
+        # convert rule_lst from (n_samples, n_data) to (n_data, n_samples)
+        rule_lst = np.array(rule_lst, dtype=object)
+        rule_lst = np.transpose(rule_lst, axes=(1, 0)).tolist()
+        dataset["rules"] = rule_lst
     # convert reward_tensor_lst from (n_samples, n_data) to (n_data, n_samples)
     reward_tensor_lst = np.array(reward_tensor_lst, dtype=object)
     reward_tensor_lst = np.transpose(reward_tensor_lst, axes=(1, 0)).tolist() 
@@ -298,6 +305,7 @@ def main(config):
     # write to a new parquet
     output_dir = os.path.dirname(config.data.output_path)
     makedirs(output_dir, exist_ok=True)
+    print(f"Saving results to {output_dir}")
     dataset.to_parquet(config.data.output_path)
     # Upload results to wandb
     if config.trainer.wandb:

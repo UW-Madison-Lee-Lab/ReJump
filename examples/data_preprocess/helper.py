@@ -171,12 +171,13 @@ def make_classification_prefix(
 
     answer_example_number = np.random.choice(range(n_classes), n_query, replace=True)
     if "reasoning_api" in template_type or "standard_api_no_reasoning" in template_type:
+        rule_example = " the class label is 1 if the first feature is greater than the second, otherwise 0 "
         answer_example = f"{', '.join([str(x) for x in answer_example_number])}"
     else:
         answer_example = f"<answer>{', '.join([str(x) for x in answer_example_number])}</answer>"
-    
-    if 'inductive' in template_type:
         rule_example = " <answer>the class label is 1 if the first feature is greater than the second, otherwise 0</answer> "
+
+    if 'inductive' in template_type:
         # 1. base_inductive
         if template_type == 'base_inductive':
             datasample = f"""
@@ -236,13 +237,24 @@ def make_classification_prefix(
             The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. Here are some examples:
             {in_context_examples}
             Please infer a rule that maps the features to the class labels.
-            Return your final answer in <answer> and </answer> tags. For example, {rule_example}.
+            Return your rule in a few sentences—for example, {rule_example}.
             """
             question = f"""
             Good job!
             {query}
             Your final answer should just be the {label_str}, without any other text, e.g., {answer_example}
             """
+        elif template_type == "reasoning_api_customized":
+            datasample = f"""
+            The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. Here are some examples:
+            {in_context_examples}
+            Please infer a rule that maps the features to the class labels.
+            Return your rule in a few sentences—for example, {rule_example}.
+            """
+            question = f"""
+            Good job!
+            {query} {customized_prompt} Your answer should just be {label_str}, without any other text, e.g., {answer_example}
+        """
         # 4. base_no_reasoning_inductive
         elif template_type == 'base_no_reasoning_inductive':
             datasample = f"""
@@ -263,11 +275,12 @@ def make_classification_prefix(
             The dataset has {len(features[0])} features and {n_classes} classes: {list(range(n_classes))}. Here are some examples:
             {in_context_examples}
             Please infer a rule that maps the features to the class labels.
-            Return your final answer in <answer> and </answer> tags. For example, {rule_example}.
+            Return your rule in a few sentences—for example, {rule_example}.
+            if you think KNN is needed to classify the points, please specify the K value.
             """
             question = f"""
             Good job!
-            {query}
+            {query} You can use KNN to classify the points if you think the rule is not enough.
             Your response should contain only the {label_str} in <answer> tags, with no extra text—for example, {answer_example}
             """
         # 6. standard_api_no_reasoning_inductive
@@ -395,12 +408,15 @@ def make_regression_prefix(
     random_targets = [np.round(np.random.uniform(0, 10), 3) for _ in range(n_query)]
     if "reasoning_api" in template_type or "standard_api_no_reasoning" in template_type:
         answer_example = f"{', '.join(str(x) for x in random_targets)}"
+        rule_example = f" the target is the average of the two features "
+
     else:
         answer_example = f"<answer>{', '.join(str(x) for x in random_targets)}</answer>"
+        rule_example = f" <answer>the target is the average of the two features</answer> "
+
 
 
     if 'inductive' in template_type:   
-        rule_example = f" <answer>the target is just the average of the two features</answer> "
         if template_type == 'base_inductive':
             datasample = f"""
             A conversation between User and Assistant. The user asks a question, and the Assistant solves it. 
@@ -472,14 +488,36 @@ def make_regression_prefix(
             {query}
             Your final answer should be enclosed in <answer> and </answer> tags, containing only {target_str} with no additional text—for example, {answer_example}.
             """
+        elif template_type == 'reasoning_api_inductive':
+            datasample = f"""
+            The dataset has {len(features[0])} features and 1 target attribute. Here are some examples:
+            {in_context_examples}
+            Please infer a rule that maps the features to the target values.
+            Return your rule in a few sentences—for example, {rule_example}.
+            """
+            question = f"""
+            Good job!
+            {query} Your response should contain only {target_str} with no additional text—for example, {answer_example}
+        """
 
+        elif template_type == "reasoning_api_customized_inductive":
+            datasample = f"""
+            The dataset has {len(features[0])} features and 1 target attribute. Here are some examples:
+            {in_context_examples}
+            Please infer a rule that maps the features to the target values.
+            Return your rule in a few sentences—for example, {rule_example}.
+            """
+            question = f"""
+            Good job!
+            {query} {customized_prompt} Your response should contain only {target_str} with no additional text—for example, {answer_example}
+                """
         # 4. standard_api_inductive
         elif template_type == 'standard_api_inductive':
             datasample = f"""
             The dataset has {len(features[0])} features and 1 target attribute. Here are some examples:
             {in_context_examples}
             Please infer a rule that maps the features to the target values.
-            Return your final answer in <answer> and </answer> tags—for example, {rule_example}.
+            Return your rule in a few sentences—for example, {rule_example}.
             """
             question = f"""
             Good job!
@@ -545,11 +583,11 @@ def make_regression_prefix(
             """
         elif template_type == 'reasoning_api':
             prefix = f"""
-            The dataset has {len(features)} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. Your answer should be just the class label, without any other text or punctuation.
+            The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} Your response should contain only {target_str} with no additional text—for example, {answer_example}
             """
         elif template_type == "reasoning_api_customized":
             prefix = f"""
-            The dataset has {len(features)} features and {n_classes} classes: {list(range(n_classes))}. {in_context_examples} Given the data point with features {format_features(features)}, classify it into one of the possible classes. \n{customized_prompt}\n Your answer should be just the class label, without any other text or punctuation.
+            The dataset has {len(features[0])} features and 1 target attribute. {in_context_examples} {query} {customized_prompt} Your response should contain only {target_str} with no additional text—for example, {answer_example}
             """
         elif template_type == "standard_api_no_reasoning":
             prefix = f"""

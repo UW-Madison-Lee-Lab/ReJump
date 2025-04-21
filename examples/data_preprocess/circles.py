@@ -13,7 +13,7 @@ from examples.data_preprocess.helper import save_data, flip_label, prepare_datas
 
 def gen_dataset(
     num_samples: int,
-    noise_level: float = 0.01,
+    feature_noise: float = 0.01,
     seed_value: int = 42,
     label_noise: float = 0.0,
     random: bool = False,

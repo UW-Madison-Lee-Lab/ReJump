@@ -463,4 +463,7 @@ supported_datasets = {
         "type": "other",
         "difficulty": None,
     },
+    "regression":{},
+    "classification":{},
+    "all":{},
 }

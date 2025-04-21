@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-"""
-Visualize ICL reasoning output from parquet files with model responses
-Default input file: /staging/szhang967/icl_dataset-output/blobs_50shot_n1.0_f0.0_test10_icl3_seed42.parquet
-"""
-
 import pandas as pd
 import json
 import os
@@ -12,22 +7,33 @@ import re
 import html
 from pathlib import Path
 import random
-from typing import Dict, Any, List, Optional, Tuple
+import csv # Added for append_metrics_to_csv
+from typing import Dict, Any, List, Optional, Tuple, Union # Added Union
+
+# Assuming constants.py defines supported_datasets correctly
 from constants import supported_datasets
-import pdb
+# Assuming helper functions are correctly imported
 from verl.trainer.ppo.helper import _select_rm_score_fn as select_reward_fn
-from examples.data_preprocess.helper import _select_parse_fn
+from examples.data_preprocess.helper import _select_parse_fn as select_parse_fn # Renamed for clarity
+
 try:
     from transformers import AutoTokenizer
-except ImportError:
-    print("Warning: Could not import AutoTokenizer from transformers")
+    from sklearn.metrics import r2_score # Moved import here
+except ImportError as e:
+    print(f"Warning: Could not import required libraries (transformers/sklearn): {e}")
     AutoTokenizer = None
+    r2_score = None
 import numpy as np
-# Initialize tokenizer
-def get_tokenizer(tokenizer_name="Qwen/Qwen2.5-3B-Instruct"):
-    """
-    Get tokenizer for token length calculation
-    """
+
+# Default threshold (can be overridden by args)
+DEFAULT_REGRESSION_CORRECT_THRESHOLD = -0.01
+
+# --- Tokenizer Functions ---
+def get_tokenizer(tokenizer_name="google/gemma-2-9b-it"): # Updated default tokenizer
+    """Gets tokenizer, falling back to GPT-2 if needed."""
+    if AutoTokenizer is None:
+        print("Transformers library not available. Tokenizer cannot be loaded.")
+        return None
     try:
         tokenizer = AutoTokenizer.from_pretrained(tokenizer_name, trust_remote_code=True)
         return tokenizer
@@ -36,1690 +42,893 @@ def get_tokenizer(tokenizer_name="Qwen/Qwen2.5-3B-Instruct"):
         try:
             print("Falling back to GPT-2 tokenizer")
             return AutoTokenizer.from_pretrained("gpt2")
-        except:
-            print("Failed to load any tokenizer. Token length will not be calculated.")
+        except Exception as e2:
+            print(f"Failed to load GPT-2 tokenizer: {e2}. Token length will not be calculated.")
             return None
 
-def calculate_token_length(text, tokenizer):
-    """
-    Calculate token length of text
-    """
+def calculate_token_length(text: Optional[str], tokenizer) -> int:
+    """Calculates token length of text using the provided tokenizer."""
     if tokenizer is None or text is None:
         return 0
     try:
+        # Ensure text is string
+        if not isinstance(text, str):
+             if isinstance(text, bytes): text = text.decode('utf-8', errors='ignore')
+             else: text = str(text)
         tokens = tokenizer.encode(text)
         return len(tokens)
     except Exception as e:
-        print(f"Error calculating token length: {e}")
+        print(f"Error calculating token length for text type {type(text)}: {e}")
         return 0
 
-def extract_think_content(text) -> Optional[str]:
-    """
-    Extract content between <think> and </think> tags
-    """
-    # Handle None case
+# --- Content Extraction Functions ---
+def _ensure_string(text: Any) -> Optional[str]:
+    """Helper to safely convert input to string."""
     if text is None:
         return None
-        
-    # Force convert to string if it's bytes or any other type
-    if not isinstance(text, str):
-        try:
-            if isinstance(text, bytes):
-                text = text.decode('utf-8')
-            else:
-                text = str(text)
-        except Exception as e:
-            print(f"Warning: Could not convert to string: {e}")
-            text = str(text)  # Last resort: use str() representation
-        
-    pattern = r'<think>(.*?)</think>'
-    match = re.search(pattern, text, re.DOTALL)
-    if match:
-        return match.group(1).strip()
-    return None
+    if isinstance(text, str):
+        return text
+    try:
+        if isinstance(text, bytes):
+            return text.decode('utf-8', errors='replace')
+        else:
+            return str(text)
+    except Exception as e:
+        print(f"Warning: Could not convert content to string: {e}")
+        return str(text) # Last resort
 
-
-def clean_response_text(response_text: str, prompt_content: Optional[str]) -> str:
-    """
-    Return original response text without any cleaning
-    
-    Args:
-        response_text: Model response text
-        prompt_content: Input prompt content (not used)
-        
-    Returns:
-        Original response text
-    """
-    # Simply filter out <|endoftext|> tags
-    if response_text:
-        return response_text.replace("<|endoftext|>", "")
-    return response_text
-
-
-def extract_answer_content(text) -> Optional[str]:
-    """
-    Extract content between <answer> and </answer> tags
-    """
-    # Handle None case
-    if text is None:
+def extract_think_content(text: Any) -> Optional[str]:
+    """Extracts content between <think> and </think> tags."""
+    text_str = _ensure_string(text)
+    if text_str is None:
         return None
-        
-    # Force convert to string if it's bytes or any other type
-    if not isinstance(text, str):
-        try:
-            if isinstance(text, bytes):
-                text = text.decode('utf-8')
-            else:
-                text = str(text)
-        except Exception as e:
-            print(f"Warning: Could not convert to string: {e}")
-            text = str(text)  # Last resort: use str() representation
-        
-    pattern = r'<answer>(.*?)</answer>'
-    match = re.search(pattern, text, re.DOTALL)
-    if match:
-        return match.group(1).strip()
-    return None
+    match = re.search(r'<think>(.*?)</think>', text_str, re.DOTALL)
+    return match.group(1).strip() if match else None
 
+def extract_answer_content(text: Any) -> Optional[str]:
+    """Extracts content between <answer> and </answer> tags."""
+    text_str = _ensure_string(text)
+    if text_str is None:
+        return None
+    match = re.search(r'<answer>(.*?)</answer>', text_str, re.DOTALL)
+    return match.group(1).strip() if match else None
 
-def get_prediction_result(response_text: Optional[str], ground_truth, task_type: str) -> Tuple[Optional[int], bool]:
-    #should be the same with reward_fn in helper.py, but I am too lazy to copy it over
+def clean_response_text(response_text: Any) -> str:
+    """Cleans response text by ensuring it's a string and removing end tokens."""
+    text_str = _ensure_string(response_text)
+    if text_str is None:
+        return ""
+    # Simple cleaning, add more if needed
+    return text_str.replace("<|endoftext|>", "").strip()
+
+def get_experiment_name(exp_path: str) -> str:
     """
-    Evaluate prediction using main_eval approach
-    
+    Gets a formatted experiment name (model_name_dataset) from the file path.
+    Expects path structure like: .../model_name/dataset_details_.../subdir/filename.parquet
+    Example: results/google-gemini-2.0-flash/moons_50_shot_.../global_step_0/test_default.parquet
+    Desired output: google-gemini-2.0-flash_moons
+
     Args:
-        response_text: Full model response text
-        ground_truth: The ground truth data containing label and features
-        
+        exp_path: The full path to the experiment file (e.g., parquet file).
+
     Returns:
-        Tuple of (predicted_label, metric)
+        The formatted experiment name string, or a fallback name if parsing fails.
     """
-    # Import classification_reward_fn from helper module
-    if task_type == "classification":
-        from examples.data_preprocess.helper import classification_reward_fn
-        # Use the classification_reward_fn for evaluation
-        metric = classification_reward_fn(response_text, ground_truth)
-        
-        nested_match = re.search(r'<answer><answer>(.*?)</answer></answer>', response_text, re.DOTALL)
-        if nested_match:
-            prediction_str = nested_match.group(1).strip()
-            if ',' in prediction_str:
-                try:
-                    prediction = [int(x.strip()) for x in prediction_str.split(',')]
-                except ValueError:
-                    try:
-                        prediction = [float(x.strip()) for x in prediction_str.split(',')]
-                    except ValueError:
-                        prediction = None
-                if prediction is not None:
-                    return prediction, metric
-            else:
-                if re.match(r'^-?\d+(\.\d+)?$', prediction_str):
-                    if '.' in prediction_str:
-                        prediction = float(prediction_str)
-                    else:
-                        prediction = int(prediction_str)
-                    return prediction, metric
-                
-        # Extract the predicted label for display
-        all_matches = list(re.finditer(r'<answer>(.*?)</answer>', response_text, re.DOTALL))
-        if all_matches:
-            response_extract = None
-            for match in all_matches[::-1]:  # Check from last to first
-                match_content = match.group(1).strip()
+    try:
+        path_obj = Path(exp_path)
 
-                # Match comma-separated integers or floats
-                if ',' in match_content:
-                    try:
-                        prediction = [int(x.strip()) for x in match_content.split(',')]
-                        return prediction, metric
-                    except ValueError:
-                        try:
-                            prediction = [float(x.strip()) for x in match_content.split(',')]
-                            return prediction, metric
-                        except ValueError:
-                            continue
+        # Check if the path has enough parts to extract the desired components.
+        # We need at least file, subdir, dataset_details, model_name.
+        # path_obj.parts includes the filename, path_obj.parent doesn't.
+        # path_obj.parent.parts gives directory parts.
+        # Example breakdown:
+        # parts = ('results', 'google-gemini-2.0-flash', 'moons_50_shot_...', 'global_step_0', 'test_default.parquet')
+        # parent.parts = ('results', 'google-gemini-2.0-flash', 'moons_50_shot_...', 'global_step_0')
+        # We need at least 3 directory levels above the file.
+        if len(path_obj.parent.parts) < 3:
+             print(f"Warning: Path '{exp_path}' has fewer than 3 parent directories. Cannot extract model/dataset as expected.")
+             return path_obj.stem # Fallback to filename without extension
 
-                # Match integers and floats (including negative numbers)
-                if re.match(r'^-?\d+(\.\d+)?$', match_content):
-                    response_extract = match
-                    break
-            if response_extract is not None and re.match(r'^-?\d+(\.\d+)?$', response_extract.group(1).strip()):
-                prediction_str = response_extract.group(1).strip()
-                # Convert to int if it's an integer, otherwise float
-                if '.' in prediction_str:
-                    prediction = float(prediction_str)
-                else:
-                    prediction = int(prediction_str)
-                return prediction, metric
-            
-            # Try direct pattern matching if the tags might have whitespace issues
-            num_pattern = r'<answer>\s*(-?\d+(\.\d+)?)\s*</answer>'
-            num_matches = re.findall(num_pattern, response_text)
-            if num_matches:
-                prediction_str = num_matches[-1][0]  # Use the last match
-                # Convert to int if it's an integer, otherwise float
-                if '.' in prediction_str:
-                    prediction = float(prediction_str)
-                else:
-                    prediction = int(prediction_str)
-                return prediction, metric
-        
-        # If metric but didn't find valid prediction, try more aggressive patterns
-        if metric:
-            # Look for numbers after "answer:" or "class:" patterns that might appear in text
-            alternative_patterns = [
-                r'answer:\s*(-?\d+(\.\d+)?)',
-                r'class:\s*(-?\d+(\.\d+)?)',
-                r'prediction:\s*(-?\d+(\.\d+)?)',
-                r'label:\s*(-?\d+(\.\d+)?)',
-                r'the answer is\s*(-?\d+(\.\d+)?)',
-                r'class is\s*(-?\d+(\.\d+)?)'
-            ]
-            
-            for pattern in alternative_patterns:
-                matches = re.findall(pattern, response_text, re.IGNORECASE)
-                if matches:
-                    try:
-                        prediction_str = matches[-1][0]  # Use the last match
-                        # Convert to int if it's an integer, otherwise float
-                        if '.' in prediction_str:
-                            prediction = float(prediction_str)
-                        else:
-                            prediction = int(prediction_str)
-                        return prediction, metric
-                    except (ValueError, TypeError):
-                        continue  # Try next pattern if this one didn't work
-            
-            # Final fallback: just find any number that could be a valid class
-            if ground_truth and 'label' in ground_truth:
-                # Get task type to determine number of classes
-                num_classes = supported_datasets[ground_truth['data_source']]['num_classes']
-                
-                # Extract all number sequences and check if any could be a valid class
-                num_matches = re.findall(r'\b(-?\d+(\.\d+)?)\b', response_text)
-                for match in num_matches[::-1]:  # Check from last to first
-                    try:
-                        # Convert to int if it's an integer, otherwise float
-                        if '.' in match[0]:
-                            num_val = float(match[0])
-                        else:
-                            num_val = int(match[0])
-                        
-                        # For integer values, check if they're valid class indices
-                        if isinstance(num_val, int) and 0 <= num_val < num_classes:
-                            # Found a valid class index
-                            return num_val, metric
-                    except (ValueError, TypeError):
-                        continue
-                
-            # If we know the answer is correct but couldn't extract it, use ground truth
-            if ground_truth and 'label' in ground_truth:
-                return ground_truth['label'], True
-        
-        # Otherwise, couldn't extract prediction
-        return None, False
-    else:
-        # Fallback to original implementation if module not available
-        if response_text is None:
-            return None, False
-        
-        # Make sure ground_truth_label is available
-        if ground_truth is None or 'label' not in ground_truth:
-            return None, False
-            
-        ground_truth_label = ground_truth['label']
-        
-        # Try to parse a number from the answer
-        answer = extract_answer_content(response_text)
-        if answer is not None and re.match(r'^-?\d+(\.\d+)?$', answer.strip()):
-            prediction_str = answer.strip()
-            # Convert to int if it's an integer, otherwise float
-            if '.' in prediction_str:
-                prediction = float(prediction_str)
-            else:
-                prediction = int(prediction_str)
-            return prediction, prediction == ground_truth_label
-        
-        # Look for number patterns in the full response
-        num_pattern = r'<answer>\s*(-?\d+(\.\d+)?)\s*</answer>'
-        num_matches = re.findall(num_pattern, response_text)
-        if num_matches:
-            prediction_str = num_matches[-1][0]  # Use the last match
-            # Convert to int if it's an integer, otherwise float
-            if '.' in prediction_str:
-                prediction = float(prediction_str)
-            else:
-                prediction = int(prediction_str)
-            return prediction, prediction == ground_truth_label
-            
-        # Try additional patterns for classification responses
-        alternative_patterns = [
-            r'answer:\s*(-?\d+(\.\d+)?)',
-            r'class:\s*(-?\d+(\.\d+)?)',
-            r'prediction:\s*(-?\d+(\.\d+)?)',
-            r'label:\s*(-?\d+(\.\d+)?)',
-            r'the answer is\s*(-?\d+(\.\d+)?)',
-            r'class is\s*(-?\d+(\.\d+)?)'
-        ]
-        
-        for pattern in alternative_patterns:
-            matches = re.findall(pattern, response_text, re.IGNORECASE)
-            if matches:
-                try:
-                    prediction_str = matches[-1][0]  # Use the last match
-                    # Convert to int if it's an integer, otherwise float
-                    if '.' in prediction_str:
-                        prediction = float(prediction_str)
-                    else:
-                        prediction = int(prediction_str)
-                    return prediction, prediction == ground_truth_label
-                except (ValueError, TypeError):
-                    continue  # Try next pattern if this one didn't work
-        
-        # Final fallback: just find any number that could be a valid class
-        num_classes = supported_datasets[ground_truth['data_source']]['num_classes']
-            
-        # Extract all number sequences and check if any could be a valid class
-        num_matches = re.findall(r'\b(-?\d+(\.\d+)?)\b', response_text)
-        for match in num_matches[::-1]:  # Check from last to first
-            try:
-                # Convert to int if it's an integer, otherwise float
-                if '.' in match[0]:
-                    num_val = float(match[0])
-                else:
-                    num_val = int(match[0])
-                
-                # For integer values, check if they're valid class indices
-                if isinstance(num_val, int) and 0 <= num_val < num_classes:
-                    # Found a valid class index
-                    return num_val, num_val == ground_truth_label
-            except (ValueError, TypeError):
-                continue
-        
-        # If no number found, return None
-        return None, False
-    
-def get_experiment_name(exp_path):
-    """
-    Get experiment name from the path  
-    """
-    print(f"Experiment path: {exp_path}")
-    parts = exp_path.split('/')
-    if len(parts) >= 4:
-        first = parts[2]
-        second = parts[3].split('_')[0]
-        return f"{first}_{second}"
-    return "Unknown_Experiment"
+        # Model Name is the 3rd directory from the end (parent of parent of parent)
+        model_name = path_obj.parent.parent.parent.name
 
-def visualize_icl_reasoning_output(input_file: str, output_format: str = "txt", save_dir: Optional[str] = None, max_samples: int = 100, REGRESSION_CORRECT_THRESHOLD=-0.01, output_csv_dir: Optional[str] = None) -> str:
-    """
-    Visualize ICL reasoning output from parquet files with model responses
-    
-    Args:
-        input_file: Path to the input parquet file
-        output_format: Output format, supports txt and html
-        save_dir: Directory to save the output file (default: same as input file's directory)
-        max_samples: Maximum number of samples to visualize (default: 100)
-        
-    Returns:
-        Path to the output file
-    """
-    # Set random seed for refined accuracy calculation
-    random.seed(42)
-    
-    # Initialize tokenizer
-    tokenizer = get_tokenizer()
-    
-    # Read the parquet file
-    print(f"Reading parquet file: {input_file}")
+        # Dataset Details is the 2nd directory from the end (parent of parent)
+        dataset_details = path_obj.parent.parent.name
 
-    df = pd.read_parquet(input_file)
-    
-    # Debug information
-    print(f"DataFrame loaded successfully with {len(df)} rows")
-    print(f"DataFrame columns: {df.columns.tolist()}")
-    
-    # Check if 'responses' column exists
-    if 'responses' in df.columns:
-        print("'responses' column found in DataFrame")
-        # Check the type of the first response
-        if len(df) > 0:
-            first_response = df.iloc[0].get('responses')
-            print(f"Type of first response: {type(first_response)}")
-            if isinstance(first_response, list) and len(first_response) > 0:
-                print(f"Type of first response item: {type(first_response[0])}")
-        
-    else:
-        raise ValueError("'responses' column not found in DataFrame")
-    
-    
-    
-        
-    # Calculate accuracy on full dataset first
-    total_data_size = len(df)
-    wrong_number_of_answer=0
-    full_correct_predictions = 0
-    full_MSE_accuracyPsamples = 0  # For storing the correct count for refined accuracy
-    parseable_correct_predictions = 0
-    parseable_MSE_accuracyPsamples= 0  # For storing the refined accuracy
-    unparseable_predictions = 0  # Count of unparseable predictions
-    parseable_correct = 0  # Count of correct predictions among parseable ones
-    parseable_predictions = 0  # List to store parseable predictions
-    #caculate R2
-    predictions_list = []
-    ground_truths_list = []
-    parseable_predictions_list = []
-    parseable_ground_truths_list = []
+        # Dataset name is the part before the first underscore in dataset_details
+        dataset_name = dataset_details.split('_')[0]
 
-    print(f"Calculating accuracy on all {total_data_size} samples...")
-    
-    # Process all samples for accuracy calculation
-    for _, row in df.iterrows():
-        # Get ground truth label
-        ground_truth = None
-        data_source = row.get('data_source', 'blobs')
-        task_type = supported_datasets[data_source]['type']
-        if 'reward_model' in row and isinstance(row['reward_model'], dict):
-            ground_truth_data = row['reward_model'].get('ground_truth', None)
-            if isinstance(ground_truth_data, dict) and 'label' in ground_truth_data:
-                ground_truth = ground_truth_data
-        
-        # Process responses
-        responses = row.get('responses', [])
-        
-        # Handle different types of response data
-        if responses is None:
-            responses = ["No response available"]
-        elif not isinstance(responses, list):
-            # Try to convert to list if it's another iterable
-            try:
-                responses = list(responses)
-            except (TypeError, ValueError):
-                responses = [responses]
-        
-        # Get first response (assuming single response per example)
-        response_text = responses[0] if responses and len(responses) > 0 else "No response generated"
-        
-        # Ensure response_text is a string
-        if not isinstance(response_text, str):
-            try:
-                if isinstance(response_text, bytes):
-                    response_text = response_text.decode('utf-8')
-                else:
-                    response_text = str(response_text)
-            except Exception as e:
-                print(f"Warning: Could not convert response to string: {e}")
-                response_text = str(response_text)  # Last resort
-        
-        # Filter out <|endoftext|> tags
-        response_text = response_text.replace("<|endoftext|>", "")
-        
-        # Get input prompt content
-        input_prompt = row.get('prompt')
-        input_prompt_content = input_prompt[0]['content']
-        
-        # Use original response without attempting to remove prompt
-        cleaned_response_text = clean_response_text(response_text, input_prompt_content)
-        
-        # Remove prompt content from response
-        if input_prompt_content:
-            cleaned_response_text = cleaned_response_text.replace(input_prompt_content, "")
-        
-        # Preserve original content, don't extract thinking and answer
-        raw_thinking = extract_think_content(cleaned_response_text)
-        raw_answer = extract_answer_content(cleaned_response_text)
-        
-        # Calculate token length
-        token_length = calculate_token_length(cleaned_response_text, tokenizer)
-        
-        # Get reward function for the data source
-        reward_fn = select_reward_fn(data_source)
-        extract_answer=_select_parse_fn(data_source)
-        # Evaluate with the appropriate reward function
-        metric = False
-        can_parse_prediction = True
-        
-        # Use the dedicated reward function
-        metric = reward_fn(cleaned_response_text, ground_truth)
+        return f"{model_name}_{dataset_name}"
+
+    except IndexError:
+        # This might happen if split('_') fails on a directory name without underscores
+        print(f"Warning: Could not parse dataset from directory name '{dataset_details}' in path '{exp_path}'.")
+        return path_obj.stem # Fallback
+    except Exception as e:
+        print(f"Warning: An error occurred parsing path '{exp_path}': {e}")
+        return path_obj.stem # Fallback
 
 
-        # Try to extract prediction result to check if it can be parsed
-        parsed_prediction = extract_answer(cleaned_response_text)
+# --- CSV Metrics Logging ---
+def append_metrics_to_csv(csv_path: str, experiment_path: str, metrics: Dict[str, Any]):
+    """Appends experiment metrics to a CSV file."""
+    experiment_name = get_experiment_name(experiment_path)
+    file_exists = os.path.isfile(csv_path)
 
-        
+    # Flatten metrics if nested (optional, adjust as needed)
+    row = {"experiment": experiment_name}
+    for k, v in metrics.items():
+        row[k] = f"{v:.4f}" if isinstance(v, float) else v # Format floats
 
-        if parsed_prediction != [] and len(parsed_prediction) == len(ground_truth['label']):
-            parseable_correct += 1  
-            parseable_predictions += 1
-            
-
-            if task_type == "classification":
-                # For classification, check if the prediction matches the ground truth
-                if metric == 1.0:
-                    full_correct_predictions += 1
-                    parseable_correct_predictions += 1
-                full_MSE_accuracyPsamples += metric
-                parseable_MSE_accuracyPsamples += metric
-                
-            if task_type == "regression":
-                # For regression, we can use the metric directly
-                if metric >= REGRESSION_CORRECT_THRESHOLD:
-                    full_correct_predictions += 1
-                    parseable_correct_predictions += 1  
-                
-                full_MSE_accuracyPsamples += metric   
-                parseable_MSE_accuracyPsamples += metric
-
-                #Calculate R2
-                if ground_truth and 'label' in ground_truth:
-                    ground_truth_label = ground_truth['label']
-                    parseable_predictions_list.append(parsed_prediction)
-                    parseable_ground_truths_list.append(ground_truth_label)
-                    predictions_list.append(parsed_prediction)
-                    ground_truths_list.append(ground_truth_label)
-
-  
-        else: #a random prediction
-            unparseable_predictions += 1
-            if task_type == "classification":
-                # For classification, check if the prediction matches the ground truth
-                if metric == 1.0:
-                    full_correct_predictions += 1
-                full_MSE_accuracyPsamples += metric
-            if task_type == "regression":
-                # For regression, we can use the metric directly
-                if metric >= REGRESSION_CORRECT_THRESHOLD:
-                    full_correct_predictions += 1
-                full_MSE_accuracyPsamples += metric 
-
-                answers = [random.uniform(0, 10) for _ in range(len(ground_truth['label']))]
-                predictions_list.append(answers)
-                ground_truths_list.append(ground_truth['label'])
-
-    
-    # Calculate overall accuracy and refined accuracy
-    accuracy = (full_correct_predictions / total_data_size) if total_data_size > 0 else 0
-    refined_accuracy = (full_MSE_accuracyPsamples / total_data_size) if total_data_size > 0 else 0
-    
-    # Calculate accuracy for parseable predictions only
-    parseable_accuracy = (parseable_correct_predictions / parseable_correct) if parseable_correct > 0 else 0
-    parseable_refined_accuracy= (parseable_MSE_accuracyPsamples / parseable_correct) if parseable_correct > 0 else 0
-    parseable_porporation = (parseable_correct / total_data_size) if total_data_size > 0 else 0
-    if task_type == "regression":
-        # Calculate R2 score
-        from sklearn.metrics import r2_score
-        r2 = r2_score(ground_truths_list, predictions_list)
-        r2_parseable = r2_score(parseable_ground_truths_list, parseable_predictions_list) if parseable_predictions_list != [] else 0
-    
-    if task_type == "classification":
-        metrics_dict = {
-            "overall_accuracy": accuracy * 100,
-            "accuracy_per_point": refined_accuracy * 100,
-            "parseable_overall_accuracy": parseable_accuracy * 100,
-            "parseable_accuracy_per_point": parseable_refined_accuracy * 100,
-            "parseableporporation": parseable_porporation * 100
-        }
-    else:
-        # 对回归任务：
-        metrics_dict = {
-            "overall_accuracy": accuracy * 100,  # 如果需要百分比，可以乘以 100
-            "overall_mse": -refined_accuracy,
-            "parseable_accuracy": parseable_accuracy * 100,
-            "parseable_mse": -parseable_refined_accuracy,
-            "r2_score": r2,
-            "parseable_r2_score": r2_parseable,
-            "parseableporporation": parseable_porporation * 100
-        }
-    import csv
-    import os
-    def append_experiment_metrics(csv_path, experiment_name, metrics):
-        experiment_name = get_experiment_name(experiment_name)
-
-        file_exists = os.path.isfile(csv_path)
-        row = {"experiment": experiment_name}
-        row.update(metrics)
-        
-        mode = 'a' if file_exists else 'w'
-        with open(csv_path, mode, newline='') as csvfile:
-            fieldnames = list(row.keys())
+    mode = 'a' if file_exists else 'w'
+    try:
+        with open(csv_path, mode, newline='', encoding='utf-8') as csvfile:
+            # Define fieldnames based on current row keys, ensuring 'experiment' is first
+            fieldnames = ['experiment'] + [k for k in row if k != 'experiment']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
             if not file_exists:
                 writer.writeheader()
-            writer.writerow(row)
-        
-    if task_type == "classification":
-        print(f"Overall accuracy from all {total_data_size} samples: {accuracy*100:.2f}%")
-        print(f"Accuracy for each point: {refined_accuracy*100:.2f}%")
-        print(f"Parseable accuracy (excluding unparseable): {parseable_accuracy*100:.2f}% ({parseable_predictions}/{total_data_size} samples)")
-        print(f"Parseable refined accuracy (excluding unparseable): {parseable_refined_accuracy*100:.2f}% ({parseable_predictions}/{total_data_size} samples)")
-        if output_csv_dir is not None:
-            output_csv = os.path.join(output_csv_dir, "classification_metrics.csv")
-            append_experiment_metrics(output_csv, input_file, metrics_dict)
-    else:
-        print(f"Overall accuracy from all {total_data_size} samples: {accuracy*100:.2f}")
-        print(f"Overall MSE: {-refined_accuracy:.4f} ({parseable_predictions}/{total_data_size} samples)")
-        print(f"Parseable accuracy (excluding unparseable): {parseable_accuracy*100:.2f}% ({parseable_predictions}/{total_data_size} samples)")
-        print(f"Parseable MSE: {-parseable_refined_accuracy:.4f} ({parseable_predictions}/{total_data_size} samples)")
-        print(f"R2 Score: {r2:.4f}")
-        print(f"Parseable R2 Score: {r2_parseable:.4f}")
-        if output_csv_dir is not None:
-            output_csv = os.path.join(output_csv_dir, "regression_metrics.csv")
-            append_experiment_metrics(output_csv, input_file, metrics_dict)
-    print(f"Unparseable predictions: {unparseable_predictions} ({unparseable_predictions/total_data_size*100:.2f}%)")
-        
-    # Sample the dataframe if needed for visualization, ensuring balanced correct/incorrect samples
-    display_df = df
-    target_correct = 0
-    target_incorrect = 0
-    balanced_sampling = False
-    
-    if max_samples > 0 and max_samples < total_data_size:
-        # Create two separate dataframes for correct and incorrect samples
-        correct_mask = []
-        incorrect_mask = []
-        
-        print("Separating correct and incorrect samples for balanced sampling...")
-        
-        # Identify correct and incorrect samples
-        for idx, row in df.iterrows():
-            # Same logic as above to determine correctness
-            ground_truth = None
-            if 'reward_model' in row and isinstance(row['reward_model'], dict):
-                ground_truth_data = row['reward_model'].get('ground_truth', None)
-                if isinstance(ground_truth_data, dict) and 'label' in ground_truth_data:
-                    ground_truth = ground_truth_data
-            
-            responses = row.get('responses', [])
-            if responses is None:
-                responses = ["No response available"]
-            elif not isinstance(responses, list):
-                try:
-                    responses = list(responses)
-                except (TypeError, ValueError):
-                    responses = [responses]
-            
-            response_text = responses[0] if responses and len(responses) > 0 else "No response generated"
-            if not isinstance(response_text, str):
-                try:
-                    if isinstance(response_text, bytes):
-                        response_text = response_text.decode('utf-8')
-                    else:
-                        response_text = str(response_text)
-                except Exception:
-                    response_text = str(response_text)
-            
-            response_text = response_text.replace("<|endoftext|>", "")
-            
-            input_prompt = row.get('prompt')
-            input_prompt_content = None
-            if input_prompt and isinstance(input_prompt, list) and len(input_prompt) > 0:
-                if isinstance(input_prompt[0], dict) and 'content' in input_prompt[0]:
-                    input_prompt_content = input_prompt[0]['content']
-            
-            cleaned_response_text = clean_response_text(response_text, input_prompt_content)
-            if input_prompt_content:
-                cleaned_response_text = cleaned_response_text.replace(input_prompt_content, "")
-            
-            data_source = row.get('data_source', 'blobs')
+
+            # Filter row to only include existing fieldnames (handles adding new columns)
+            filtered_row = {k: row.get(k, '') for k in fieldnames}
+            writer.writerow(filtered_row)
+    except IOError as e:
+        print(f"Error writing to CSV {csv_path}: {e}")
+    except Exception as e:
+         print(f"An unexpected error occurred writing to CSV: {e}")
+
+# --- NumPy Data Handling Helper ---
+def safe_tolist(data: Any) -> Any:
+     """Converts NumPy arrays/scalars within nested structures to Python lists/scalars."""
+     if isinstance(data, np.ndarray):
+         return data.tolist()
+     elif isinstance(data, (np.int_, np.intc, np.intp, np.int8, np.int16, np.int32, np.int64, np.uint8,
+                         np.uint16, np.uint32, np.uint64)):
+         return int(data)
+     elif isinstance(data, (np.float_, np.float16, np.float32, np.float64)):
+         return float(data)
+     elif isinstance(data, np.bool_):
+         return bool(data)
+     elif isinstance(data, (list, tuple)):
+         return [safe_tolist(item) for item in data]
+     elif isinstance(data, dict):
+         return {key: safe_tolist(value) for key, value in data.items()}
+     return data # Return as is if not a NumPy type or container we handle
+
+def load_data_and_tokenizer(input_file: str, tokenizer_name: str = "google/gemma-2-9b-it") -> Tuple[pd.DataFrame, Any]:
+    """Loads data from parquet file and initializes tokenizer."""
+    if not os.path.exists(input_file):
+        raise FileNotFoundError(f"Error: File '{input_file}' not found")
+
+    print(f"Reading parquet file: {input_file}")
+    try:
+        df = pd.read_parquet(input_file)
+        print(f"DataFrame loaded successfully with {len(df)} rows")
+        print(f"DataFrame columns: {df.columns.tolist()}")
+        if 'responses' not in df.columns:
+             raise ValueError("'responses' column not found in DataFrame")
+    except Exception as e:
+        raise ValueError(f"Error reading parquet file {input_file}: {e}") from e
+
+    tokenizer = get_tokenizer(tokenizer_name)
+    return df, tokenizer
+
+def calculate_metrics(
+    df: pd.DataFrame,
+    regression_threshold: float
+) -> Tuple[Dict[str, Any], List[bool], List[Any], List[Any]]:
+    """Calculates overall metrics from the full dataframe."""
+    print(f"Calculating metrics on all {len(df)} samples...")
+    total_data_size = len(df)
+    if total_data_size == 0:
+        return {}, [], [], []
+
+    # Per-row results
+    metrics_per_row = []
+    parsed_predictions_per_row = []
+    ground_truth_labels_per_row = []
+    correctness_flags_per_row = []
+
+    # R2 calculation lists
+    predictions_for_r2 = []
+    ground_truths_for_r2 = []
+    parseable_predictions_for_r2 = []
+    parseable_ground_truths_for_r2 = []
+
+    # Aggregate counts
+    full_correct_count = 0
+    parseable_count = 0
+    parseable_correct_count = 0
+    mse_sum = 0.0
+    parseable_mse_sum = 0.0
+    wrong_number_of_answers = 0
+    task_type = "unknown" # Determine from first valid row
+
+    for _, row in df.iterrows():
+        # --- Extract data for the row ---
+        data_source = row.get('data_source', None)
+        if not data_source:
+            print(f"Warning: Missing 'data_source' in row. Skipping metric calculation for this row.")
+            metrics_per_row.append(None) # Placeholder
+            parsed_predictions_per_row.append(None)
+            ground_truth_labels_per_row.append(None)
+            correctness_flags_per_row.append(False)
+            continue
+
+        if data_source not in supported_datasets:
+             print(f"Warning: Unknown data_source '{data_source}'. Skipping.")
+             continue
+
+        current_task_type = supported_datasets[data_source]['type']
+        if task_type == "unknown":
+            task_type = current_task_type # Set task type based on first row
+
+        ground_truth_dict = row.get('reward_model', {}).get('ground_truth', None)
+        ground_truth_label = ground_truth_dict.get('label', None) if isinstance(ground_truth_dict, dict) else None
+
+        responses = row.get('responses', [])
+        # Ensure responses is a list and get the first response
+        if not isinstance(responses, list): responses = [responses]
+        response_text = clean_response_text(responses[0]) if responses else ""
+
+        # --- Select functions ---
+        try:
             reward_fn = select_reward_fn(data_source)
-            
-            metric = False
+            parse_fn = select_parse_fn(data_source)
+        except NotImplementedError:
+            print(f"Warning: Reward or parse function not implemented for {data_source}. Skipping metrics.")
+            continue
+        except Exception as e:
+             print(f"Error selecting functions for {data_source}: {e}. Skipping.")
+             continue
+
+
+        # --- Evaluate ---
+        metric_value = 0.0
+        is_correct = False
+        parsed_prediction = None
+        is_parseable = False
+
+        if ground_truth_label is not None:
             try:
-                metric = reward_fn(cleaned_response_text, ground_truth)
-            except Exception:
-                _, metric = get_prediction_result(cleaned_response_text, ground_truth, task_type)
-            
-            if metric:
-                correct_mask.append(idx)
-            else:
-                incorrect_mask.append(idx)
-        
-        correct_df = df.loc[correct_mask]
-        incorrect_df = df.loc[incorrect_mask]
-        
-        print(f"Found {len(correct_df)} correct samples and {len(incorrect_df)} incorrect samples")
-        
-        # Calculate how many samples to take from each group
-        total_correct = len(correct_df)
-        total_incorrect = len(incorrect_df)
-        
-        # Aim for 50/50 split if possible
-        target_correct = min(total_correct, max_samples // 2)
-        target_incorrect = min(total_incorrect, max_samples - target_correct)
-        
-        # If one group is smaller than the target, take more from the other group
-        if target_correct < max_samples // 2:
-            target_incorrect = min(total_incorrect, max_samples - target_correct)
-        if target_incorrect < max_samples - target_correct:
-            target_correct = min(total_correct, max_samples - target_incorrect)
-        
-        # Sample from each group
-        sampled_correct = correct_df.sample(n=target_correct, random_state=42) if target_correct > 0 else pd.DataFrame()
-        sampled_incorrect = incorrect_df.sample(n=target_incorrect, random_state=43) if target_incorrect > 0 else pd.DataFrame()
-        
-        # Combine the samples
-        display_df = pd.concat([sampled_correct, sampled_incorrect])
-        
-        # Shuffle the combined samples to avoid clustering
-        display_df = display_df.sample(frac=1, random_state=44)
-        
-        balanced_sampling = True
-        print(f"Sampled {target_correct} correct samples and {target_incorrect} incorrect samples for visualization")
-        print(f"Total samples for visualization: {len(display_df)}")
-    
-    # Statistics for displayed samples
-    displayed_samples = len(display_df)
-    displayed_correct_predictions = 0
-    
-    # Determine the output file path
-    if save_dir:
-        output_dir = Path(save_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        output_filename = f"{Path(input_file).stem}_visualization.{output_format}"
-        output_file = output_dir / output_filename
-    else:
-        output_dir = Path(input_file).parent
-        output_filename = f"{Path(input_file).stem}_visualization.{output_format}"
-        output_file = output_dir / output_filename
-    
-    print(f"Output file: {output_file}")
-    
-    if output_format == "html":
-        # HTML output
-        html_content = [
-            "<!DOCTYPE html>",
-            "<html>",
-            "<head>",
-            "    <meta charset=\"UTF-8\">",
-            "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">",
-            "    <title>ICL Reasoning Results - Accuracy: " + f"{accuracy*100:.2f}%" + "</title>" if task_type == "classification" else "ICL Reasoning Results - MSE: " + f"{refined_accuracy:.4f}",
-            "    <style>",
-            "        body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }",
-            "        .sample { border: 1px solid #ddd; padding: 15px; margin-bottom: 20px; border-radius: 5px; }",
-            "        .section { margin-bottom: 15px; }",
-            "        .section-title { font-weight: bold; background-color: #f5f5f5; padding: 5px; }",
-            "        .prompt { white-space: pre-wrap; font-family: monospace; max-height: 200px; overflow-y: auto; }",
-            "        .response { white-space: pre-wrap; font-family: monospace; }",
-            "        .think { background-color: #f9f9f9; padding: 10px; border-left: 3px solid #ccc; }",
-            "        .answer { font-weight: bold; }",
-            "        .correct { color: green; }",
-            "        .incorrect { color: red; }",
-            "        .summary { background-color: #eef; padding: 15px; margin-bottom: 20px; border-radius: 5px; }",
-            "        table { border-collapse: collapse; width: 100%; }",
-            "        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }",
-            "        th { background-color: #f2f2f2; }",
-            "        /* Simple and clear accuracy style */",
-            "        .accuracy-big { font-size: 24px; font-weight: bold; color: #333; margin: 20px 0; padding: 10px; background-color: #e9ffe9; border: 2px solid green; }",
-            "        .refined-accuracy { color: #1565C0; }",
-            "    </style>",
-            "</head>",
-            "<body>",
-        ]
-        
-        # Add summary before all samples
-        sampled_note = ""
-        balance_note = ""
-        if max_samples > 0 and max_samples < total_data_size:
-            sampled_note = f" (showing {displayed_samples} out of {total_data_size})"
-            if balanced_sampling:
-                balance_note = f"<div>Balanced sampling: {target_correct} correct, {target_incorrect} incorrect</div>"
-        
-        # Directly add title and accuracy information at top of page without complex positioning or JavaScript
-        top_content = [
-            f'<!-- ACCURACY DATA: {accuracy:.2f}% | REFINED: {refined_accuracy:.2f}% | UNPARSEABLE: {unparseable_predictions} -->',
-            f'<h1>ICL Reasoning Results: {Path(input_file).name}</h1>',
-            f'<div class="accuracy-big">',
-            f'Accuracy: {accuracy*100:.2f}% &nbsp;|&nbsp; Refined Accuracy: {refined_accuracy*100:.2f}%' if task_type == "classification" else f'Accuracy: {accuracy:.2f} &nbsp;|&nbsp; Refined MSE: {-refined_accuracy:.4f}',
-            f'</div>',
-            f'<div class="accuracy-big" style="background-color: #e9f0ff; border-color: #1565C0;">',
-            f'Parseable Accuracy: {parseable_accuracy*100:.2f}% (excluding {unparseable_predictions} unparseable samples)' if task_type == "classification" else f'Parseable Accuracy: {-parseable_accuracy:.2f} (excluding {unparseable_predictions} unparseable samples)',
-            f'</div>',
-            f'<div>Unparseable Predictions: {unparseable_predictions} ({unparseable_predictions/total_data_size*100:.2f}%)</div>',
-            f'</div>',
-            f'<div>Wrong Number of Answers: {wrong_number_of_answer} ({wrong_number_of_answer/total_data_size*100:.2f}%)</div>',
-            f'<div>Correct threshold: {REGRESSION_CORRECT_THRESHOLD} </div>' if task_type == "regression" else "",
-            f'<hr style="margin: 20px 0; border: 0; height: 2px; background: #333;">',
-        ]
-        
-        summary_html = [
-            f'<div class="summary">',
-            f'<h2>Results Summary</h2>',
-            f'<table>',
-            f'<tr><th>Metric</th><th>Value</th></tr>',
-            f'<tr><td>Total Samples{sampled_note}</td><td>{total_data_size}</td></tr>',
-            f'<tr><td>Correct Predictions (all data)</td><td>{full_correct_predictions}</td></tr>' if task_type == "classification" else "",
-            f'<tr><td>Accuracy (all data)</td><td>{accuracy*100:.2f}%</td></tr>' 
-            f'<tr><td>Refined Accuracy</td><td>{refined_accuracy*100:.2f}%</td></tr>' if task_type == "classification" else f'<tr><td>MSE</td><td>{-refined_accuracy:.4f}</td></tr>',
-            f'<tr><td>Parseable Accuracy</td><td>{parseable_accuracy*100:.2f}% ({parseable_predictions}/{total_data_size} samples)</td></tr>',
-            f'<tr><td>Parseable MSE</td><td>{-parseable_refined_accuracy:.4f} ({parseable_predictions}/{total_data_size} samples)</td></tr>'  if task_type == "regression" else f'<tr><td>Parseable Refined Accuracy</td><td>{parseable_refined_accuracy*100:.2f}% ({parseable_predictions}/{total_data_size} samples)</td></tr>', 
-            f'<tr><td>Unparseable Predictions</td><td>{unparseable_predictions} ({unparseable_predictions/total_data_size*100:.2f}%)</td></tr>',
-            f'</table>',
-            f'{balance_note}',
-            f'</div>'
-        ]
-        
-        # Add content to HTML body
-        html_content = html_content + top_content + summary_html
-        
-        # Process each sample
-        for idx, row in display_df.iterrows():
-            # Get ground truth label
-            ground_truth = None
-            if 'reward_model' in row and isinstance(row['reward_model'], dict):
-                ground_truth_data = row['reward_model'].get('ground_truth', None)
-                if isinstance(ground_truth_data, dict) and 'label' in ground_truth_data:
-                    ground_truth = ground_truth_data
-            
-            # Get data source for reward function selection
-            data_source = row.get('data_source')
-            
-            # Process responses
-            responses = row.get('responses', [])
-            
-            # Handle different types of response data
-            if responses is None:
-                responses = ["No response available"]
-            elif not isinstance(responses, list):
-                # Try to convert to list if it's another iterable
-                try:
-                    responses = list(responses)
-                except (TypeError, ValueError):
-                    responses = [responses]
-            
-            # Get first response (assuming single response per example)
-            response_text = responses[0] if responses and len(responses) > 0 else "No response generated"
-            
-            # Ensure response_text is a string
-            if not isinstance(response_text, str):
-                try:
-                    if isinstance(response_text, bytes):
-                        response_text = response_text.decode('utf-8')
-                    else:
-                        response_text = str(response_text)
-                except Exception as e:
-                    print(f"Warning: Could not convert response to string: {e}")
-                    response_text = str(response_text)  # Last resort
-            
-            # Filter out <|endoftext|> tags
-            response_text = response_text.replace("<|endoftext|>", "")
-            
-            # Get input prompt content
-            input_prompt = row.get('prompt')
-            input_prompt_content = None
-            if input_prompt and isinstance(input_prompt, list) and len(input_prompt) > 0:
-                if isinstance(input_prompt[0], dict) and 'content' in input_prompt[0]:
-                    input_prompt_content = input_prompt[0]['content']
-            
-            # Clean response text
-            cleaned_response_text = clean_response_text(response_text, input_prompt_content)
-            
-            # Remove prompt content from response
-            if input_prompt_content:
-                cleaned_response_text = cleaned_response_text.replace(input_prompt_content, "")
-            
-            # Preserve original content, don't extract thinking and answer
-            raw_thinking = extract_think_content(cleaned_response_text)
-            raw_answer = extract_answer_content(cleaned_response_text)
-            
-            # Calculate token length
-            token_length = calculate_token_length(cleaned_response_text, tokenizer)
-            
-            # Get reward function for the data source
-            reward_fn = select_reward_fn(data_source)
-            
-            # Extract prediction function
-            extract_answer=_select_parse_fn(data_source)
+                # Calculate metric (reward)
+                metric_value = reward_fn(response_text, ground_truth_dict)
 
-            # Evaluate with the appropriate reward function
-            metric = False
-            prediction = None
-            
-            # First try with the dedicated reward function
-            metric = reward_fn(cleaned_response_text, ground_truth)
+                # Attempt to parse prediction
+                parsed_prediction = parse_fn(response_text)
 
-            
-            # Extract prediction for display with enhanced matching
-            prediction = None
-            # First check if there's a clean answer tag
-            if raw_answer and raw_answer.strip().isdigit():
-                prediction = int(raw_answer.strip())
-            else:
-                # Try to extract prediction using get_prediction_result function
-                parsed_prediction = extract_answer(cleaned_response_text)
-                if parsed_prediction is not None:
-                    prediction = parsed_prediction
-                elif ground_truth and 'label' in ground_truth and metric:
-                    # If correct but can't parse prediction, use ground truth
-                    prediction = ground_truth['label']
-                
-            
-            if task_type == "classification" and metric: displayed_correct_predictions += 1
-            
-            # Start building the sample HTML
-            html_content.append(f'<div class="sample">')
-            html_content.append(f'<h2>Sample {idx+1}</h2>')
-            
-            # Add ICL and Test Data Configuration section
-            html_content.append(f'<div class="section">')
-            html_content.append(f'<div class="section-title">Configuration Information</div>')
-            html_content.append(f'<details>')
-            html_content.append(f'<summary>Show Configuration</summary>')
-            
-            # Display ICL Meta Info
-            html_content.append(f'<div style="margin-top: 10px;">')
-            html_content.append(f'<h4>ICL Example Meta Info</h4>')
-            
-            icl_meta_info = row.get('icl_example_meta_info', [])
-            if icl_meta_info is not None:
-                # Convert NumPy arrays to regular Python types
-                if hasattr(icl_meta_info, '__iter__') and not isinstance(icl_meta_info, (str, dict)):
-                    # For iterable objects like arrays and lists
-                    html_content.append(f'<table style="width: 100%; border-collapse: collapse;">')
-                    html_content.append(f'<tr style="background-color: #f2f2f2;"><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Index</th><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Value</th></tr>')
-                    
-                    for i, item in enumerate(icl_meta_info):
-                        # Convert each item to regular python type if needed
-                        if hasattr(item, 'item') and callable(getattr(item, 'item')):
-                            try:
-                                item = item.item()  # Convert NumPy scalar to Python scalar
-                            except:
-                                item = str(item)
-                        elif hasattr(item, 'tolist') and callable(getattr(item, 'tolist')):
-                            try:
-                                item = item.tolist()  # Convert NumPy array to Python list
-                            except:
-                                item = str(item)
-                        
-                        if isinstance(item, dict):
-                            # Handle dict items
-                            for key, value in item.items():
-                                # Convert numpy values to regular Python types
-                                if hasattr(value, 'item') and callable(getattr(value, 'item')):
-                                    try:
-                                        value = value.item()
-                                    except:
-                                        value = str(value)
-                                elif hasattr(value, 'tolist') and callable(getattr(value, 'tolist')):
-                                    try:
-                                        value = value.tolist()
-                                    except:
-                                        value = str(value)
-                                html_content.append(f'<tr><td style="border: 1px solid #ddd; padding: 8px;">{key}</td><td style="border: 1px solid #ddd; padding: 8px;">{value}</td></tr>')
-                        else:
-                            # Handle non-dict items
-                            html_content.append(f'<tr><td style="border: 1px solid #ddd; padding: 8px;">{i}</td><td style="border: 1px solid #ddd; padding: 8px;">{item}</td></tr>')
-                    
-                    html_content.append(f'</table>')
-                elif isinstance(icl_meta_info, dict):
-                    # If meta_info is a dictionary, show its key-value pairs
-                    html_content.append(f'<table style="width: 100%; border-collapse: collapse;">')
-                    html_content.append(f'<tr style="background-color: #f2f2f2;"><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Property</th><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Value</th></tr>')
-                    
-                    for key, value in icl_meta_info.items():
-                        # Convert numpy values to regular Python types
-                        if hasattr(value, 'item') and callable(getattr(value, 'item')):
-                            try:
-                                value = value.item()  # Convert NumPy scalar to Python scalar
-                            except:
-                                value = str(value)
-                        elif hasattr(value, 'tolist') and callable(getattr(value, 'tolist')):
-                            try:
-                                value = value.tolist()  # Convert NumPy array to Python list
-                            except:
-                                value = str(value)
-                        html_content.append(f'<tr><td style="border: 1px solid #ddd; padding: 8px;">{key}</td><td style="border: 1px solid #ddd; padding: 8px;">{value}</td></tr>')
-                    
-                    html_content.append(f'</table>')
-                else:
-                    # If it's not iterable or dict (scalar values)
-                    value = icl_meta_info
-                    if hasattr(value, 'item') and callable(getattr(value, 'item')):
-                        try:
-                            value = value.item()
-                        except:
-                            value = str(value)
-                    elif hasattr(value, 'tolist') and callable(getattr(value, 'tolist')):
-                        try:
-                            value = value.tolist()
-                        except:
-                            value = str(value)
-                    html_content.append(f'<div>{value}</div>')
-            else:
-                html_content.append(f'<div>No ICL meta information available</div>')
-            
-            html_content.append(f'</div>')
-            
-            # Display Test Data Configuration
-            html_content.append(f'<div style="margin-top: 20px;">')
-            html_content.append(f'<h4>Test Data Configuration</h4>')
-            
-            test_data_config = row.get('test_data', {})
-            if test_data_config and isinstance(test_data_config, dict):
-                html_content.append(f'<table style="width: 100%; border-collapse: collapse;">')
-                html_content.append(f'<tr style="background-color: #f2f2f2;"><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Property</th><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Value</th></tr>')
-                
-                for key, value in test_data_config.items():
-                    html_content.append(f'<tr><td style="border: 1px solid #ddd; padding: 8px;">{key}</td><td style="border: 1px solid #ddd; padding: 8px;">{value}</td></tr>')
-                
-                html_content.append(f'</table>')
-            else:
-                html_content.append(f'<div>No test data configuration available</div>')
-            
-            html_content.append(f'</div>')
-            
-            # Display extra info if available
-            if 'extra_info' in row and isinstance(row['extra_info'], dict):
-                html_content.append(f'<div style="margin-top: 20px;">')
-                html_content.append(f'<h4>Extra Information</h4>')
-                
-                extra_info = row['extra_info']
-                html_content.append(f'<table style="width: 100%; border-collapse: collapse;">')
-                html_content.append(f'<tr style="background-color: #f2f2f2;"><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Property</th><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Value</th></tr>')
-                
-                for key, value in extra_info.items():
-                    html_content.append(f'<tr><td style="border: 1px solid #ddd; padding: 8px;">{key}</td><td style="border: 1px solid #ddd; padding: 8px;">{value}</td></tr>')
-                
-                html_content.append(f'</table>')
-                html_content.append(f'</div>')
-            
-            html_content.append(f'</details>')
-            html_content.append(f'</div>')
-            
-            # Data source
-            if 'data_source' in row:
-                html_content.append(f'<div class="section">')
-                html_content.append(f'<div class="section-title">Data Source</div>')
-                html_content.append(f'<div>{row["data_source"]}</div>')
-                html_content.append(f'</div>')
-            
-            # Add ICL Examples section (collapsed by default)
-            if 'icl_examples' in row:
-                html_content.append(f'<div class="section">')
-                html_content.append(f'<div class="section-title">ICL Examples</div>')
-                html_content.append(f'<details>')
-                html_content.append(f'<summary>Show ICL Examples</summary>')
-                
-                icl_examples = row.get('icl_examples', [])
-                
-                # Handle various formats of ICL examples
-                if isinstance(icl_examples, str):
-                    try:
-                        # Try to parse as JSON if it's a string representation of a list
-                        if icl_examples.startswith('[') and icl_examples.endswith(']'):
-                            icl_examples = json.loads(icl_examples)
-                        else:
-                            icl_examples = [icl_examples]
-                    except:
-                        icl_examples = [icl_examples]
-                
-                html_content.append(f'<div style="font-size: 0.9em; margin-bottom: 10px;"><b>Total ICL Examples: {len(icl_examples)}</b></div>')
-                
-                # Display each ICL example
-                for i, example in enumerate(icl_examples):
-                    html_content.append(f'<div style="border: 1px solid #ddd; margin-bottom: 10px; padding: 10px; border-radius: 5px;">')
-                    html_content.append(f'<h4>Example {i+1}</h4>')
-                    
-                    # Try to parse the example if it's a string
-                    example_data = None
-                    if isinstance(example, str):
-                        try:
-                            example_data = json.loads(example)
-                        except:
-                            # If not valid JSON, just use as text
-                            pass
-                    else:
-                        example_data = example
-                    
-                    if example_data and isinstance(example_data, dict):
-                        # Extract prompt content
-                        if 'prompt' in example_data:
-                            prompt_content = None
-                            if isinstance(example_data['prompt'], list) and len(example_data['prompt']) > 0:
-                                if isinstance(example_data['prompt'][0], dict) and 'content' in example_data['prompt'][0]:
-                                    prompt_content = example_data['prompt'][0]['content']
-                            elif isinstance(example_data['prompt'], dict) and 'content' in example_data['prompt']:
-                                prompt_content = example_data['prompt']['content']
-                            
-                            if prompt_content:
-                                prompt_token_length = calculate_token_length(prompt_content, tokenizer)
-                                html_content.append(f'<div><b>Prompt:</b> <span style="color:#666; font-size:0.9em;">[{prompt_token_length} tokens]</span></div>')
-                                html_content.append(f'<div style="white-space: pre-wrap; font-family: monospace; background-color: #f5f5f5; padding: 5px; margin-bottom: 5px; max-height: 200px; overflow-y: auto;">{html.escape(prompt_content)}</div>')
-                        
-                        # Extract reasonings
-                        if 'reasonings' in example_data and example_data['reasonings']:
-                            reasonings = example_data['reasonings']
-                            if isinstance(reasonings, list) and len(reasonings) > 0:
-                                reasoning_text = reasonings[0]
-                            else:
-                                reasoning_text = str(reasonings)
-                            
-                            # 计算token数量
-                            reasoning_token_length = calculate_token_length(reasoning_text, tokenizer)
-                            html_content.append(f'<div><b>Reasoning:</b> <span style="color:#666; font-size:0.9em;">[{reasoning_token_length} tokens]</span></div>')
-                            html_content.append(f'<div style="white-space: pre-wrap; font-family: monospace; background-color: #f5f5f5; padding: 5px; margin-bottom: 5px; max-height: 150px; overflow-y: auto;">{html.escape(reasoning_text)}</div>')
-                        
-                        # Extract responses
-                        if 'responses' in example_data and example_data['responses']:
-                            responses = example_data['responses']
-                            if isinstance(responses, list) and len(responses) > 0:
-                                response_text = responses[0]
-                            else:
-                                response_text = str(responses)
-                            
-                            # 计算token数量
-                            response_token_length = calculate_token_length(response_text, tokenizer)
-                            html_content.append(f'<div><b>Response:</b> <span style="color:#666; font-size:0.9em;">[{response_token_length} tokens]</span></div>')
-                            html_content.append(f'<div style="white-space: pre-wrap; font-family: monospace; background-color: #f5f5f5; padding: 5px; max-height: 150px; overflow-y: auto;">{html.escape(response_text)}</div>')
-                        
-                        # Extract data source if available
-                        example_data_source = None
-                        if 'data_source' in example_data:
-                            example_data_source = example_data['data_source']
-                        elif data_source:  # Use the row's data_source as fallback
-                            example_data_source = data_source
-                        
-                        if example_data_source:
-                            html_content.append(f'<div><b>Data Source:</b> {example_data_source}</div>')
-                        
-                        # Extract features and label if available
-                        if 'features' in example_data and isinstance(example_data['features'], list):
-                            if isinstance(example_data['features'][0], list):
-                                for example in example_data['features']:
-                                    features_str = ", ".join([f"{x:.3f}" for x in example])
-                                    html_content.append(f'<div><b>Features:</b> [{features_str}]</div>')
-                            else:
-                                features = example_data['features']
-                                features_str = ", ".join([f"{x:.3f}" for x in features])
-                                html_content.append(f'<div><b>Features:</b> [{features_str}]</div>')
-                        
-                        if 'ground_truth' in example_data and isinstance(example_data['ground_truth'], dict):
-                            ground_truth = example_data['ground_truth']
-                            if 'label' in ground_truth:
-                                html_content.append(f'<div><b>Label:</b> {ground_truth["label"]}</div>')
-                    else:
-                        # Just display the raw example text
-                        html_content.append(f'<div style="white-space: pre-wrap; font-family: monospace; max-height: 300px; overflow-y: auto;">{html.escape(str(example))}</div>')
-                    
-                    html_content.append(f'</div>')
-                
-                html_content.append(f'</details>')
-                html_content.append(f'</div>')
-            
-            # Add Test Examples section (collapsed by default)
-            if 'test_examples' in row:
-                html_content.append(f'<div class="section">')
-                html_content.append(f'<div class="section-title">Test Examples</div>')
-                html_content.append(f'<details>')
-                html_content.append(f'<summary>Show Test Examples</summary>')
-                
-                test_examples = row.get('test_examples', '[]')
-                
-                # Parse test examples - expected to be a JSON string of lists of tuples
-                try:
-                    if isinstance(test_examples, str):
-                        test_examples = json.loads(test_examples)
-                except Exception as e:
-                    test_examples = []
-                    print(f"Error parsing test examples: {e}")
-                
-                html_content.append(f'<div style="font-size: 0.9em; margin-bottom: 10px;"><b>Total Test Examples: {len(test_examples)}</b></div>')
-                
-                # Display test examples in a table for better readability
-                if test_examples:
-                    html_content.append(f'<table style="width: 100%; border-collapse: collapse;">')
-                    html_content.append(f'<tr style="background-color: #f2f2f2;"><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Example</th><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Features</th><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Label</th></tr>')
-                    
-                    for i, example in enumerate(test_examples):
-                        # Test examples are typically (features, label) tuples
-                        if isinstance(example, (list, tuple)) and len(example) >= 2:
-                            features, label = example[0], example[1]
-                            
-                            # Format features for display
-                            if isinstance(features, (list, tuple)):
-                                features_str = ", ".join([f"{x:.3f}" for x in features])
-                                features_display = f"[{features_str}]"
-                            else:
-                                features_display = str(features)
-                            
-                            label_display = str(label)
-                            
-                            html_content.append(f'<tr><td style="border: 1px solid #ddd; padding: 8px;">{i+1}</td><td style="border: 1px solid #ddd; padding: 8px; font-family: monospace;">{features_display}</td><td style="border: 1px solid #ddd; padding: 8px;">{label_display}</td></tr>')
-                    
-                    html_content.append(f'</table>')
-                else:
-                    html_content.append(f'<div>No test examples found or unable to parse</div>')
-                
-                html_content.append(f'</details>')
-                html_content.append(f'</div>')
-            
-            # Input Prompt
-            html_content.append(f'<div class="section">')
-            html_content.append(f'<div class="section-title">Input Prompt</div>')
-            
-            prompt = row.get('prompt', None)
-            if prompt is not None:
-                if isinstance(prompt, list) or isinstance(prompt, np.ndarray):
-                    # Handle list of prompt items
-                    html_content.append(f'<details>')
-                    html_content.append(f'<summary>Show Input Prompt</summary>')
-                    html_content.append(f'<div class="prompt">')
-                    for prompt_item in prompt:
-                        if isinstance(prompt_item, dict):
-                            if 'role' in prompt_item:
-                                html_content.append(f'<b>{prompt_item["role"]}:</b><br>')
-                            if 'content' in prompt_item:
-                                content = prompt_item["content"]
-                                
-                                if content:
-                                    # Escape HTML content
-                                    escaped_content = html.escape(content)
-                                    html_content.append(f'{escaped_content}<br><br>')
-                        elif isinstance(prompt_item, list):
-                            for item in prompt_item:
-                                html_content.append(f"{str(item['content'])}<br>")
-                    html_content.append(f'</div>')
-                    html_content.append(f'</details>')
-                else:
-                    # Handle string or other type of prompt
-                    html_content.append(f'<details>')
-                    html_content.append(f'<summary>Show Input Prompt</summary>')
-                    # Escape HTML content
-                    escaped_prompt = html.escape(str(prompt))
-                    html_content.append(f'<div class="prompt">{escaped_prompt}</div>')
-                    html_content.append(f'</details>')
-            else:
-                html_content.append(f'<div>No prompt available</div>')
-            
-            html_content.append(f'</div>')
-            
-            # Ground truth and features
-            html_content.append(f'<div class="section">')
-            html_content.append(f'<div class="section-title">Ground Truth</div>')
-            if ground_truth is not None:
-                features_str = ""
-                if 'features' in ground_truth:
-                    features = ground_truth['features']
-                    if isinstance(features, list):
-                        features_str = ", ".join([f"{x:.3f}" for x in features])
-                        features_str = f"[{features_str}]"
-                    else:
-                        features_str = str(features)
-                html_content.append(f'<div>Label: {ground_truth.get("label", "N/A")}</div>')
-                if features_str:
-                    html_content.append(f'<div>Features: {features_str}</div>')
-            else:
-                html_content.append(f'<div>Not available</div>')
-            html_content.append(f'</div>')
-            
-            # Prediction result (still displayed because it's useful to the user)
-            html_content.append(f'<div class="section">')
-            html_content.append(f'<div class="section-title">Prediction Result</div>')
-            if prediction is not None:
+                # Check parseability and length match
+                if isinstance(parsed_prediction, (list, np.ndarray)) and \
+                   isinstance(ground_truth_label, (list, np.ndarray)) and \
+                   len(parsed_prediction) == len(ground_truth_label) and \
+                   parsed_prediction != []: # Check if parse_fn returned non-empty list for success
+                    is_parseable = True
+                elif not isinstance(parsed_prediction, (list, np.ndarray)) and \
+                     not isinstance(ground_truth_label, (list, np.ndarray)) and \
+                     parsed_prediction is not None and \
+                   len(parsed_prediction) == len(ground_truth_label): # Handle scalar case
+                    is_parseable = True
+                elif isinstance(parsed_prediction, (list, np.ndarray)) and parsed_prediction == []:
+                     # Explicitly treat empty list as unparseable if parse_fn indicates failure this way
+                     is_parseable = False
+                     wrong_number_of_answers += 1
+                elif parsed_prediction is not None: # Parsed something, but length mismatch
+                    is_parseable = False # Treat length mismatch as unparseable for stats
+                    wrong_number_of_answers += 1
+                else: # parse_fn returned None
+                     is_parseable = False
+
+                # Determine correctness based on task type and metric/threshold
                 if task_type == "classification":
-                    result_class = "correct" if metric==1 else "incorrect"
-                    html_content.append(f'<div class="{result_class}">Predicted: {prediction} ({("CORRECT" if metric else "INCORRECT")})</div>')
+                    is_correct = (metric_value == 1.0)
+                    mse_sum += (1.0 - metric_value) # Treat accuracy as 1 - error rate for consistency
+                    if is_parseable: parseable_mse_sum += (1.0 - metric_value)
+                elif task_type == "regression":
+                    # metric_value is likely negative MSE from reward_fn
+                    is_correct = (metric_value >= regression_threshold)
+                    mse_sum += (-metric_value) # Accumulate positive MSE
+                    if is_parseable: parseable_mse_sum += (-metric_value)
                 else:
-                    result_class = "correct" if metric>REGRESSION_CORRECT_THRESHOLD else "incorrect"
-                    html_content.append(f'<div class="{result_class}">Predicted: {prediction} ({("CORRECT" if (result_class=="correct") else "INCORRECT")})</div>')
-                    html_content.append(f'<div class="{result_class}">MSE: {metric}</div>')
+                    is_correct = bool(metric_value) # Generic fallback
+                    # Cannot reliably calculate MSE/Accuracy for unknown tasks
+
+            except Exception as e:
+                print(f"Error processing row with data_source {data_source}: {e}")
+                # Keep defaults (False, None, False)
+
+            # --- Update counts and lists ---
+            if is_parseable:
+                parseable_count += 1
+                if is_correct:
+                    full_correct_count += 1
+                    parseable_correct_count += 1
+                # R2 lists (only if parseable and regression)
+                if task_type == "regression":
+                    parseable_predictions_for_r2.append(safe_tolist(parsed_prediction))
+                    parseable_ground_truths_for_r2.append(safe_tolist(ground_truth_label))
+                    predictions_for_r2.append(safe_tolist(parsed_prediction))
+                    ground_truths_for_r2.append(safe_tolist(ground_truth_label))
             else:
-                html_content.append(f'<div class="incorrect">Unable to parse prediction</div>')
-            
-            # Add token length information
-            html_content.append(f'<div style="margin-top: 5px; color: #666;">Response Token Length: {token_length}</div>')
-            
-            html_content.append(f'</div>')
-            
-            # Restore collapsible full response, but don't extract tag content
-            html_content.append(f'<details open>')
-            html_content.append(f'<summary>Model Response (Cleaned)</summary>')
-            html_content.append(f'<div class="section">')
-            # Use html.escape to ensure tags display correctly, not interpreted as HTML tags
-            escaped_response = html.escape(cleaned_response_text)
-            html_content.append(f'<div class="response" style="white-space: pre-wrap; font-family: monospace;">{escaped_response}</div>')
-            html_content.append(f'</div>')
-            html_content.append(f'</details>')
-            
-            # End sample div
-            html_content.append(f'</div>')
-        
-        # Close HTML tags
-        html_content.append("</body>")
-        html_content.append("</html>")
-        
-        # Write to file
+                 if is_correct: # Still count correct if metric says so, even if unparseable
+                      full_correct_count += 1
+                 # Add random prediction for R2 calculation if unparseable regression
+                 if task_type == "regression":
+                      num_labels = len(safe_tolist(ground_truth_label))
+                      random_pred = [random.uniform(0, 10) for _ in range(num_labels)]
+                      if num_labels == 1: random_pred = random_pred[0] # Scalar if needed
+                      predictions_for_r2.append(random_pred)
+                      ground_truths_for_r2.append(safe_tolist(ground_truth_label))
+
+        # Store per-row results
+        metrics_per_row.append(metric_value)
+        parsed_predictions_per_row.append(safe_tolist(parsed_prediction)) # Ensure basic types
+        ground_truth_labels_per_row.append(safe_tolist(ground_truth_label))
+        correctness_flags_per_row.append(is_correct)
+
+    # --- Calculate final aggregate metrics ---
+    accuracy = (full_correct_count / total_data_size) if total_data_size > 0 else 0
+    parseable_accuracy = (parseable_correct_count / parseable_count) if parseable_count > 0 else 0
+    parseable_proportion = (parseable_count / total_data_size) if total_data_size > 0 else 0
+    unparseable_count = total_data_size - parseable_count
+
+    metrics_dict = {
+        "total_samples": total_data_size,
+        "parseable_samples": parseable_count,
+        "unparseable_samples": unparseable_count,
+        "parseable_proportion": parseable_proportion * 100,
+        "wrong_number_of_answers": wrong_number_of_answers,
+    }
+
+    if task_type == "classification":
+        refined_accuracy = (mse_sum / total_data_size) # This is actually avg error rate
+        parseable_refined_accuracy = (parseable_mse_sum / parseable_count) if parseable_count > 0 else 0
+        metrics_dict.update({
+            "overall_accuracy": accuracy * 100,
+            "accuracy_per_point": (1.0 - refined_accuracy) * 100, # Convert error rate back to accuracy
+            "parseable_accuracy": parseable_accuracy * 100,
+            "parseable_accuracy_per_point": (1.0 - parseable_refined_accuracy) * 100,
+        })
+        print(f"Overall Accuracy: {metrics_dict['overall_accuracy']:.2f}%")
+        print(f"Parseable Accuracy: {metrics_dict['parseable_accuracy']:.2f}% ({parseable_count}/{total_data_size})")
+
+    elif task_type == "regression":
+        overall_mse = (mse_sum / total_data_size) if total_data_size > 0 else 0
+        parseable_mse = (parseable_mse_sum / parseable_count) if parseable_count > 0 else 0
+        r2 = r2_score(ground_truths_for_r2, predictions_for_r2) if r2_score and ground_truths_for_r2 else 0.0
+        parseable_r2 = r2_score(parseable_ground_truths_for_r2, parseable_predictions_for_r2) if r2_score and parseable_ground_truths_for_r2 else 0.0
+
+        metrics_dict.update({
+            "overall_accuracy_threshold": accuracy * 100, # Based on threshold
+            "overall_mse": overall_mse,
+            "parseable_accuracy_threshold": parseable_accuracy * 100, # Based on threshold
+            "parseable_mse": parseable_mse,
+            "r2_score": r2,
+            "parseable_r2_score": parseable_r2,
+        })
+        print(f"Overall MSE: {metrics_dict['overall_mse']:.4f}")
+        print(f"Parseable MSE: {metrics_dict['parseable_mse']:.4f} ({parseable_count}/{total_data_size})")
+        print(f"Overall R2 Score: {metrics_dict['r2_score']:.4f}")
+        print(f"Parseable R2 Score: {metrics_dict['parseable_r2_score']:.4f}")
+
+    print(f"Unparseable Predictions: {unparseable_count} ({unparseable_count/total_data_size*100:.2f}%)")
+    print(f"Wrong Number of Answers (Length Mismatch): {wrong_number_of_answers} ({wrong_number_of_answers/total_data_size*100:.2f}%)")
+
+    return metrics_dict, correctness_flags_per_row, parsed_predictions_per_row, ground_truth_labels_per_row
+
+
+def sample_data_for_visualization(
+    df: pd.DataFrame,
+    max_samples: int,
+    correctness_flags: List[bool]
+) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    """Samples data for visualization, aiming for a balanced correct/incorrect split."""
+    total_data_size = len(df)
+    sampling_info = {"sampled": False, "target_correct": 0, "target_incorrect": 0}
+
+    if max_samples <= 0 or max_samples >= total_data_size:
+        return df, sampling_info # Return full dataframe if no sampling needed
+
+    print("Sampling data for visualization...")
+    correct_indices = [i for i, correct in enumerate(correctness_flags) if correct]
+    incorrect_indices = [i for i, correct in enumerate(correctness_flags) if not correct]
+
+    correct_df = df.iloc[correct_indices]
+    incorrect_df = df.iloc[incorrect_indices]
+    print(f"Found {len(correct_df)} correct samples and {len(incorrect_df)} incorrect samples")
+
+    # Calculate how many samples to take from each group
+    total_correct = len(correct_df)
+    total_incorrect = len(incorrect_df)
+
+    # Aim for 50/50 split if possible
+    target_correct = min(total_correct, max_samples // 2)
+    target_incorrect = min(total_incorrect, max_samples - target_correct)
+
+    # Adjust if one group is too small
+    if target_correct < max_samples // 2:
+        target_incorrect = min(total_incorrect, max_samples - target_correct)
+    if target_incorrect < max_samples // 2: # Check again after potential adjustment
+        target_correct = min(total_correct, max_samples - target_incorrect)
+
+    # Sample from each group
+    sampled_correct = correct_df.sample(n=target_correct, random_state=42) if target_correct > 0 else pd.DataFrame(columns=df.columns)
+    sampled_incorrect = incorrect_df.sample(n=target_incorrect, random_state=43) if target_incorrect > 0 else pd.DataFrame(columns=df.columns)
+
+    # Combine and shuffle
+    display_df = pd.concat([sampled_correct, sampled_incorrect])
+    display_df = display_df.sample(frac=1, random_state=44).reset_index(drop=True) # Shuffle and reset index
+
+    sampling_info = {"sampled": True, "target_correct": target_correct, "target_incorrect": target_incorrect}
+    print(f"Sampled {target_correct} correct samples and {target_incorrect} incorrect samples for visualization.")
+    print(f"Total samples for visualization: {len(display_df)}")
+
+    return display_df, sampling_info
+
+
+def format_features_for_display(features: Any) -> str:
+     """Formats features (handling lists, arrays, scalars) for HTML/text display."""
+     if isinstance(features, (list, tuple, np.ndarray)):
+         # Check if it's a list/array of lists/arrays (e.g., multiple feature sets for n_query > 1)
+         if features and isinstance(features[0], (list, tuple, np.ndarray)):
+              formatted = []
+              for i, feat_set in enumerate(features):
+                   try:
+                       f_str = ", ".join([f"{x:.3f}" for x in feat_set])
+                       formatted.append(f"{i+1}. [{f_str}]")
+                   except (TypeError, ValueError):
+                       formatted.append(f"{i+1}. {str(feat_set)}")
+              return "<br>".join(formatted) # Use <br> for HTML multiline
+         else: # Single feature set
+              try:
+                   f_str = ", ".join([f"{x:.3f}" for x in features])
+                   return f"[{f_str}]"
+              except (TypeError, ValueError):
+                  return str(features)
+     else: # Scalar or other type
+         return str(features)
+
+
+def generate_html_report(
+    output_file: str,
+    display_df: pd.DataFrame,
+    metrics_dict: Dict[str, Any],
+    sampling_info: Dict[str, Any],
+    tokenizer: Any,
+    input_file_name: str,
+    regression_threshold: float
+):
+    """Generates the HTML report content and writes it to a file."""
+    print(f"Generating HTML report: {output_file}")
+    html_content = [
+        "<!DOCTYPE html><html><head>",
+        "<meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">",
+    ]
+
+    # --- Determine Title ---
+    task_type = supported_datasets.get(display_df.iloc[0].get('data_source', ''), {}).get('type', 'unknown') if not display_df.empty else 'unknown'
+    title = "ICL Reasoning Results"
+    if task_type == "classification":
+        acc = metrics_dict.get('overall_accuracy', 0)
+        title += f" - Accuracy: {acc:.2f}%"
+    elif task_type == "regression":
+         mse = metrics_dict.get('overall_mse', 0)
+         title += f" - MSE: {mse:.4f}"
+
+    html_content.extend([
+         f"<title>{title}</title>",
+         "<style>",
+         "body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }",
+         ".sample { border: 1px solid #ddd; padding: 15px; margin-bottom: 20px; border-radius: 5px; }",
+         ".section { margin-bottom: 15px; }",
+         ".section-title { font-weight: bold; background-color: #f5f5f5; padding: 5px; margin-bottom: 5px;}",
+         ".prompt { white-space: pre-wrap; font-family: monospace; max-height: 300px; overflow-y: auto; background-color: #f8f8f8; padding: 5px; border: 1px solid #eee;}",
+         ".response { white-space: pre-wrap; font-family: monospace; }",
+         ".think { background-color: #f9f9f9; padding: 10px; border-left: 3px solid #ccc; white-space: pre-wrap; font-family: monospace;}",
+         ".answer { font-weight: bold; }",
+         ".correct { color: green; }",
+         ".incorrect { color: red; }",
+         ".summary { background-color: #eef; padding: 15px; margin-bottom: 20px; border-radius: 5px; }",
+         "table { border-collapse: collapse; width: 100%; margin-bottom: 10px;}",
+         "th, td { border: 1px solid #ddd; padding: 8px; text-align: left; vertical-align: top; }",
+         "th { background-color: #f2f2f2; }",
+         ".metrics-table td:nth-child(2) { text-align: right; font-weight: bold; }",
+         "details { margin-bottom: 10px; border: 1px solid #eee; padding: 5px; border-radius: 4px;}",
+         "summary { cursor: pointer; font-weight: bold; }",
+         ".token-count { color:#666; font-size:0.9em; margin-left: 10px; }",
+         "</style></head><body>",
+         f"<h1>ICL Reasoning Results: {Path(input_file_name).name}</h1>",
+    ])
+
+    # --- Summary Section ---
+    html_content.append('<div class="summary"><h2>Results Summary</h2><table class="metrics-table">')
+    html_content.append(f"<tr><td>Total Samples</td><td>{metrics_dict['total_samples']}</td></tr>")
+    if sampling_info["sampled"]:
+        html_content.append(f"<tr><td>Displayed Samples</td><td>{len(display_df)} (Balanced: {sampling_info['target_correct']} correct, {sampling_info['target_incorrect']} incorrect)</td></tr>")
+
+    if task_type == "classification":
+        html_content.append(f"<tr><td>Overall Accuracy</td><td>{metrics_dict.get('overall_accuracy', 0):.2f}%</td></tr>")
+        html_content.append(f"<tr><td>Accuracy Per Point</td><td>{metrics_dict.get('accuracy_per_point', 0):.2f}%</td></tr>")
+        html_content.append(f"<tr><td>Parseable Accuracy</td><td>{metrics_dict.get('parseable_accuracy', 0):.2f}%</td></tr>")
+        html_content.append(f"<tr><td>Parseable Accuracy Per Point</td><td>{metrics_dict.get('parseable_accuracy_per_point', 0):.2f}%</td></tr>")
+    elif task_type == "regression":
+        html_content.append(f"<tr><td>Overall MSE</td><td>{metrics_dict.get('overall_mse', 0):.4f}</td></tr>")
+        html_content.append(f"<tr><td>Parseable MSE</td><td>{metrics_dict.get('parseable_mse', 0):.4f}</td></tr>")
+        html_content.append(f"<tr><td>Overall R2 Score</td><td>{metrics_dict.get('r2_score', 0):.4f}</td></tr>")
+        html_content.append(f"<tr><td>Parseable R2 Score</td><td>{metrics_dict.get('parseable_r2_score', 0):.4f}</td></tr>")
+        html_content.append(f"<tr><td>Correct Threshold (≥)</td><td>{regression_threshold}</td></tr>")
+        html_content.append(f"<tr><td>Overall Accuracy (Threshold)</td><td>{metrics_dict.get('overall_accuracy_threshold', 0):.2f}%</td></tr>")
+        html_content.append(f"<tr><td>Parseable Accuracy (Threshold)</td><td>{metrics_dict.get('parseable_accuracy_threshold', 0):.2f}%</td></tr>")
+
+    html_content.append(f"<tr><td>Parseable Proportion</td><td>{metrics_dict.get('parseable_proportion', 0):.2f}% ({metrics_dict.get('parseable_samples', 0)}/{metrics_dict.get('total_samples', 0)})</td></tr>")
+    html_content.append(f"<tr><td>Unparseable Samples</td><td>{metrics_dict.get('unparseable_samples', 0)}</td></tr>")
+    html_content.append(f"<tr><td>Wrong # Answers</td><td>{metrics_dict.get('wrong_number_of_answers', 0)}</td></tr>")
+    html_content.append("</table></div>")
+
+    # --- Individual Samples ---
+    for idx, row in display_df.iterrows():
+        # --- Extract data ---
+        # Use safe_tolist to handle potential numpy types from sampling/concat
+        row_dict = safe_tolist(row.to_dict())
+
+        data_source = row_dict.get('data_source', 'unknown')
+        prompt_data = row_dict.get('prompt', [{}])[0] # Get first prompt dict
+        datasample_text = prompt_data.get('datasample')
+        question_text = prompt_data.get('content')
+        responses = row_dict.get('responses', [])
+        rules = row_dict.get('rules', [])
+
+        if not isinstance(rules, list): rules = [rules]
+        rules_text = clean_response_text(rules[0]) if rules else None
+        if not isinstance(responses, list): responses = [responses]
+        response_text = clean_response_text(responses[0]) if responses else "" # Use cleaned text
+
+        reward_model_data = row_dict.get('reward_model', {})
+        ground_truth_data = reward_model_data.get('ground_truth', {})
+        gt_label = ground_truth_data.get('label', 'N/A')
+        gt_features = ground_truth_data.get('features', 'N/A')
+
+        extra_info = row_dict.get('extra_info', {})
+        # --- Recalculate metric/prediction for this sample (needed for display) ---
+        metric = 0.0
+        is_correct = False
+        prediction = None
+        try:
+             current_task_type = supported_datasets[data_source]['type']
+             reward_fn = select_reward_fn(data_source)
+             parse_fn = select_parse_fn(data_source)
+             metric = reward_fn(response_text, ground_truth_data) # Use original cleaned response
+             prediction = parse_fn(response_text)
+             # Determine correctness again for display consistency
+             if current_task_type == "classification":
+                 is_correct = (metric == 1.0)
+             elif current_task_type == "regression":
+                 is_correct = (metric >= regression_threshold)
+
+             # Handle cases where parse_fn returns None or []
+             if prediction is None or (isinstance(prediction, list) and prediction == []):
+                  prediction = "UNPARSEABLE"
+                  is_correct = False # Mark unparseable as incorrect for display consistency
+             elif isinstance(prediction, list) and isinstance(gt_label, list) and len(prediction) != len(gt_label):
+                  prediction = f"PARSE ERROR (Length mismatch: {prediction})"
+                  is_correct = False # Mark length mismatch as incorrect
+
+        except Exception as e:
+             print(f"Error recalculating metrics for display (idx {idx}): {e}")
+             prediction = "ERROR"
+             is_correct = False
+
+        result_class = "correct" if is_correct else "incorrect"
+
+        # --- Build HTML for sample ---
+        html_content.append(f'<div class="sample">')
+        html_content.append(f'<h2>Sample {extra_info.get("index", idx)+1} <span class="{result_class}" style="font-size: small;">({result_class.upper()})</span></h2>')
+
+        # Data source and Extra Info
+        html_content.append('<div class="section"><details><summary>Details & Config</summary>')
+        html_content.append(f'<div><b>Data Source:</b> {data_source}</div>')
+        html_content.append('<b>Extra Info:</b><table>')
+        for k, v in extra_info.items():
+            html_content.append(f'<tr><td>{html.escape(str(k))}</td><td>{html.escape(str(v))}</td></tr>')
+        html_content.append('</table></details></div>')
+
+        # Prompt (Datasample + Question)
+        html_content.append('<div class="section"><div class="section-title">Input Prompt</div><details><summary>Show Prompt</summary><div class="prompt">')
+        prompt_token_length = 0
+        if datasample_text:
+            ds_len = calculate_token_length(datasample_text, tokenizer)
+            prompt_token_length += ds_len
+            html_content.append(f'<b>[Datasample]</b><span class="token-count">[{ds_len} tokens]</span><br>{html.escape(datasample_text)}<hr>')
+        if question_text:
+            q_len = calculate_token_length(question_text, tokenizer)
+            prompt_token_length += q_len
+            html_content.append(f'<b>[Question]</b><span class="token-count">[{q_len} tokens]</span><br>{html.escape(question_text)}')
+        html_content.append(f'</div><div><b>Total Prompt Tokens: {prompt_token_length}</b></div></details></div>')
+
+        # Ground Truth
+        html_content.append('<div class="section"><div class="section-title">Ground Truth</div>')
+        html_content.append(f'<div><b>Label:</b> {html.escape(str(gt_label))}</div>')
+        html_content.append(f'<div><b>Features:</b> {format_features_for_display(gt_features)}</div>') # Use helper
+        html_content.append('</div>')
+
+        # Prediction Result
+        html_content.append('<div class="section"><div class="section-title">Prediction Result</div>')
+        html_content.append(f'<div class="{result_class}"><b>Predicted:</b> {html.escape(str(prediction))}</div>')
+        if task_type == "regression":
+             html_content.append(f'<div class="{result_class}"><b>Metric (-MSE):</b> {metric:.4f}</div>')
+        html_content.append('</div>')
+
+                # Model Response (cleaned)
+        if rules_text:
+            html_content.append('<div class="section"><details open><summary>Rule</summary>')
+            response_token_length = calculate_token_length(rules_text, tokenizer)
+            html_content.append(f'<div class="response">{html.escape(rules_text)}</div>')
+            html_content.append(f'<div style="text-align: right;"><span class="token-count">[{response_token_length} tokens]</span></div>')
+            html_content.append('</details></div>')
+
+        # Model Response (cleaned)
+        html_content.append('<div class="section"><details open><summary>Model Response (Cleaned)</summary>')
+        response_token_length = calculate_token_length(response_text, tokenizer)
+        html_content.append(f'<div class="response">{html.escape(response_text)}</div>')
+        html_content.append(f'<div style="text-align: right;"><span class="token-count">[{response_token_length} tokens]</span></div>')
+        html_content.append('</details></div>')
+
+        # Optional: Thinking
+        thinking_content = extract_think_content(response_text)
+        if thinking_content:
+            html_content.append('<div class="section"><details><summary>Extracted Thinking</summary>')
+            think_token_length = calculate_token_length(thinking_content, tokenizer)
+            html_content.append(f'<div class="think">{html.escape(thinking_content)}</div>')
+            html_content.append(f'<div style="text-align: right;"><span class="token-count">[{think_token_length} tokens]</span></div>')
+            html_content.append('</details></div>')
+
+        # Optional: Answer
+        answer_content = extract_answer_content(response_text)
+        if answer_content:
+            html_content.append('<div class="section"><details><summary>Extracted Answer Tag</summary>')
+            ans_token_length = calculate_token_length(answer_content, tokenizer)
+            html_content.append(f'<div class="answer">{html.escape(answer_content)}</div>')
+            html_content.append(f'<div style="text-align: right;"><span class="token-count">[{ans_token_length} tokens]</span></div>')
+            html_content.append('</details></div>')
+
+        html_content.append('</div>') # End sample div
+
+    # --- Finalize HTML ---
+    html_content.append("</body></html>")
+    try:
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write('\n'.join(html_content))
-    
-    else:  # Text output
+    except IOError as e:
+         print(f"Error writing HTML file {output_file}: {e}")
+
+
+def generate_txt_report(
+    output_file: str,
+    display_df: pd.DataFrame,
+    metrics_dict: Dict[str, Any],
+    sampling_info: Dict[str, Any],
+    tokenizer: Any,
+    input_file_name: str,
+    regression_threshold: float
+):
+    """Generates the TXT report content and writes it to a file."""
+    print(f"Generating TXT report: {output_file}")
+    txt_content = []
+
+    # --- Header ---
+    txt_content.append("="*80)
+    txt_content.append(f"ICL REASONING RESULTS: {Path(input_file_name).name}")
+    txt_content.append("="*80 + "\n")
+
+    # --- Summary Section ---
+    txt_content.append("SUMMARY")
+    txt_content.append("-"*80)
+    txt_content.append(f"Total Samples: {metrics_dict['total_samples']}")
+    if sampling_info["sampled"]:
+         txt_content.append(f"Displayed Samples: {len(display_df)} (Balanced: {sampling_info['target_correct']} correct, {sampling_info['target_incorrect']} incorrect)")
+
+    task_type = supported_datasets.get(display_df.iloc[0].get('data_source', ''), {}).get('type', 'unknown') if not display_df.empty else 'unknown'
+    if task_type == "classification":
+        txt_content.append(f"Overall Accuracy: {metrics_dict.get('overall_accuracy', 0):.2f}%")
+        # txt_content.append(f"Accuracy Per Point: {metrics_dict.get('accuracy_per_point', 0):.2f}%")
+        txt_content.append(f"Parseable Accuracy: {metrics_dict.get('parseable_accuracy', 0):.2f}%")
+        # txt_content.append(f"Parseable Accuracy Per Point: {metrics_dict.get('parseable_accuracy_per_point', 0):.2f}%")
+    elif task_type == "regression":
+        txt_content.append(f"Overall MSE: {metrics_dict.get('overall_mse', 0):.4f}")
+        txt_content.append(f"Parseable MSE: {metrics_dict.get('parseable_mse', 0):.4f}")
+        txt_content.append(f"Overall R2 Score: {metrics_dict.get('r2_score', 0):.4f}")
+        txt_content.append(f"Parseable R2 Score: {metrics_dict.get('parseable_r2_score', 0):.4f}")
+        txt_content.append(f"Correct Threshold (>=): {regression_threshold}")
+        txt_content.append(f"Overall Accuracy (Threshold): {metrics_dict.get('overall_accuracy_threshold', 0):.2f}%")
+        txt_content.append(f"Parseable Accuracy (Threshold): {metrics_dict.get('parseable_accuracy_threshold', 0):.2f}%")
+
+    txt_content.append(f"Parseable Proportion: {metrics_dict.get('parseable_proportion', 0):.2f}% ({metrics_dict.get('parseable_samples', 0)}/{metrics_dict.get('total_samples', 0)})")
+    txt_content.append(f"Unparseable Samples: {metrics_dict.get('unparseable_samples', 0)}")
+    txt_content.append(f"Wrong # Answers: {metrics_dict.get('wrong_number_of_answers', 0)}")
+    txt_content.append("="*80 + "\n")
+
+    # --- Individual Samples ---
+    for idx, row in display_df.iterrows():
+        # --- Extract data ---
+        row_dict = safe_tolist(row.to_dict())
+        data_source = row_dict.get('data_source', 'unknown')
+        prompt_data = row_dict.get('prompt', [{}])[0]
+        datasample_text = prompt_data.get('datasample')
+        question_text = prompt_data.get('content')
+        responses = row_dict.get('responses', [])
+        if not isinstance(responses, list): responses = [responses]
+        response_text = clean_response_text(responses[0]) if responses else ""
+
+        reward_model_data = row_dict.get('reward_model', {})
+        ground_truth_data = reward_model_data.get('ground_truth', {})
+        gt_label = ground_truth_data.get('label', 'N/A')
+        gt_features = ground_truth_data.get('features', 'N/A')
+        extra_info = row_dict.get('extra_info', {})
+
+        # --- Recalculate metric/prediction ---
+        metric = 0.0
+        is_correct = False
+        prediction = None
+        try:
+             current_task_type = supported_datasets[data_source]['type']
+             reward_fn = select_reward_fn(data_source)
+             parse_fn = select_parse_fn(data_source)
+             metric = reward_fn(response_text, ground_truth_data)
+             prediction = parse_fn(response_text)
+             if current_task_type == "classification": is_correct = (metric == 1.0)
+             elif current_task_type == "regression": is_correct = (metric >= regression_threshold)
+             if prediction is None or (isinstance(prediction, list) and prediction == []):
+                 prediction = "UNPARSEABLE"
+                 is_correct = False
+             elif isinstance(prediction, list) and isinstance(gt_label, list) and len(prediction) != len(gt_label):
+                  prediction = f"PARSE ERROR (Length mismatch: {prediction})"
+                  is_correct = False
+        except Exception as e:
+             prediction = "ERROR"
+             is_correct = False
+
+        result_str = "CORRECT" if is_correct else "INCORRECT"
+
+        # --- Build TXT for sample ---
+        txt_content.append(f"=== Sample {extra_info.get('index', idx)+1} ({result_str}) ===")
+        txt_content.append(f"Data Source: {data_source}")
+
+        # Extra Info
+        txt_content.append("\n--- Extra Info ---")
+        for k, v in extra_info.items():
+            txt_content.append(f"  {k}: {v}")
+
+        # Prompt
+        txt_content.append("\n--- Input Prompt ---")
+        prompt_token_length = 0
+        if datasample_text:
+            ds_len = calculate_token_length(datasample_text, tokenizer)
+            prompt_token_length += ds_len
+            txt_content.append(f"[Datasample] [{ds_len} tokens]\n{datasample_text}\n{'-'*20}")
+        if question_text:
+            q_len = calculate_token_length(question_text, tokenizer)
+            prompt_token_length += q_len
+            txt_content.append(f"[Question] [{q_len} tokens]\n{question_text}")
+        txt_content.append(f"--> Total Prompt Tokens: {prompt_token_length}")
+
+
+        # Ground Truth
+        txt_content.append("\n--- Ground Truth ---")
+        txt_content.append(f"Label: {gt_label}")
+        # Use format_features_for_display but replace <br> with newline
+        features_display_text = format_features_for_display(gt_features).replace("<br>", "\n")
+        txt_content.append(f"Features: {features_display_text}")
+
+        # Prediction
+        txt_content.append("\n--- Prediction Result ---")
+        txt_content.append(f"Predicted: {prediction} ({result_str})")
+        if task_type == "regression":
+             txt_content.append(f"Metric (-MSE): {metric:.4f}")
+
+        # Response
+        response_token_length = calculate_token_length(response_text, tokenizer)
+        txt_content.append(f"\n--- Model Response (Cleaned) [{response_token_length} tokens] ---")
+        txt_content.append(response_text)
+
+        # Optional: Thinking
+        thinking_content = extract_think_content(response_text)
+        if thinking_content:
+            think_token_length = calculate_token_length(thinking_content, tokenizer)
+            txt_content.append(f"\n--- Extracted Thinking [{think_token_length} tokens] ---")
+            txt_content.append(thinking_content)
+
+        # Optional: Answer
+        answer_content = extract_answer_content(response_text)
+        if answer_content:
+             ans_token_length = calculate_token_length(answer_content, tokenizer)
+             txt_content.append(f"\n--- Extracted Answer Tag [{ans_token_length} tokens] ---")
+             txt_content.append(answer_content)
+
+        txt_content.append("\n" + "="*80 + "\n")
+
+    # --- Write to file ---
+    try:
         with open(output_file, 'w', encoding='utf-8') as f:
-            # Write summary header
-            f.write("="*80 + "\n")
-            f.write(f"ICL REASONING RESULTS: {Path(input_file).name}\n")
-            f.write("="*80 + "\n\n")
-            
-            # Process each sample
-            for idx, row in display_df.iterrows():
-                f.write(f"=== Sample {idx+1} ===\n\n")
-                
-                # Write data source if available
-                if 'data_source' in row:
-                    f.write(f"--- Data Source ---\n")
-                    f.write(f"{row['data_source']}\n\n")
-                
-                # Write input prompt
-                f.write("--- Input Prompt ---\n")
-                prompt = row.get('prompt', None)
-                if prompt is not None:
-                    if isinstance(prompt, list):
-                        # Handle list of prompt items
-                        for prompt_item in prompt:
-                            if isinstance(prompt_item, dict):
-                                if 'role' in prompt_item:
-                                    f.write(f"{prompt_item['role']}:\n")
-                                if 'content' in prompt_item:
-                                    content = prompt_item["content"]
-                                    if content:
-                                        f.write(f"{content}\n\n")
+            f.write('\n'.join(txt_content))
+    except IOError as e:
+         print(f"Error writing TXT file {output_file}: {e}")
 
-                            else:
-                                f.write(f"{str(prompt_item)}\n")
-                    else:
-                        # Handle string or other type of prompt
-                        f.write(f"{str(prompt)}\n")
-                else:
-                    f.write("No prompt available\n")
-                f.write("\n")
-                
-                # Add ICL Examples section in text format
-                if 'icl_examples' in row:
-                    f.write("--- ICL Examples ---\n")
-                    
-                    icl_examples = row.get('icl_examples', [])
-                    
-                    # Handle various formats of ICL examples
-                    if isinstance(icl_examples, str):
-                        try:
-                            # Try to parse as JSON if it's a string representation of a list
-                            if icl_examples.startswith('[') and icl_examples.endswith(']'):
-                                icl_examples = json.loads(icl_examples)
-                            else:
-                                icl_examples = [icl_examples]
-                        except:
-                            icl_examples = [icl_examples]
-                    
-                    f.write(f"Total ICL Examples: {len(icl_examples)}\n")
-                    
-                    # Display each ICL example (summarized version for text format)
-                    for i, example in enumerate(icl_examples):
-                        f.write(f"\nExample {i+1}:\n")
-                        f.write("-" * 40 + "\n")
-                        
-                        # Try to parse the example if it's a string
-                        example_data = None
-                        if isinstance(example, str):
-                            try:
-                                example_data = json.loads(example)
-                            except:
-                                # If not valid JSON, just use as text
-                                pass
-                        else:
-                            example_data = example
-                        
-                        if example_data and isinstance(example_data, dict):
-                            # Extract key information (brief summary for text format)
-                            # Features and label if available
-                            if 'features' in example_data and isinstance(example_data['features'], list):
-                                features = example_data['features']
-                                features_str = ", ".join([f"{x:.3f}" for x in features])
-                                f.write(f"Features: [{features_str}]\n")
-                            
-                            # Add data source if available
-                            example_data_source = None
-                            if 'data_source' in example_data:
-                                example_data_source = example_data['data_source']
-                            elif data_source:  # Use the row's data_source as fallback
-                                example_data_source = data_source
-                            
-                            if example_data_source:
-                                f.write(f"Data Source: {example_data_source}\n")
-                            
-                            if 'ground_truth' in example_data and isinstance(example_data['ground_truth'], dict):
-                                ground_truth = example_data['ground_truth']
-                                if 'label' in ground_truth:
-                                    f.write(f"Label: {ground_truth['label']}\n")
-                            
-                            # Reasonable length for reasoning and response (truncated)
-                            if 'reasonings' in example_data and example_data['reasonings']:
-                                reasonings = example_data['reasonings']
-                                if isinstance(reasonings, list) and len(reasonings) > 0:
-                                    reasoning_text = reasonings[0]
-                                else:
-                                    reasoning_text = str(reasonings)
-                                
-                                # 计算token数量
-                                reasoning_token_length = calculate_token_length(reasoning_text, tokenizer)
-                                
-                                # Truncate if too long for text format
-                                if len(reasoning_text) > 300:
-                                    reasoning_text = reasoning_text[:300] + "... [truncated]"
-                                
-                                f.write(f"\nReasoning: [{reasoning_token_length} tokens] {reasoning_text}\n")
-                            
-                            # Brief response summary
-                            if 'responses' in example_data and example_data['responses']:
-                                responses = example_data['responses']
-                                if isinstance(responses, list) and len(responses) > 0:
-                                    response_text = responses[0]
-                                else:
-                                    response_text = str(responses)
-                                
-                                # 计算token数量
-                                response_token_length = calculate_token_length(response_text, tokenizer)
-                                
-                                # Truncate if too long for text format
-                                if len(response_text) > 200:
-                                    response_text = response_text[:200] + "... [truncated]"
-                                
-                                f.write(f"\nResponse: [{response_token_length} tokens] {response_text}\n")
-                        else:
-                            # Just display a brief summary for text
-                            example_str = str(example)
-                            if len(example_str) > 500:
-                                example_str = example_str[:500] + "... [truncated]"
-                            f.write(f"{example_str}\n")
-                    
-                    f.write("\n")
-                
-                # Add Test Examples section in text format
-                if 'test_examples' in row:
-                    f.write("--- Test Examples ---\n")
-                    
-                    test_examples = row.get('test_examples', '[]')
-                    
-                    # Parse test examples - expected to be a JSON string of lists of tuples
-                    try:
-                        if isinstance(test_examples, str):
-                            test_examples = json.loads(test_examples)
-                    except Exception as e:
-                        test_examples = []
-                        print(f"Error parsing test examples: {e}")
-                    
-                    f.write(f"Total Test Examples: {len(test_examples)}\n\n")
-                    
-                    # Display test examples in a simple list format
-                    for i, example in enumerate(test_examples):
-                        # Test examples are typically (features, label) tuples
-                        if isinstance(example, (list, tuple)) and len(example) >= 2:
-                            features, label = example[0], example[1]
-                            
-                            # Format features for display
-                            if isinstance(features, (list, tuple)):
-                                features_str = ", ".join([f"{x:.3f}" for x in features])
-                                features_display = f"[{features_str}]"
-                            else:
-                                features_display = str(features)
-                            
-                            label_display = str(label)
-                            
-                            f.write(f"Example {i+1}: Features: {features_display}, Label: {label_display}\n")
-                        else:
-                            f.write(f"Example {i+1}: {str(example)}\n")
-                    
-                    f.write("\n")
-                
-                # Get ground truth label
-                ground_truth = None
-                if 'reward_model' in row and isinstance(row['reward_model'], dict):
-                    ground_truth_data = row['reward_model'].get('ground_truth', None)
-                    if isinstance(ground_truth_data, dict) and 'label' in ground_truth_data:
-                        ground_truth = ground_truth_data
-                
-                # Add Configuration Information section in text format
-                f.write("--- Configuration Information ---\n")
-                
-                # ICL Meta Info
-                f.write("ICL Example Meta Info:\n")
-                icl_meta_info = row.get('icl_example_meta_info', [])
-                if icl_meta_info is not None:
-                    # Convert NumPy arrays to regular Python types
-                    if hasattr(icl_meta_info, '__iter__') and not isinstance(icl_meta_info, (str, dict)):
-                        # For iterable objects like arrays and lists
-                        for i, item in enumerate(icl_meta_info):
-                            # Convert each item to regular python type if needed
-                            if hasattr(item, 'item') and callable(getattr(item, 'item')):
-                                try:
-                                    item = item.item()  # Convert NumPy scalar to Python scalar
-                                except:
-                                    item = str(item)
-                            elif hasattr(item, 'tolist') and callable(getattr(item, 'tolist')):
-                                try:
-                                    item = item.tolist()  # Convert NumPy array to Python list
-                                except:
-                                    item = str(item)
-                            
-                            if isinstance(item, dict):
-                                # Handle dict items
-                                for key, value in item.items():
-                                    # Convert numpy values to regular Python types
-                                    if hasattr(value, 'item') and callable(getattr(value, 'item')):
-                                        try:
-                                            value = value.item()
-                                        except:
-                                            value = str(value)
-                                    elif hasattr(value, 'tolist') and callable(getattr(value, 'tolist')):
-                                        try:
-                                            value = value.tolist()
-                                        except:
-                                            value = str(value)
-                                    f.write(f"  {key}: {value}\n")
-                            else:
-                                # Handle non-dict items
-                                f.write(f"  Item {i}: {item}\n")
-                    elif isinstance(icl_meta_info, dict):
-                        # If meta_info is a dictionary, show its key-value pairs
-                        for key, value in icl_meta_info.items():
-                            # Convert numpy values to regular Python types
-                            if hasattr(value, 'item') and callable(getattr(value, 'item')):
-                                try:
-                                    value = value.item()  # Convert NumPy scalar to Python scalar
-                                except:
-                                    value = str(value)
-                            elif hasattr(value, 'tolist') and callable(getattr(value, 'tolist')):
-                                try:
-                                    value = value.tolist()  # Convert NumPy array to Python list
-                                except:
-                                    value = str(value)
-                            f.write(f"  {key}: {value}\n")
-                    else:
-                        # If it's not iterable or dict (scalar values)
-                        value = icl_meta_info
-                        if hasattr(value, 'item') and callable(getattr(value, 'item')):
-                            try:
-                                value = value.item()
-                            except:
-                                value = str(value)
-                        elif hasattr(value, 'tolist') and callable(getattr(value, 'tolist')):
-                            try:
-                                value = value.tolist()
-                            except:
-                                value = str(value)
-                        f.write(f"  Data: {value}\n")
-                else:
-                    f.write("  No ICL meta information available\n")
-                
-                f.write("\n")
-                
-                # Test Data Configuration
-                f.write("Test Data Configuration:\n")
-                test_data_config = row.get('test_data', {})
-                if test_data_config and isinstance(test_data_config, dict):
-                    for key, value in test_data_config.items():
-                        f.write(f"  {key}: {value}\n")
-                else:
-                    f.write("  No test data configuration available\n")
-                
-                f.write("\n")
-                
-                # Extra Info
-                if 'extra_info' in row and isinstance(row['extra_info'], dict):
-                    f.write("Extra Information:\n")
-                    extra_info = row['extra_info']
-                    for key, value in extra_info.items():
-                        f.write(f"  {key}: {value}\n")
-                    f.write("\n")
-                
-                # Write ground truth information
-                f.write("--- Ground Truth ---\n")
-                if ground_truth is not None:
-                    f.write(f"Label: {ground_truth.get('label', 'N/A')}\n")
-                    if 'features' in ground_truth:
-                        features = ground_truth['features']
-                        if isinstance(features, list):
-                            features_str = ", ".join([f"{x:.3f}" for x in features])
-                            f.write(f"Features: [{features_str}]\n")
-                        else:
-                            f.write(f"Features: {features}\n")
-                else:
-                    f.write("Not available\n")
-                f.write("\n")
-                
-                # Process responses
-                responses = row.get('responses', [])
-                
-                # Handle different types of response data
-                if responses is None:
-                    responses = ["No response available"]
-                elif not isinstance(responses, list):
-                    # Try to convert to list if it's another iterable
-                    try:
-                        responses = list(responses)
-                    except (TypeError, ValueError):
-                        responses = [responses]
-                
-                # Get first response (assuming single response per example)
-                response_text = responses[0] if responses and len(responses) > 0 else "No response generated"
-                
-                # Ensure response_text is a string
-                if not isinstance(response_text, str):
-                    try:
-                        if isinstance(response_text, bytes):
-                            response_text = response_text.decode('utf-8')
-                        else:
-                            response_text = str(response_text)
-                    except Exception as e:
-                        print(f"Warning: Could not convert response to string: {e}")
-                        response_text = str(response_text)  # Last resort
-                
-                # Filter out <|endoftext|> tags
-                response_text = response_text.replace("<|endoftext|>", "")
-                
-                # Get input prompt content
-                input_prompt = row.get('prompt')
-                input_prompt_content = None
-                if input_prompt and isinstance(input_prompt, list) and len(input_prompt) > 0:
-                    if isinstance(input_prompt[0], dict) and 'content' in input_prompt[0]:
-                        input_prompt_content = input_prompt[0]['content']
-                
-                # Clean response text
-                cleaned_response_text = clean_response_text(response_text, input_prompt_content)
-                
-                # Remove prompt content from response
-                if input_prompt_content:
-                    cleaned_response_text = cleaned_response_text.replace(input_prompt_content, "")
-                
-                # Preserve original content, don't extract thinking and answer
-                raw_thinking = extract_think_content(cleaned_response_text)
-                raw_answer = extract_answer_content(cleaned_response_text)
-                
-                # Calculate token length
-                token_length = calculate_token_length(cleaned_response_text, tokenizer)
-                
-                # Get data source for reward function selection
-                data_source = row.get('data_source', 'blobs')
-                
-                # Get reward function for the data source
-                reward_fn = select_reward_fn(data_source)
-                
-                # Evaluate with the appropriate reward function
-                metric = False
-                prediction = None
-                
-                
-                # First try with the dedicated reward function
-                metric = reward_fn(cleaned_response_text, ground_truth)
+def visualize_icl_reasoning_output_refactored(
+    input_file: str,
+    output_format: str = "html",
+    save_dir: Optional[str] = None,
+    max_samples: int = 100,
+    regression_threshold: float = DEFAULT_REGRESSION_CORRECT_THRESHOLD,
+    output_csv_dir: Optional[str] = None
+) -> str:
+    """
+    Orchestrates the loading, analysis, sampling, and visualization of ICL output.
 
-                
-                # Extract prediction for display with enhanced matching
-                prediction = None
-                # First check if there's a clean answer tag
-                if raw_answer and raw_answer.strip().isdigit():
-                    prediction = int(raw_answer.strip())
-                else:
-                    # Try to extract prediction using get_prediction_result function
-                    parsed_prediction, _ = extract_answer(cleaned_response_text, ground_truth, task_type)
-                    if parsed_prediction is not None:
-                        prediction = parsed_prediction
-                    elif ground_truth and 'label' in ground_truth and metric:
-                        # If correct but can't parse prediction, use ground truth
-                        prediction = ground_truth['label']
+    Args:
+        input_file: Path to the input parquet file.
+        output_format: 'txt' or 'html'.
+        save_dir: Directory to save the output file.
+        max_samples: Max samples for visualization (0 for all).
+        regression_threshold: Threshold for regression correctness.
+        output_csv_dir: Directory to save metrics CSV.
 
-                if metric:
-                    displayed_correct_predictions += 1
-                
-                # Write prediction result
-                f.write("--- Prediction Result ---\n")
-                if prediction is not None:
-                    result_str = "CORRECT" if metric else "INCORRECT"
-                    f.write(f"Predicted: {prediction} ({result_str})\n")
-                else:
-                    f.write("Unable to parse prediction\n")
-                
-                # Add token length information
-                f.write(f"Response Token Length: {token_length}\n")
-                
-                f.write("\n")
-                
-                # Write full response (don't extract tag content)
-                f.write(f"--- Model Response (Cleaned) ---\n")
-                f.write(f"{cleaned_response_text}\n")
-                f.write("\n")
-                
-                # Write separator
-                f.write("="*80 + "\n\n")
-            
-            # Write summary at the end
-            # Note: Use the previously calculated accuracy and refined_accuracy variables
-            
-            sampled_note = ""
-            balance_note = ""
-            if max_samples > 0 and max_samples < total_data_size:
-                sampled_note = f" (showing {displayed_samples} out of {total_data_size})"
-                if balanced_sampling:
-                    balance_note = f"Balanced sampling: {target_correct} correct, {target_incorrect} incorrect"
-            f.write("="*80 + "\n")
-            f.write("SUMMARY\n")
-            f.write("="*80 + "\n")
-            f.write(f"Total samples{sampled_note}: {total_data_size}\n")
-            f.write(f"Correct predictions (all data): {full_correct_predictions}\n")
-            f.write(f"Accuracy (all data): {accuracy*100:.2f}%\n")
-            f.write(f"Refined accuracy: {refined_accuracy*100:.2f}%\n")
-            f.write(f"Parseable accuracy: {parseable_accuracy*100:.2f}% ({parseable_predictions}/{total_data_size} samples)\n")
-            f.write(f"Unparseable predictions: {unparseable_predictions} ({unparseable_predictions/total_data_size*100:.2f}%)\n")
-            if balance_note:
-                f.write(f"{balance_note}\n")
-            f.write("="*80 + "\n")
-    
-    print(f"Visualization saved to: {output_file}")
-    
+    Returns:
+        Path to the generated output file.
+    """
+    random.seed(42) # Set seed for reproducibility in sampling
+
+    # 1. Load data and tokenizer
+    df, tokenizer = load_data_and_tokenizer(input_file)
+
+    # 2. Calculate metrics on the full dataset
+    # Note: Pass necessary arguments if calculate_metrics needs them (e.g., selectors)
+    metrics_dict, correctness_flags, _, _ = calculate_metrics(
+        df, regression_threshold
+    )
+    print(f"Metrics calculated: {metrics_dict}")
+
+    # 3. Append metrics to CSV if requested
+    if output_csv_dir:
+        csv_filename = "regression_metrics.csv" if metrics_dict.get("overall_mse") is not None else "classification_metrics.csv"
+        output_csv_path = os.path.join(output_csv_dir, csv_filename)
+        Path(output_csv_dir).mkdir(parents=True, exist_ok=True)
+        append_metrics_to_csv(output_csv_path, input_file, metrics_dict)
+        print(f"Metrics appended to: {output_csv_path}")
+
+    # 4. Sample data for visualization
+    display_df, sampling_info = sample_data_for_visualization(
+        df, max_samples, correctness_flags
+    )
+
+    # 5. Determine output file path
+    if save_dir:
+        output_dir = Path(save_dir)
+    else:
+        output_dir = Path(input_file).parent
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_filename = f"{Path(input_file).stem}_visualization.{output_format}"
+    output_file = output_dir / output_filename
+
+    # 6. Generate the report
+    if output_format == "html":
+        generate_html_report(
+            str(output_file), display_df, metrics_dict, sampling_info, tokenizer,
+            input_file, regression_threshold
+        )
+    elif output_format == "txt":
+        generate_txt_report(
+            str(output_file), display_df, metrics_dict, sampling_info, tokenizer,
+            input_file, regression_threshold
+        )
+    else:
+        raise ValueError(f"Unsupported output format: {output_format}")
+
+    print(f"Visualization complete! Saved to: {output_file}")
     return str(output_file)
-
 
 def main():
     parser = argparse.ArgumentParser(description='Visualize ICL reasoning output with model responses')
-    parser.add_argument('--input', type=str, 
-                        required=True,
+    parser.add_argument('--input', type=str, required=True,
                         help='Path to the input parquet file with model responses')
     parser.add_argument('--format', type=str, choices=['txt', 'html'], default='html',
                         help='Output format (txt or html)')
@@ -1727,21 +936,32 @@ def main():
                         help='Directory to save the output file (default: same as input file)')
     parser.add_argument('--max-samples', type=int, default=100,
                         help='Maximum number of samples to visualize (default: 100, use 0 for all)')
-    parser.add_argument('--REGRESSION_CORRECT_THRESHOLD', type=float, default=-0.01,
-                        help='Threshold for regression correctness (default:-0.01)')
-    parser.add_argument('--output-csv', type=str, default=None,
-                        help='Output results to CSV file')
+    # Argument names should match the function parameters now
+    parser.add_argument('--regression-threshold', type=float, default=DEFAULT_REGRESSION_CORRECT_THRESHOLD,
+                        help=f'Threshold for regression correctness (default: {DEFAULT_REGRESSION_CORRECT_THRESHOLD})')
+    parser.add_argument('--output-csv-dir', type=str, default=None, # Changed arg name slightly
+                        help='Directory to save/append metrics to a CSV file')
     args = parser.parse_args()
-    
-    # Check if input file exists
-    if not os.path.exists(args.input):
-        print(f"Error: File '{args.input}' not found")
-        return
-    
-    # Visualize the output
-    output_file = visualize_icl_reasoning_output(args.input, args.format, args.output_dir, args.max_samples, args.REGRESSION_CORRECT_THRESHOLD, args.output_csv)
-    print(f"Visualization complete! Saved to: {output_file}")
+
+    try:
+        output_file = visualize_icl_reasoning_output_refactored(
+            input_file=args.input,
+            output_format=args.format,
+            save_dir=args.output_dir,
+            max_samples=args.max_samples,
+            regression_threshold=args.regression_threshold, # Use updated arg name
+            output_csv_dir=args.output_csv_dir # Use updated arg name
+        )
+        # print(f"Refactored visualization complete! Saved to: {output_file}") # Optional
+    except FileNotFoundError as e:
+         print(f"Error: {e}")
+    except ValueError as e:
+         print(f"Error: {e}")
+    except Exception as e:
+         print(f"An unexpected error occurred: {e}")
+         import traceback
+         traceback.print_exc() # Print full traceback for unexpected errors
 
 
 if __name__ == "__main__":
-    main() 
+    main()

@@ -52,6 +52,10 @@ n_samples_list = args.n_samples
 feature_noise_list = args.feature_noise
 if args.dataset == ["regression"]:
     dataset_list = ['linreg', 'pwreg', 'cosreg', 'l1normreg', 'quadreg', 'expreg']
+if args.dataset == ["classification"]:
+    dataset_list = ['blobs', 'moons', 'linear', 'circles']
+if args.dataset == ["all"]:
+    dataset_list = ['blobs', 'moons', 'linear', 'circles', 'linreg', 'pwreg', 'cosreg', 'l1normreg', 'quadreg', 'expreg']
 os.makedirs(f"{root_dir}/run_exps/auto", exist_ok=True)
  
 script_paths = []
