@@ -101,9 +101,9 @@ def draw_acc_vs_token_count(dfs, labels, figure_name):
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset_name", type=str, required=True)
-    parser.add_argument("--model_name", type=str, nargs="+", required=True)
-    parser.add_argument("--response_length", type=int, required=True)
+    parser.add_argument("--dataset_name", type=str, default="circles")
+    parser.add_argument("--model_name", type=str, nargs="+", default=["deepseek-ai/deepseek-reasoner", "claude/claude-3-7-sonnet-20250219-thinking"])
+    parser.add_argument("--response_length", type=int, default=3520)
     args = parser.parse_args()
 
     dfs = []
