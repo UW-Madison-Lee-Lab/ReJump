@@ -9,12 +9,14 @@ from sklearn.metrics import accuracy_score
 import graphviz
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.linear_model import LogisticRegression
 import math
 import numpy as np
 import tiktoken
 import argparse
 import os
 import pdb
+from tqdm import tqdm
 
 def get_model_types_prompt(model_function_list_str):
     # model_function_list_str is a string representation of a list of function definition strings.
@@ -316,6 +318,7 @@ class MLModelGraph:
         
         return len(nodes_to_prune) + additional_pruned
     
+    
     def visualize(self):
         """Visualize the graph using Graphviz"""
         dot = graphviz.Digraph(comment='ML Model Hierarchy')
@@ -355,109 +358,158 @@ def create_ml_model_hierarchy():
     graph.add_node("unknown", "Unknown", "category", "root")
     
     # GLM subcategories
-    graph.add_node("linear", "Linear", "subcategory", "glm")
-    graph.add_node("nonlinear", "Non-linear", "subcategory", "glm")
+    graph.add_node("linear_link", "Linear Link", "subcategory", "glm")
+    graph.add_node("nonlinear_link", "Non-linear Link", "subcategory", "glm")
     
-    graph.add_node("linear1", "Low-Performance Linear", "subcategory", "linear")
-    graph.add_node("linear2", "Medium-Performance Linear", "subcategory", "linear1")
-    graph.add_node("linear3", "High-Performance Linear", "subcategory", "linear2")
+    graph.add_node("linear_basis_linear_link", "Linear Basis", "subcategory", "linear_link")
+    graph.add_node("nonlinear_basis_linear_link", "Non-linear Basis", "subcategory", "linear_link")
     
-    graph.add_node("nonlinear1", "Low-Performance Non-linear", "subcategory", "nonlinear")
-    graph.add_node("nonlinear2", "Medium-Performance Non-linear", "subcategory", "nonlinear1")
-    graph.add_node("nonlinear3", "High-Performance Non-linear", "subcategory", "nonlinear2")
+    graph.add_node("linear_basis_nonlinear_link", "Linear Basis", "subcategory", "nonlinear_link")
+    graph.add_node("nonlinear_basis_nonlinear_link", "Non-linear Basis", "subcategory", "nonlinear_link")
     
-    # Decision tree depths
-    graph.add_node("depth1", "depth=1", "subcategory", "decision_tree")
-    graph.add_node("depth2", "depth=2", "subcategory", "depth1")
-    graph.add_node("depth3", "depth=3", "subcategory", "depth2")
+    # # Decision tree depths
+    # graph.add_node("depth1", "depth=1", "subcategory", "decision_tree")
+    # graph.add_node("depth2", "depth=2", "subcategory", "depth1")
+    # graph.add_node("depth3", "depth=3", "subcategory", "depth2")
     
-    graph.add_node("depth11", "Low-Performance depth=1", "subcategory", "depth1")
-    graph.add_node("depth21", "Low-Performance depth=2", "subcategory", "depth2")
-    graph.add_node("depth31", "Low-Performance depth=3", "subcategory", "depth3")
+    # graph.add_node("depth11", "Low-Performance depth=1", "subcategory", "depth1")
+    # graph.add_node("depth21", "Low-Performance depth=2", "subcategory", "depth2")
+    # graph.add_node("depth31", "Low-Performance depth=3", "subcategory", "depth3")
     
-    graph.add_node("depth12", "Medium-Performance depth=1", "subcategory", "depth11")
-    graph.add_node("depth22", "Medium-Performance depth=2", "subcategory", "depth21")
-    graph.add_node("depth32", "Medium-Performance depth=3", "subcategory", "depth31")
+    # graph.add_node("depth12", "Medium-Performance depth=1", "subcategory", "depth11")
+    # graph.add_node("depth22", "Medium-Performance depth=2", "subcategory", "depth21")
+    # graph.add_node("depth32", "Medium-Performance depth=3", "subcategory", "depth31")
     
-    graph.add_node("depth13", "High-Performance depth=1", "subcategory", "depth12")
-    graph.add_node("depth23", "High-Performance depth=2", "subcategory", "depth22")
-    graph.add_node("depth33", "High-Performance depth=3", "subcategory", "depth32")
+    # graph.add_node("depth13", "High-Performance depth=1", "subcategory", "depth12")
+    # graph.add_node("depth23", "High-Performance depth=2", "subcategory", "depth22")
+    # graph.add_node("depth33", "High-Performance depth=3", "subcategory", "depth32")
     
-    # KNN k values
-    graph.add_node("k1", "k=1", "subcategory", "knn")
-    graph.add_node("k3", "k=3", "subcategory", "knn")
-    graph.add_node("k5", "k=5", "subcategory", "knn")
+    # # KNN k values
+    # graph.add_node("k1", "k=1", "subcategory", "knn")
+    # graph.add_node("k3", "k=3", "subcategory", "knn")
+    # graph.add_node("k5", "k=5", "subcategory", "knn")
     
-    graph.add_node("k11", "Low-Performance k=1", "subcategory", "k1")
-    graph.add_node("k31", "Low-Performance k=3", "subcategory", "k3")
-    graph.add_node("k51", "Low-Performance k=5", "subcategory", "k5")
+    # graph.add_node("k11", "Low-Performance k=1", "subcategory", "k1")
+    # graph.add_node("k31", "Low-Performance k=3", "subcategory", "k3")
+    # graph.add_node("k51", "Low-Performance k=5", "subcategory", "k5")
     
-    graph.add_node("k12", "Medium-Performance k=1", "subcategory", "k11")
-    graph.add_node("k32", "Medium-Performance k=3", "subcategory", "k31")
-    graph.add_node("k52", "Medium-Performance k=5", "subcategory", "k51")
+    # graph.add_node("k12", "Medium-Performance k=1", "subcategory", "k11")
+    # graph.add_node("k32", "Medium-Performance k=3", "subcategory", "k31")
+    # graph.add_node("k52", "Medium-Performance k=5", "subcategory", "k51")
     
-    graph.add_node("k13", "High-Performance k=1", "subcategory", "k12")
-    graph.add_node("k33", "High-Performance k=3", "subcategory", "k32")
-    graph.add_node("k53", "High-Performance k=5", "subcategory", "k52")
+    # graph.add_node("k13", "High-Performance k=1", "subcategory", "k12")
+    # graph.add_node("k33", "High-Performance k=3", "subcategory", "k32")
+    # graph.add_node("k53", "High-Performance k=5", "subcategory", "k52")
     
     return graph
 
-def get_parent_node(model_type_dict):
-    acc = model_type_dict["acc"]
-    interval = [.5, .9]
-    if model_type_dict["category"] == "generalized_linear":
-        if model_type_dict["detail"]["linear_link"] and model_type_dict["detail"]["linear_basis"]:
-            if acc < interval[0]:
-                return "linear1"
-            elif acc < interval[1]:
-                return "linear2"
-            else:
-                return "linear3"
-        else:
-            acc = model_type_dict["acc"]
-            if acc < interval[0]:
-                return "nonlinear1"
-            elif acc < interval[1]:
-                return "nonlinear2"
-            else:
-                return "nonlinear3"
-    elif model_type_dict["category"] == "decision_tree":
-        if "depth" in model_type_dict["detail"]:
-            prefix = f"depth{model_type_dict['detail']['depth']}"
-            if acc < interval[0]:
-                return f"{prefix}1"
-            elif acc < interval[1]:
-                return f"{prefix}2"
-            else:
-                return f"{prefix}3"
-        else:
-            prefix = f"depth{model_type_dict['detail']['depth_val']}"
-            if acc < interval[0]:
-                return f"{prefix}1"
-            elif acc < interval[1]:
-                return f"{prefix}2"
-            else:
-                return f"{prefix}3"
-    elif model_type_dict["category"] == "KNN":
-        if "K_val" in model_type_dict["detail"]:
-            prefix = f"k{model_type_dict['detail']['K_val']}"
-            if acc < interval[0]:
-                return f"{prefix}1"
-            elif acc < interval[1]:
-                return f"{prefix}2"
-            else:
-                return f"{prefix}3"
-        else:
-            prefix = f"k{model_type_dict['detail']['K_val']}"
-            if acc < interval[0]:
-                return f"{prefix}1"
-            elif acc < interval[1]:
-                return f"{prefix}2"
-            else:
-                return f"{prefix}3"
-    else:
-        return "unknown"
+# def get_parent_node(model_type_dict, path):
+#     acc = model_type_dict["acc"]
+#     interval = [.5, .9]
+#     if model_type_dict["category"] == "generalized_linear":
+#         if model_type_dict["detail"]["linear_link"] and model_type_dict["detail"]["linear_basis"]:
+#             if acc < interval[0]:
+#                 return "linear1"
+#             elif acc < interval[1]:
+#                 return "linear2"
+#             else:
+#                 return "linear3"
+#         else:
+#             acc = model_type_dict["acc"]
+#             if acc < interval[0]:
+#                 return "nonlinear1"
+#             elif acc < interval[1]:
+#                 return "nonlinear2"
+#             else:
+#                 return "nonlinear3"
+#     elif model_type_dict["category"] == "decision_tree":
+#         if "depth" in model_type_dict["detail"]:
+#             prefix = f"depth{model_type_dict['detail']['depth']}"
+#             if acc < interval[0]:
+#                 return f"{prefix}1"
+#             elif acc < interval[1]:
+#                 return f"{prefix}2"
+#             else:
+#                 return f"{prefix}3"
+#         else:
+#             prefix = f"depth{model_type_dict['detail']['depth_val']}"
+#             if acc < interval[0]:
+#                 return f"{prefix}1"
+#             elif acc < interval[1]:
+#                 return f"{prefix}2"
+#             else:
+#                 return f"{prefix}3"
+#     elif model_type_dict["category"] == "KNN":
+#         if "K_val" in model_type_dict["detail"]:
+#             prefix = f"k{model_type_dict['detail']['K_val']}"
+#             if acc < interval[0]:
+#                 return f"{prefix}1"
+#             elif acc < interval[1]:
+#                 return f"{prefix}2"
+#             else:
+#                 return f"{prefix}3"
+#         else:
+#             prefix = f"k{model_type_dict['detail']['K_val']}"
+#             if acc < interval[0]:
+#                 return f"{prefix}1"
+#             elif acc < interval[1]:
+#                 return f"{prefix}2"
+#             else:
+#                 return f"{prefix}3"
+#     else:
+#         return "unknown"
     
+def get_parent_node(model_type_dict, path, node_id, max_depth, breadth):
+    acc = model_type_dict["acc"]
+    parent_node = None
+    if path: 
+        for i, node in enumerate(path[::-1]):
+            if node["category"] != model_type_dict["category"]:
+                break
+            elif model_type_dict["category"] == "generalized_linear":
+                if node["detail"]["linear_link"] != model_type_dict["detail"]["linear_link"]:
+                    break
+                elif node["detail"]["linear_basis"] != model_type_dict["detail"]["linear_basis"]:
+                    break
+                
+            if node["acc"] <= acc:
+                parent_node = node["id"]
+            
+                path = path if i == 0 else path[:(-i)]
+                path = path + [{
+                    "id": node_id, 
+                    "acc": acc, 
+                    "category": model_type_dict["category"], 
+                    "detail": model_type_dict["detail"],
+                }]
+                
+                break
+        
+    if parent_node is None:
+        breadth += 1
+        if model_type_dict["category"] == "generalized_linear":
+            if model_type_dict["detail"]["linear_link"]:
+                if model_type_dict["detail"]["linear_basis"]:
+                    parent_node = "linear_basis_linear_link"
+                else:
+                    parent_node = "nonlinear_basis_linear_link"
+            else:
+                if model_type_dict["detail"]["linear_basis"]:
+                    parent_node = "linear_basis_nonlinear_link"
+                else:
+                    parent_node = "nonlinear_basis_nonlinear_link"
+        elif model_type_dict["category"] == "decision_tree":
+            parent_node = "decision_tree"
+        elif model_type_dict["category"] == "KNN":
+            parent_node = "knn"
+        else:
+            parent_node = "unknown"
+        path = [{"id": node_id, "acc": acc, "category": model_type_dict["category"], "detail": model_type_dict["detail"]}]
+        
+    max_depth = max(max_depth, len(path))
+    
+    return parent_node, path, max_depth, breadth
+            
 def get_upper_bound(samples):
     model = LogisticRegression()
     model.fit(samples[["x1", "x2"]], samples["y"])
@@ -490,9 +542,9 @@ def add_highlighted_path(graph, path_nodes, color='red', penwidth='2.0'):
     # Highlight all nodes in the path (just the boundary, not filled)
     for i, node in enumerate(path_nodes):
         if i == 0:  # Start node
-            graph.node(node, style='filled', fillcolor='green', penwidth=str(penwidth))
+            graph.node(node, color='green', penwidth=str(penwidth))
         elif i == len(path_nodes) - 1:  # End node
-            graph.node(node, style='filled', fillcolor='red', penwidth=str(penwidth))
+            graph.node(node, color='red', penwidth=str(penwidth))
         else:  # Middle nodes
             graph.node(node, color=color, penwidth=str(penwidth))
 
@@ -539,7 +591,7 @@ def count_tokens(text):
         # Fallback: approximate token count if tiktoken is not available
         return len(text.split())
     
-def draw_vis(idx, figure_name, model_funcs, results, results_dir):
+def draw_vis(idx, figure_name, model_funcs, results_dir):
     save_dir = f"{results_dir}/parsed_model_types"
     os.makedirs(save_dir, exist_ok=True)
     model_type_path = f"{save_dir}/{idx}.json"
@@ -552,29 +604,30 @@ def draw_vis(idx, figure_name, model_funcs, results, results_dir):
         save_json(model_type_json, model_type_path)
 
     for i in range(len(model_type_json)):
-        model_type_json[i]["acc"] = compute_acc(model_type_json[i], get_icl_samples(idx, results))
+        model_type_json[i]["acc"] = model_funcs["samples"][idx]["model_evaluation_table"][i]["accuracy"]
         
-
     # Create the graph
     ml_graph = create_ml_model_hierarchy()
 
     if len(model_type_json) <= 1:
         print(f"Skipping {idx} because it has only one model.")
-        return
+        return 1, 1
     
+    path, max_depth, breadth = [], 0, 0
     for i in range(len(model_type_json)):
-        parent_node = get_parent_node(model_type_json[i])
-        ml_graph.add_node(f"model_{i}", f"Model {i}", "model", parent_node)
+        parent_node, path, max_depth, breadth = get_parent_node(model_type_json[i], path, f"model_{i}", max_depth, breadth)
+        ml_graph.add_node(f"model_{i}", f"Model {i}\n {model_type_json[i]['acc']:.2f}", "model", parent_node)
             
     ml_graph.prune_node()
     figure = add_highlighted_path(ml_graph.visualize(), [f"model_{i}" for i in range(len(model_type_json))], color='blue', penwidth='2.5')
-    figure.render(f'{save_dir}/{figure_name}_{idx}', format='pdf')
+    figure.render(f'{save_dir}/{figure_name}', format='pdf')
+    return max_depth, breadth
 
     
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--idx", type=int, default=0)
+    parser.add_argument("--idx", type=int, nargs='+', default=[])
     parser.add_argument("--dataset_name", type=str, default="circles")
     parser.add_argument("--model_name", type=str, default="claude/claude-3-7-sonnet-20250219-thinking")
     args = parser.parse_args()
@@ -593,7 +646,23 @@ if __name__ == "__main__":
     )
     results = pd.read_parquet(f"{result_dir}/test_default.parquet")
     model_funcs = load_json(f"{result_dir}/test_default_gemini_analysis_llm_analysis.json")
+
     model_text = pd.read_parquet(f"{result_dir}/test_default_gemini_analysis.parquet")
-    figure_name = f"{args.dataset_name}_{args.model_name.replace('/', '_')}_model_tree"
-    draw_vis(args.idx, figure_name, model_funcs, results, result_dir)
+    
+    if len(args.idx) == 0:
+        idxs = range(model_funcs["metadata"]["processed_samples"])
+    else:
+        idxs = args.idx
+    
+    max_depth, breadth = 0, 0
+    for idx in tqdm(idxs):
+        order = model_funcs["samples"][idx]["index"]
+        figure_name = f"{args.dataset_name}_{args.model_name.replace('/', '_')}_model_tree_{order}"
+        max_depth_idx, breadth_idx = draw_vis(idx, figure_name, model_funcs, result_dir)
+        max_depth += max_depth_idx
+        breadth += breadth_idx
+
+    max_depth /= len(idxs)
+    breadth /= len(idxs)
+    print(f"Max depth: {max_depth:.3f}, Breadth: {breadth:.3f}")
 
