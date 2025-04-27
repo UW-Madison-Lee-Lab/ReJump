@@ -186,7 +186,10 @@ class ResponseAnalyzer:
         model = self.client.GenerativeModel('gemini-2.5-pro-preview-03-25')
         # model = self.client.GenerativeModel('gemini-2.0-flash')
         result = model.generate_content(
-            f"System: You are a helpful assistant that extracts information from model outputs.\n\nUser: {prompt}"
+            f"System: You are a helpful assistant that extracts information from model outputs.\n\nUser: {prompt}",
+            generation_config=genai.types.GenerationConfig(
+                temperature=self.temperature,
+            )
         )
         return result.text
     

@@ -32,26 +32,36 @@ def run_analysis_pipeline(base_dir="/home/szhang967/liftr/multi-query-results"):
         for file in files:
             if file == "test_default_gemini_analysis.parquet":
                 input_file = os.path.join(root, file)
-                print(f"Processing file: {input_file}")
-                
-                # Run llm_analysis.py
-                analysis_script = "/home/szhang967/liftr/reasoning_analysis/llm_analysis.py"
                 data_type = get_data_type(input_file)
-            #     if data_type == "classification":
-            #         continue
-                subprocess.run(["python", analysis_script, "--input", input_file, "--data_type", data_type], check=True)
+
+                print(f"Processing file: {input_file}")
+                # if data_type != "classification":
+                #     continue
+                # if "claude" not in input_file:
+                #     continue
+                if "circles" not in input_file:
+                    continue
                 
-                # Get the output file path (same directory as input)
-                output_dir = os.path.dirname(input_file)
-                analysis_output = os.path.join(output_dir,  f"{file.split('.')[0]}" + "_llm_analysis.json")
+                # # Run llm_analysis.py
+                # analysis_script = "/home/szhang967/liftr/reasoning_analysis/llm_analysis.py"
+                # subprocess.run(["python", analysis_script, "--input", input_file, "--data_type", data_type], check=True)
+
+                # Run llm_logical_graph_analysis.py
+                logical_graph_input_file = input_file.replace("test_default_gemini_analysis.parquet", "test_default_gemini_analysis_logical_graph.parquet")
+                logical_graph_analysis_script = "/home/szhang967/liftr/reasoning_analysis/llm_logical_graph_analysis.py"
+                subprocess.run(["python", logical_graph_analysis_script, "--input", logical_graph_input_file], check=True)
+                
+                # # Get the output file path (same directory as input)
+                # output_dir = os.path.dirname(input_file)
+                # analysis_output = os.path.join(output_dir,  f"{file.split('.')[0]}" + "_llm_analysis.json")
                 
                 
-                # Run plot_model_accuracy.py
-                if os.path.exists(analysis_output):
-                    plot_script = "/home/szhang967/liftr/reasoning_analysis/plot_model_accuracy.py"
-                    subprocess.run(["python", plot_script, "--input", analysis_output, "--data_type", data_type], check=True)
-                else: 
-                    print(f"Warning: Analysis output file not found at {analysis_output}")
+                # # Run plot_model_accuracy.py
+                # if os.path.exists(analysis_output):
+                #     plot_script = "/home/szhang967/liftr/reasoning_analysis/plot_model_accuracy.py"
+                #     subprocess.run(["python", plot_script, "--input", analysis_output, "--data_type", data_type], check=True)
+                # else: 
+                #     print(f"Warning: Analysis output file not found at {analysis_output}")
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Run analysis pipeline on Gemini test results.')

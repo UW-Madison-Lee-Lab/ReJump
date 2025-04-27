@@ -19,6 +19,12 @@ That means:
   `def model(x, y, data)`
 Even if `data` is not used, it must be present to ensure compatibility.
 
+🔴 STRICT TEXT MATCHING REQUIREMENT:
+- `rule_original_text` and `validation_original_text` MUST be **copied exactly as they appear** in the original transcript.
+- This includes all spaces, line breaks (`\n`), quotation marks, punctuation, symbols, and even formatting like `"..."`.
+- DO NOT paraphrase, reformat, or truncate. NO ellipses, summaries, or approximations are allowed.
+- If no validation text is present, set `validation_original_text` to "" (empty string), but do not guess or rewrite.
+
 For each fitting model, extract the following fields:
 
 order: (integer) Order of appearance, starting from 0.
@@ -32,8 +38,8 @@ model_family: (string) Best-matching sklearn-style model family (choose from bel
     - custom (if none fit)
 function: (string) Python implementation of the model logic. The function name MUST always be 'def model(x, y, data)', even if 'data' is not used in the function. Constants must be hardcoded.
 extracted_parameter: (list of strings) All constant parameters used in function, excluding input features. If none, use [].
-rule_original_text: (string) Exact original text where the rule was proposed.
-validation_original_text: (string) Exact original text where the rule was tested or validated. Leave "" if absent.
+rule_original_text: (string) Exact original text where the rule was proposed (must be IDENTICAL to the source, with all characters preserved).
+validation_original_text: (string) Exact original text where the rule was tested or validated (must be IDENTICAL to the source, or "" if not present).
 
 Output Format Example:
 
@@ -46,7 +52,7 @@ Output Format Example:
     "model_family": "sklearn.linear_model.LinearRegression",
     "function": "def model(x, y, data):\n    w1, w2, b = 0.4187, 0.3765, 0.0632\n    return w1 * x + w2 * y + b",
     "extracted_parameter": ["w1=0.4187", "w2=0.3765", "b=0.0632"],
-    "rule_original_text": "Let me try to hypothesize a linear model...",
+    "rule_original_text": "Let me try to hypothesize a linear model with parameters: w1 = 0.4187, w2 = 0.3765, b = 0.0632.",
     "validation_original_text": "Tested on [-0.552, 0.332], predicted -0.0431 vs actual -0.048."
   },
   {
@@ -56,7 +62,7 @@ Output Format Example:
     "model_family": "sklearn.neighbors.KNeighborsRegressor",
     "function": "def model(x, y, data):\n    from math import sqrt\n    k=3\n    distances = sorted([(sqrt((x - xi)**2 + (y - yi)**2), target) for xi, yi, target in data])\n    top_k = [target for _, target in distances[:k]]\n    return sum(top_k) / len(top_k)",
     "extracted_parameter": ["k=3"],
-    "rule_original_text": "Alternatively, maybe a nearest neighbor approach...",
+    "rule_original_text": "Alternatively, maybe a nearest neighbor approach with k=3 would be better.",
     "validation_original_text": "Nearest three points' targets: -0.835, -0.768, -0.929."
   },
   {
@@ -76,9 +82,9 @@ Remember:
 - Extract ALL models.
 - Follow EXACT order.
 - Be FAITHFUL to original rules.
+- `rule_original_text` and `validation_original_text` must be IDENTICAL to source text with no edits.
 - Extract PARAMETERS explicitly.
 - Function name must ALWAYS be: def model(x, y, data)
-
 
 ---
 

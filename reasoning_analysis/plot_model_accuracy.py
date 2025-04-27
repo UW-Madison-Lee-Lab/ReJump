@@ -66,6 +66,7 @@ def extract_model_accuracy_data(json_file):
         data = json.load(f)
     
     all_data = []
+    all_data_with_unnormalized_order = []
     # Add a second list for model_family_best_accuracy data
     all_best_data = []
     # Add a third list for accuracy/best_accuracy ratio data
@@ -120,6 +121,9 @@ def extract_model_accuracy_data(json_file):
         all_data.extend((norm_order, accuracy, sample_idx)
                        for norm_order, accuracy in zip(normalized_orders, filtered_accuracies))
         
+        all_data_with_unnormalized_order.extend((order, accuracy, sample_idx)
+                       for order, accuracy in zip(filtered_orders, filtered_accuracies))
+        
         # Add model_family_best_accuracy data if available
         all_best_data.extend((norm_order, float(best_acc), sample_idx)
                             for norm_order, best_acc in zip(normalized_orders, filtered_best_accuracies)
@@ -130,8 +134,9 @@ def extract_model_accuracy_data(json_file):
             if best_acc is not None and best_acc > 0:
                 ratio = accuracy / best_acc
                 all_ratio_data.append((norm_order, ratio, sample_idx))
-    
-    return all_data, all_best_data, all_ratio_data, total_filtered, sample_model_counts
+        
+
+    return all_data, all_best_data, all_ratio_data, total_filtered, sample_model_counts, all_data_with_unnormalized_order
 
 def extract_model_mse_data(json_file):
     """Extract model MSE data from the JSON file for regression tasks."""
@@ -139,6 +144,7 @@ def extract_model_mse_data(json_file):
         data = json.load(f)
     
     all_data = []
+    all_data_with_unnormalized_order = []
     # Add a second list for model_family_best_mse data
     all_best_data = []
     # Add a third list for |best_mse - mse| difference data
@@ -193,6 +199,9 @@ def extract_model_mse_data(json_file):
         all_data.extend((norm_order, mse, sample_idx)
                        for norm_order, mse in zip(normalized_orders, filtered_mse))
         
+        all_data_with_unnormalized_order.extend((order, mse, sample_idx)
+                       for order, mse in zip(filtered_orders, filtered_mse))
+        
         # Add model_family_best_mse data if available
         all_best_data.extend((norm_order, float(best_mse), sample_idx)
                             for norm_order, best_mse in zip(normalized_orders, filtered_best_mse)
@@ -204,7 +213,7 @@ def extract_model_mse_data(json_file):
                 diff = abs(best_mse - mse)
                 all_diff_data.append((norm_order, diff, sample_idx))
     
-    return all_data, all_best_data, all_diff_data, total_filtered, sample_model_counts
+    return all_data, all_best_data, all_diff_data, total_filtered, sample_model_counts, all_data_with_unnormalized_order
 
 def clear_existing_plots():
     """Clear all existing plot contents in matplotlib to prevent leftover graphical elements from affecting new charts"""
@@ -330,8 +339,15 @@ def plot_model_accuracy(data, output_file=None, title=None, exclude_outliner=Fal
     else:
         plt.show()
 
-def plot_model_accuracy_with_ci(data, output_file=None, title=None):
-    """Create a scatter plot with mean line and confidence intervals using seaborn."""
+def plot_model_accuracy_with_ci(data, output_file=None, title=None, fit_type='quadratic'):
+    """Create a scatter plot with mean line and confidence intervals using seaborn.
+    
+    Args:
+        data: List of tuples containing (normalized_order, accuracy, sample_index)
+        output_file: Path to save the output image file
+        title: Custom plot title
+        fit_type: Type of regression line to fit. Options: 'linear', 'quadratic', or None. Default is 'linear'.
+    """
     clear_existing_plots()
     
     # Convert data to DataFrame format for seaborn
@@ -344,10 +360,29 @@ def plot_model_accuracy_with_ci(data, output_file=None, title=None):
     })
     
     # Create scatter plot with mean line and confidence intervals
-    sns.lineplot(data=df, x='Normalized Order', y='Accuracy', 
-                ci=95,  # 95% confidence interval
-                estimator='mean',
-                label='Mean with 95% CI')
+    if fit_type == 'linear':
+        # Use order=1 for linear fit
+        sns.lineplot(data=df, x='Normalized Order', y='Accuracy', 
+                    ci=95,  # 95% confidence interval
+                    estimator='mean',
+                    label='Mean with 95% CI')
+    elif fit_type == 'quadratic':
+        # For quadratic fit, use regplot with order=2
+        sns.regplot(data=df, x='Normalized Order', y='Accuracy',
+                   scatter=False,
+                   order=2,
+                   ci=95,
+                   line_kws={'label': 'Quadratic fit with 95% CI'})
+        
+        # Add the mean trend line separately
+        sns.lineplot(data=df, x='Normalized Order', y='Accuracy',
+                    ci=None,
+                    estimator='mean',
+                    label='Mean trend')
+    elif fit_type is None:
+        # Just plot the raw data points without regression
+        sns.scatterplot(data=df, x='Normalized Order', y='Accuracy',
+                       hue='Sample', palette='viridis', alpha=0.7)
     
     # Add individual points
     # sns.scatterplot(data=df, x='Normalized Order', y='Accuracy',
@@ -757,11 +792,11 @@ def main():
     # Check JSON file to determine data type if not specified
     if args.data_type == 'classification':
         print("Extracting classification model accuracy data...")
-        data, best_data, ratio_data, filtered_count, sample_model_counts = extract_model_accuracy_data(args.input)
+        data, best_data, ratio_data, filtered_count, sample_model_counts, all_data_with_unnormalized_order = extract_model_accuracy_data(args.input)
         metric_name = "accuracy"
     elif args.data_type == 'regression':
         print("Extracting regression model MSE data...")
-        data, best_data, diff_data, filtered_count, sample_model_counts = extract_model_mse_data(args.input)
+        data, best_data, diff_data, filtered_count, sample_model_counts, all_data_with_unnormalized_order = extract_model_mse_data(args.input)
         metric_name = "MSE"
     else:
         raise NotImplementedError(f"Data type '{args.data_type}' not implemented")
@@ -798,6 +833,9 @@ def main():
         
         if args.data_type == 'classification':
             plot_model_accuracy(data, trend_output, args.title, y_limits=(55, 90))
+
+            unnormalized_trend_output = output_dir / f"{input_stem}_unnormalized_trend_plot.png"
+            plot_model_accuracy(all_data_with_unnormalized_order, unnormalized_trend_output, args.title, y_limits=(40, 90))
         else:
             plot_model_mse(data, trend_output, args.title)
             

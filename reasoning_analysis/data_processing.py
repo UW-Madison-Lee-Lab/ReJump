@@ -7,7 +7,7 @@ import json
 import re
 import math
 import random
-import numpy as np  # 确保导入numpy
+import numpy as np  # Make sure numpy is imported
 from typing import Dict, Any, List, Optional, Tuple, Callable, Union
 
 import pandas as pd
@@ -638,14 +638,14 @@ def extract_and_execute_model_functions(extracted_json: str, ground_truth: Dict[
     # Results to return
     model_results = []
     
-    # Add安全的比较函数
+    # Add safe comparison functions
     def safe_equals(a, b):
-        """安全地比较两个可能是NumPy数组的值"""
+        """Safely compare two values that might be NumPy arrays"""
         if hasattr(a, 'shape') or hasattr(b, 'shape'):
             try:
                 return np.array_equal(a, b)
             except:
-                # 如果不能直接比较，尝试转换为Python原生类型
+                # If direct comparison fails, try to convert to Python native types
                 try:
                     if hasattr(a, 'item') and callable(getattr(a, 'item')):
                         a = a.item()
@@ -657,18 +657,18 @@ def extract_and_execute_model_functions(extracted_json: str, ground_truth: Dict[
         return a == b
     
     def safe_not_equals(a, b):
-        """安全地比较两个可能是NumPy数组的值是否不相等"""
+        """Safely compare if two values that might be NumPy arrays are not equal"""
         return not safe_equals(a, b)
     
     def create_all_samples(in_context_samples, current_x, current_y, data_type):
         """
-        创建不包含当前样本的样本列表
+        Create a sample list that doesn't include the current sample
         
         Args:
-            in_context_samples: 所有样本列表
-            current_x: 当前样本的x特征
-            current_y: 当前样本的y特征
-            data_type: 数据类型（'regression'或'classification'）
+            in_context_samples: List of all samples
+            current_x: x feature of the current sample
+            current_y: y feature of the current sample
+            data_type: Data type ('regression' or 'classification')
             
         Returns:
             List of tuples (x, y, value) excluding the current sample
@@ -711,6 +711,9 @@ def extract_and_execute_model_functions(extracted_json: str, ground_truth: Dict[
         model_desc = model.get('description', f'Model {model_idx}')
         model_func_str = model.get('function', '')
         model_family = model.get('model_family', 'cannot parse model family')  # Extract model_family
+        rule_original_text = model.get('rule_original_text', '')
+        validation_original_text = model.get('validation_original_text', '')
+        
         
         # print(f"\nProcessing model {model_idx+1}/{len(models)}: {model_desc}")
         # print(f"Model family: {model_family}")
@@ -926,7 +929,9 @@ def extract_and_execute_model_functions(extracted_json: str, ground_truth: Dict[
                     'mse': mse,
                     'total_count': total_count,
                     'valid_predictions': len(squared_errors),
-                    'predictions': predictions
+                    'predictions': predictions,
+                    'rule_original_text': rule_original_text,
+                    'validation_original_text': validation_original_text
                 })
             elif data_type == 'classification':
                 # For classification, calculate accuracy
@@ -941,7 +946,9 @@ def extract_and_execute_model_functions(extracted_json: str, ground_truth: Dict[
                     'accuracy': accuracy,
                     'correct_count': correct_count,
                     'total_count': total_count,
-                    'predictions': predictions
+                    'predictions': predictions,
+                    'rule_original_text': rule_original_text,
+                    'validation_original_text': validation_original_text
                 })
             else:
                 raise NotImplementedError(f"Data type {data_type} not implemented")
@@ -1287,6 +1294,8 @@ def create_model_evaluation_table(model_results, models_data, data_type):
             valid_predictions = result.get('valid_predictions', 0)
             model_family = result.get("model_family", "unknown")
             predictions = result.get("predictions", [])
+            rule_original_text = result.get("rule_original_text", "")
+            validation_original_text = result.get("validation_original_text", "")
             
             # Compute model_family_best_mse
             model_family_best_mse = compute_model_family_best_mse(model_family, predictions)
@@ -1302,7 +1311,9 @@ def create_model_evaluation_table(model_results, models_data, data_type):
                 "model_code": result.get("model_func", ""),
                 "model_family": model_family,
                 "model_family_best_mse": model_family_best_mse,
-                "predictions": predictions[:10]  # Include first 10 predictions
+                "predictions": predictions,  # Include first 10 predictions
+                "rule_original_text": rule_original_text,
+                "validation_original_text": validation_original_text
             }
         elif data_type == 'classification':
             accuracy = result.get('accuracy', 0.0)
@@ -1310,6 +1321,8 @@ def create_model_evaluation_table(model_results, models_data, data_type):
             total_count = result.get('total_count', 0)
             model_family = result.get("model_family", "unknown")
             predictions = result.get("predictions", [])
+            rule_original_text = result.get("rule_original_text", "")
+            validation_original_text = result.get("validation_original_text", "")
             
             # Compute model_family_best_accuracy
             model_family_best_accuracy = compute_model_family_best_accuracy(model_family, predictions)
@@ -1325,7 +1338,9 @@ def create_model_evaluation_table(model_results, models_data, data_type):
                 "model_code": result.get("model_func", ""),
                 "model_family": model_family,
                 "model_family_best_accuracy": model_family_best_accuracy,
-                "predictions": predictions[:10]  # Include first 10 predictions
+                "predictions": predictions,  # Include first 10 predictions
+                "rule_original_text": rule_original_text,
+                "validation_original_text": validation_original_text
             }
         else:
             raise NotImplementedError(f"Data type {data_type} not implemented")

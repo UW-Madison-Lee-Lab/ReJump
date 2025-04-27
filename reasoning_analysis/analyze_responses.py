@@ -122,25 +122,94 @@ def read_instruction_file(file_path: str) -> str:
         logger.error(f"Error reading instruction file: {e}")
         raise ValueError(f"Could not read instruction file: {file_path}")
 
+# def process_reasoning(input: str) -> str:
+#     #split the input by '\n' and concate them with their index
+#     lines = input.split('\n')
+#     #remove empty lines
+#     lines = [line for line in lines if line.strip()]
+#     processed_lines = []
+#     reasoning_dict = {}
+#     for i, line in enumerate(lines):
+#         step_key = i # Use integer index as key
+#         reasoning_dict[step_key] = line
+#         processed_lines.append(f"[Step {i}]: {line}")
+#     return '\n'.join(processed_lines), reasoning_dict
+
+def process_reasoning(input_str: str) -> tuple[str, dict]:
+
+    if not input_str:
+        return "", {}
+        
+    parts = re.split(r'([.?!])', input_str)
+    
+    sentences = []
+    current_sentence = ""
+    for part in parts:
+        # Skip empty parts that can result from the split
+        if not part: 
+            continue
+        
+        # Append the current part (either text or punctuation)
+        current_sentence += part
+        
+        # If the part is a punctuation mark, the sentence is complete
+        if part in ['.', '?', '!']:
+            sentence_strip = current_sentence.strip()
+            if sentence_strip: # Avoid adding empty strings if there's only whitespace
+                 sentences.append(sentence_strip)
+            # Reset for the next sentence
+            current_sentence = ""
+
+    # Add any remaining part if the input doesn't end with punctuation
+    remaining_strip = current_sentence.strip()
+    if remaining_strip:
+        sentences.append(remaining_strip)
+
+    # Filter out potentially empty strings again (e.g., from consecutive delimiters)
+    sentences = [s for s in sentences if s]
+
+    processed_lines = []
+    reasoning_dict = {}
+    for i, sentence in enumerate(sentences):
+        step_key = i # Use integer index as key
+        reasoning_dict[step_key] = sentence
+        processed_lines.append(f"[Step {i}]: {sentence}")
+        
+    # Return the formatted string and the dictionary
+    return '\n'.join(processed_lines), reasoning_dict
 
 def process_row(args):
     """
     Process a single row from the dataframe using LLM API
     
     Args:
-        args: Tuple containing (row_idx, row_data, instruction, analyzer, column_prefix, continue_on_error)
+        args: Tuple containing (row_idx, row_data, instruction, analyzer, column_prefix, continue_on_error, field_of_interests)
         
     Returns:
-        Tuple of (row_idx, raw_output, extracted_json, error)
+        Tuple of (row_idx, raw_output, extracted_json, total_input, reasoning_dict, error)
     """
-    row_idx, row, instruction, analyzer, column_prefix, continue_on_error = args
+    row_idx, row, instruction, analyzer, column_prefix, continue_on_error, field_of_interests = args
     
     try:
         # Handle responses based on its type (could be string or list)
-        response = row['responses'][0]
-        # Create the prompt by appending the response to the instruction
-        # Replace the placeholder with the actual response
-        prompt = instruction.replace("<INSERT MODEL OUTPUT TRANSCRIPT HERE>", response)
+        reasonings_str, reasoning_dict = process_reasoning(row['reasonings'][0])
+        input_prompt = row['prompt'][0]['content']
+        responses = row['responses'][0]
+
+        if field_of_interests == 'input+reasonings':
+            # Concatenate 'prompt' and 'reasonings' fields
+            total_input = 'Input: ' + input_prompt + '\n' + 'Reasoning: ' + reasonings_str
+        elif field_of_interests == 'reasonings':
+            total_input = reasonings_str
+        elif field_of_interests == 'responses':
+            total_input = responses
+        else:
+            raise NotImplementedError(f"Field of interests {field_of_interests} not implemented")
+        
+        if "<INSERT MODEL OUTPUT TRANSCRIPT HERE>" in instruction:
+            prompt = instruction.replace("<INSERT MODEL OUTPUT TRANSCRIPT HERE>", total_input)
+        else:
+            prompt = instruction + total_input
         
         # Call LLM API with instruction + response
         raw_output = analyzer.analyze_response(prompt)
@@ -148,16 +217,16 @@ def process_row(args):
         # Extract JSON
         extracted_json = extract_json(raw_output)
         
-        return row_idx, raw_output, json.dumps(extracted_json), None
+        return row_idx, raw_output, json.dumps(extracted_json), total_input, reasoning_dict, None
     except Exception as e:
         error_msg = f"Error processing row {row_idx}: {str(e)}"
         logger.error(error_msg)
         
         if not continue_on_error:
-            return row_idx, None, None, error_msg
+            return row_idx, None, None, None, None, error_msg
         else:
             logger.warning(f"Continuing due to --continue-on-error flag for row {row_idx}...")
-            return row_idx, f"ERROR: {str(e)}", "{}", None
+            return row_idx, f"ERROR: {str(e)}", "{}", None, {}, None
 
 
 def process_file(
@@ -170,7 +239,9 @@ def process_file(
     max_retries: int = 5,
     delay: int = 1,
     continue_on_error: bool = False,
-    batch_size: int = 10
+    batch_size: int = 10,
+    field_of_interests: str = "responses",
+    debug: bool = False
 ) -> None:
     """
     Process a parquet file and analyze responses
@@ -186,9 +257,16 @@ def process_file(
         delay: Delay between API calls in seconds
         continue_on_error: Whether to continue processing after an error
         batch_size: Size of batches for parallel processing and saving
+        field_of_interests: The field name in the dataframe to use as the response (default: 'responses')
+        debug: Whether to run in debug mode (limits to 5 rows)
     """
     logger.info(f"Reading input file: {input_file}")
     df = pd.read_parquet(input_file)
+    
+    if debug:
+        logger.info("Running in debug mode - using only first 5 rows")
+        df = df.head(5)
+        batch_size = min(batch_size, 5)
     
     # Read the instruction file
     logger.info(f"Reading instruction file: {instruction_file}")
@@ -203,6 +281,8 @@ def process_file(
     df[f'{column_prefix}_llm_type'] = llm_type
     df[f'{column_prefix}_raw_output'] = None
     df[f'{column_prefix}_extracted_json'] = None
+    df[f'{column_prefix}_total_input'] = None  # Add new column for total_input
+    df[f'{column_prefix}_splitted_reasoning_dict'] = None # Add new column for reasoning dict
     
     logger.info(f"Processing {len(df)} rows using {llm_type} API with batch size {batch_size}")
     
@@ -219,7 +299,7 @@ def process_file(
             
             # Create list of tasks for this batch
             tasks = [
-                (i, df.iloc[i], instruction, analyzer, column_prefix, continue_on_error)
+                (i, df.iloc[i], instruction, analyzer, column_prefix, continue_on_error, field_of_interests)
                 for i in range(batch_start, batch_end)
             ]
             
@@ -229,7 +309,7 @@ def process_file(
             # Process completed tasks as they finish
             batch_errors = []
             for future in concurrent.futures.as_completed(future_to_idx):
-                row_idx, raw_output, extracted_json, error = future.result()
+                row_idx, raw_output, extracted_json, total_input, reasoning_dict, error = future.result()
                 
                 if error and not continue_on_error:
                     batch_errors.append(error)
@@ -237,6 +317,9 @@ def process_file(
                     
                 df.at[row_idx, f'{column_prefix}_raw_output'] = raw_output
                 df.at[row_idx, f'{column_prefix}_extracted_json'] = extracted_json
+                df.at[row_idx, f'{column_prefix}_total_input'] = total_input  # Save total_input
+                # Store the reasoning dictionary as a JSON string
+                df.at[row_idx, f'{column_prefix}_splitted_reasoning_dict'] = json.dumps(reasoning_dict) 
                 
                 # Update progress bar
                 processed_count += 1
@@ -251,6 +334,13 @@ def process_file(
             # Save after each batch
             logger.info(f"Saving results after processing batch up to row {batch_end-1}...")
             df.to_parquet(output_file)
+            
+            # In debug mode, also save as JSON
+            if debug:
+                json_output_file = str(Path(output_file).with_suffix('.json'))
+                logger.info(f"Debug mode: Also saving results to JSON file: {json_output_file}")
+                # Convert DataFrame to JSON with records orientation and indent for readability
+                df.to_json(json_output_file, orient='records', indent=2, force_ascii=False)
     
     # Close progress bar
     pbar.close()
@@ -268,8 +358,6 @@ def parse_arguments():
                         help='Path to output parquet file (default: auto-generated)')
     
     parser.add_argument('--instruction', '-p', type=str, 
-                        # default="classification-fitting_model_extraction_prompt.txt",
-                        # default="regression-fitting_model_extraction_prompt.txt",
                         help='Path to instruction file')
     
     parser.add_argument('--llm', '-l', type=str, default='gemini',
@@ -297,8 +385,14 @@ def parse_arguments():
     parser.add_argument('--output_suffix', '-s', type=str, default='',
                         help='Suffix to append to the output filename (default: empty)')
     
+    parser.add_argument('--field_of_interests', '-f', type=str, default='responses',
+                        help="Field name in the dataframe to use as the response (default: 'responses')")
+    
     parser.add_argument('--verbose', '-v', action='store_true',
                         help='Enable verbose logging')
+    
+    parser.add_argument('--debug', '-D', action='store_true',
+                        help='Run in debug mode (limits to 5 rows)')
     
     return parser.parse_args()
 
@@ -314,7 +408,10 @@ def main():
     # Create output file path if not provided
     if args.output is None:
         input_path = Path(args.input)
-        output_path = input_path.parent / f"{input_path.stem}_{args.llm}_analysis{args.output_suffix}.parquet"
+        suffix = args.output_suffix
+        if args.debug:
+            suffix = '_debug' + suffix
+        output_path = input_path.parent / f"{input_path.stem}_{args.llm}_analysis{suffix}.parquet"
         args.output = str(output_path)
     
     # Process file
@@ -328,7 +425,9 @@ def main():
         max_retries=args.max_retries,
         delay=args.delay,
         continue_on_error=args.continue_on_error,
-        batch_size=args.batch_size
+        batch_size=args.batch_size,
+        field_of_interests=args.field_of_interests,
+        debug=args.debug
     )
 
 

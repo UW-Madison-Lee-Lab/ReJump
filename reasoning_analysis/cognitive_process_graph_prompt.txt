@@ -1,0 +1,214 @@
+You are given:
+1. A complete chain-of-thought reasoning trace from a model, pre-processed into numbered lines. Each line starts with its index (0, 1, 2, ...) followed by a period and a space, like `"{index}. {reasoning step text}"`. Each numbered line represents a single node in the reasoning graph.
+
+Your goal is to extract the graph structure from this reasoning trace. **Output every node** indicated by a numbered line; do not omit any. Follow the format demonstrated in the example below.
+
+## 1. Node Schema
+
+Each node must be an object with these fields:
+- **id** (integer): The index number provided at the beginning of the corresponding input line. This must match the input numbering exactly.
+- **depends_on** (array of integers or null): The `id`(s) (i.e., the index numbers from the input) of the node(s) this step directly uses as input or logically follows from. Dependencies must faithfully reflect the original chain-of-thought. If a node represents an initial statement or thought based only on the implicit input/context, set this field to `null`. You need to infer these dependencies by analyzing the content and flow of the reasoning across the numbered lines.
+- **type** (string): one of the following categories, determined by analyzing the content of the corresponding input line:
+    - `Observation/Given`: Information taken directly from the problem, context, or restated/inferred facts derived from prior steps.
+        - `depends_on` is usually `null` if it's the first mention from input, or lists prior `id`(s) if inferred or restated.
+    - `Calculation/Process Step`: Performing a mathematical operation, applying a rule, or executing a specific action defined in a plan.
+        - `depends_on` should list the `id`(s) of the node(s) providing the necessary input data or context for this step (e.g., Observations, prior Conclusions).
+    - `Conclusion/Assertion`: Stating an intermediate or final result, judgment, or derived statement based on preceding steps.
+        - `depends_on` should list the `id`(s) of the Observation, Calculation, or other Conclusion node(s) leading to this result.
+    - `Meta-Cognition/Plan`: Statements about the reasoning process itself, planning steps, strategic decisions, self-correction triggers, or evaluations of the process/state.
+        - `depends_on` might be `null` or refer to the immediately preceding step(s) or the general context being commented upon.
+
+> **Important:**
+> - No additional fields (like `is_hallucinated`, `origin`, `points_to`) are required for this schema.
+> - Focus on correctly assigning the `id`, `depends_on`, and `type` based on the definitions above and the reasoning flow.
+> - The `text` of the reasoning step is **not** included in the output node object.
+
+## 2. Example (One-Shot)
+
+**Input Transcript:**
+```
+[Step 0]: Okay, let's see.
+[Step 1]: The problem is about comparing the average enrollments of two high schools: Norman High School and Butler High School.
+[Step 2]: The question is asking how much greater the average enrollment at Norman is compared to Butler.
+[Step 3]: First, I need to figure out the enrollment numbers for both schools.
+[Step 4]: The problem says Norman enrolls an average of 4000 students every year.
+[Step 5]: That's straightforward.
+[Step 6]: So Norman = 4000.
+[Step 7]: Now, Butler High School is the neighboring school and enrolls 3/4 as many students as Norman.
+[Step 8]: Hmm, so Butler's enrollment is three-fourths of Norman's.
+[Step 9]: To find Butler's enrollment, I need to calculate 3/4 of 4000.
+[Step 10]: Let me do that math.
+[Step 11]: 3/4 of 4000.
+[Step 12]: So 4000 divided by 4 is 1000, and then multiplied by 3 would be 3000.
+[Step 13]: So Butler has 3000 students on average.
+[Step 14]: Now, the question is asking how much greater Norman's enrollment is compared to Butler's.
+[Step 15]: That means I need to subtract Butler's enrollment from Norman's to find the difference.
+[Step 16]: So 4000 (Norman) minus 3000 (Butler) equals 1000.
+[Step 17]: Therefore, Norman's enrollment is 1000 students greater than Butler's.
+[Step 18]: Wait, let me double-check.
+[Step 19]: If Butler is 3/4 of Norman, then 3/4 * 4000 is indeed 3000.
+[Step 20]: Then subtracting 3000 from 4000 gives 1000.
+[Step 21]: That seems right.
+[Step 22]: Yeah, that makes sense.
+[Step 23]: No mistakes there.
+```
+
+**Corresponding Output JSON:**
+```json
+{
+  "nodes": [
+    {
+      "id": 0,
+      "depends_on": null,
+      "type": "Meta-Cognition/Plan"
+    },
+    {
+      "id": 1,
+      "depends_on": null,
+      "type": "Observation/Given"
+    },
+    {
+      "id": 2,
+      "depends_on": [1],
+      "type": "Observation/Given"
+    },
+    {
+      "id": 3,
+      "depends_on": [2],
+      "type": "Meta-Cognition/Plan"
+    },
+    {
+      "id": 4,
+      "depends_on": null,
+      "type": "Observation/Given"
+    },
+    {
+      "id": 5,
+      "depends_on": [4],
+      "type": "Meta-Cognition/Plan"
+    },
+    {
+      "id": 6,
+      "depends_on": [4],
+      "type": "Conclusion/Assertion"
+    },
+    {
+      "id": 7,
+      "depends_on": null,
+      "type": "Observation/Given"
+    },
+    {
+      "id": 8,
+      "depends_on": [7],
+      "type": "Observation/Given"
+    },
+    {
+      "id": 9,
+      "depends_on": [6, 8],
+      "type": "Meta-Cognition/Plan"
+    },
+    {
+      "id": 10,
+      "depends_on": [9],
+      "type": "Meta-Cognition/Plan"
+    },
+    {
+      "id": 11,
+      "depends_on": [9],
+      "type": "Calculation/Process Step"
+    },
+    {
+      "id": 12,
+      "depends_on": [11],
+      "type": "Calculation/Process Step"
+    },
+    {
+      "id": 13,
+      "depends_on": [12],
+      "type": "Conclusion/Assertion"
+    },
+    {
+      "id": 14,
+      "depends_on": [2],
+      "type": "Observation/Given"
+    },
+    {
+      "id": 15,
+      "depends_on": [6, 13, 14],
+      "type": "Meta-Cognition/Plan"
+    },
+    {
+      "id": 16,
+      "depends_on": [6, 13],
+      "type": "Calculation/Process Step"
+    },
+    {
+      "id": 17,
+      "depends_on": [16],
+      "type": "Conclusion/Assertion"
+    },
+    {
+      "id": 18,
+      "depends_on": [17],
+      "type": "Meta-Cognition/Plan"
+    },
+    {
+      "id": 19,
+      "depends_on": [7, 13],
+      "type": "Calculation/Process Step"
+    },
+    {
+      "id": 20,
+      "depends_on": [6, 13, 17],
+      "type": "Calculation/Process Step"
+    },
+    {
+      "id": 21,
+      "depends_on": [19, 20],
+      "type": "Conclusion/Assertion"
+    },
+    {
+      "id": 22,
+      "depends_on": [21],
+      "type": "Conclusion/Assertion"
+    },
+    {
+      "id": 23,
+      "depends_on": [21, 22],
+      "type": "Conclusion/Assertion"
+    }
+  ]
+}
+```
+
+## 3. Output Format
+
+Return **only** a single JSON object with a top-level key `"nodes"`, whose value is an array of node objects following the schema and example above:
+
+```json
+{
+  "nodes": [
+    {
+      "id": 0,
+      "depends_on": <dependencies_for_node_0>,
+      "type": "<type_of_node_0>"
+    },
+    {
+      "id": 1,
+      "depends_on": <dependencies_for_node_1>,
+      "type": "<type_of_node_1>"
+    },
+    // ... more nodes
+    {
+      "id": N,
+      "depends_on": <dependencies_for_node_N>,
+      "type": "<type_of_node_N>"
+    }
+  ]
+}
+```
+
+---
+
+Now extract the fitting models from the following transcript:
+<INSERT MODEL OUTPUT TRANSCRIPT HERE>
