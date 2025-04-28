@@ -377,7 +377,8 @@ def get_graph(idx, results, results_dir, overwrite=False):
     visit_order = get_node_visit_order(json_data)
     graph, max_depth, breadth = create_flowchart_from_dict(json_data)
     graph = add_highlighted_path(graph, visit_order, color='blue', penwidth='2.5')
-    graph.render(f"{results_dir}/tree_vis/{idx}", format="pdf")
+    if graph is not None:
+        graph.render(f"{results_dir}/tree_vis/{idx}", format="pdf")
     
     return graph, max_depth, breadth
 

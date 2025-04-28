@@ -463,4 +463,20 @@ supported_datasets = {
         "type": "other",
         "difficulty": None,
     },
+    "math500": {
+        "num_classes": None,
+        "num_features": None,
+        "feature_noise": None,
+        "label_noise": None,
+        "type": "other",
+        "difficulty": None,
+    },
+    "gpqa_diamond": {
+        "num_classes": None,
+        "num_features": None,
+        "feature_noise": None,
+        "label_noise": None,
+        "type": "other",
+        "difficulty": None,
+    },
 }

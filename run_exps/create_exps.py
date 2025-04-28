@@ -29,6 +29,7 @@ parser.add_argument("--data_mode", type=str, default="default", choices=["defaul
 parser.add_argument("--wandb", type=int, default=2, choices=[0, 1, 2])
 parser.add_argument("--api_workers", type=int, default=16)
 parser.add_argument("--exp_name", type=str, default="")
+parser.add_argument("--test_ratio", type=float, default=1)
 args = parser.parse_args()
 
 if args.load_train_step:
@@ -89,6 +90,7 @@ for dataset in dataset_list:
                             feature_noise=feature_noise,
                             label_noise=args.label_noise,
                             data_mode=args.data_mode,
+                            test_ratio=args.test_ratio
                         )
                         command_list.append(gen_command)
                         if args.train:

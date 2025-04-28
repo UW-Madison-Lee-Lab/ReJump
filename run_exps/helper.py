@@ -12,6 +12,7 @@ def gen_dataset(
     feature_noise=None,
     label_noise=0.0,
     data_mode="default",
+    test_ratio=1,
 ):
     if "ricl" in template_type:
         if supported_datasets[dataset_name]["type"] == "regression":
@@ -81,7 +82,7 @@ python -m examples.data_preprocess.{dataset_name} \
     --n_shot={shot} \
     --n_query={n_query} \
     --feature_noise={feature_noise} \
-    --test_ratio=0.2 \
+    --test_ratio={test_ratio} \
     --label_noise={label_noise} \
     --data_mode={data_mode}
             """ 
