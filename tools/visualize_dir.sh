@@ -1,7 +1,7 @@
 
 #!/usr/bin/env bash
 
-BASE_DIR="results/gemini-flash"
+BASE_DIR="results/deepseek"
 
 for parquet_file in $(find "$BASE_DIR" -type f -name "test_default.parquet"); do
     echo "Processing: $parquet_file"
