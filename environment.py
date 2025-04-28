@@ -13,7 +13,7 @@ TRANSFORMERS_CACHE = "/data/yzeng58/.cache/huggingface/hub"
 TRITON_CACHE_DIR="/data/yzeng58/cache/triton"
  
 WANDB_INFO = {
-    'project': 'liftr',
+    'project': 'liftr-generation',
     'entity': 'lee-lab-uw-madison'
 }
  

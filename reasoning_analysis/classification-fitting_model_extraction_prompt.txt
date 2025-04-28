@@ -1,0 +1,112 @@
+You are given a transcript of a model reasoning through a classification task.
+
+🎯 Your task is to extract **all fitting models** the model proposed, **in the exact order they appear** in the transcript.
+
+---
+
+### ✅ What is a fitting model?
+
+A **fitting model** is any rule, condition, or heuristic the model proposes to classify data points into classes.  
+Even if the rule is later rejected, restated, or redundant — it must be included.
+
+Each fitting model must include:
+
+1. "order" — the position in which the model proposed it (starting from 0)
+2. "description" — a concise, human-readable description of the rule
+3. "rule" — a dictionary where each class label (e.g., "0", "1") maps to a list of logic expressions
+4. "model_family" — Best-matching sklearn-style model family (choose from below or 'custom'):
+    - sklearn.tree.DecisionTreeClassifier
+    - sklearn.neighbors.KNeighborsClassifier
+    - sklearn.linear_model.LogisticRegression
+    - sklearn.preprocessing.PolynomialFeatures
+    - custom (if none fit)
+5. "function" — a Python function implementing the rule with signature `def model(x, y, data)`
+    - All constants must be hardcoded in the function.
+    - The function must be fully executable.
+6. "extracted_parameter" — All constant parameters used in the function (excluding x, y, data). If none, use [].
+7. "rule_original_text" — the **exact original text** where the model proposes this rule
+    - ❗️It **must match the original transcript exactly**, including all spaces, punctuation, escape characters (e.g., `\n`), etc.
+    - Do **not** paraphrase, abbreviate, or use ellipses (e.g., "...") under any circumstance.
+8. "validation_original_text" — the **exact original text** where the model validates this rule, or leave "" if not explicitly validated
+    - ❗️Must also be an **exact character-for-character match** with the transcript.
+
+---
+
+### ⚠️ Instructions
+
+- 🔁 You **must include every proposed fitting model**, even if similar or repeated
+- 🧭 You must **preserve their original order** (based on first appearance in the transcript)
+- 🧪 If the rule was not tested, set "validation_original_text" to ""
+- 🧩 Both `rule_original_text` and `validation_original_text` must be **verbatim matches** to the transcript — no modification allowed
+
+---
+
+### 🧪 1-shot Example (Format Only — Do Not Copy Content)
+
+```json
+[
+  {
+    "order": 0,
+    "description": "Quadrant I → Class 1",
+    "rule": {
+      "1": ["x > 0 and y > 0"],
+      "0": ["else"]
+    },
+    "model_family": "sklearn.tree.DecisionTreeClassifier",
+    "function": "def model(x, y, data):\n    if x > 0 and y > 0:\n        return 1\n    return 0",
+    "extracted_parameter": [],
+    "rule_original_text": "Points in the first quadrant (x positive, y positive) like [0.877, -0.202] are labeled 1. If that’s reliable, that’s a clean quadrant rule.",
+    "validation_original_text": "But [0.514, 0.858] (x positive, y positive) is label 0. That’s conflicting and breaks the quadrant idea."
+  },
+  {
+    "order": 1,
+    "description": "x < 0 and y > 0 → Class 0",
+    "rule": {
+      "0": ["x < 0 and y > 0"],
+      "1": ["else"]
+    },
+    "model_family": "sklearn.tree.DecisionTreeClassifier",
+    "function": "def model(x, y, data):\n    if x < 0 and y > 0:\n        return 0\n    return 1",
+    "extracted_parameter": [],
+    "rule_original_text": "Wait, there’s a mix here. For example, some points with x negative and y positive are labeled 0. So maybe that’s the rule?",
+    "validation_original_text": "and others labeled 1 (like [-0.482, 0.760]) – so there’s no clean split here either."
+  },
+  {
+    "order": 2,
+    "description": "Distance < 1 → Class 1; Distance ≈ 1 → Class 0",
+    "rule": {
+      "0": ["abs(x**2 + y**2 - 1) < 0.01"],
+      "1": ["x**2 + y**2 < 1"]
+    },
+    "model_family": "custom",
+    "function": "def model(x, y, data):\n    if abs(x**2 + y**2 - 1) < 0.01:\n        return 0\n    if x**2 + y**2 < 1:\n        return 1\n    return 0",
+    "extracted_parameter": ["threshold=0.01"],
+    "rule_original_text": "Maybe points on the unit circle (distance ≈1) are labeled 0, and others labeled 1? Let’s check.",
+    "validation_original_text": "Looking at label 1 points: [-0.828, 0.352] has squared distance ≈ 0.8. So it seems like points that lie approximately on the unit circle are label 0, otherwise label 1."
+  },
+  {
+    "order": 3,
+    "description": "k-NN classification using nearest labels",
+    "rule": {
+      "0": ["majority label among k nearest neighbors is 0"],
+      "1": ["else"]
+    },
+    "model_family": "sklearn.neighbors.KNeighborsClassifier",
+    "function": "def model(x, y, data):\n    from math import sqrt\n    distances = sorted([(sqrt((x - xi)**2 + (y - yi)**2), label) for xi, yi, label in data])\n    k = 5\n    top_k = [label for _, label in distances[:k]]\n    return 1 if top_k.count(1) > top_k.count(0) else 0",
+    "extracted_parameter": ["k=5"],
+    "rule_original_text": "Now, looking at the nearest neighbors:\nThe closest points to [-0.624, -0.648] are [0.1, -0.6] (label 0), [-0.9, -0.6] (label 0), [-0.6, -0.3] (label 0), [-0.5, -0.8] (label 1), and [-0.7, -0.5] (label 0).",
+    "validation_original_text": "So among the top 5, 4 are 0 and 1 is 1. So majority is 0. Hence, the predicted label is 0."
+  }
+]
+```
+
+---
+
+### ℹ️ Notes on `data` format:
+- `data` is always passed into the function as a list of `(xi, yi, label)` tuples
+- Even if unused, the parameter must be present in the function signature
+
+---
+
+Now extract the fitting models from the following transcript:  
+<INSERT MODEL OUTPUT TRANSCRIPT HERE>

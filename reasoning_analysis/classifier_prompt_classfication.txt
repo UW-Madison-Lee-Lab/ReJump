@@ -1,0 +1,209 @@
+
+You are given a Python function definition that represents a model used for classification.
+Your task is to determine the **type of classifier** this function corresponds to, based on its structure and logic.
+
+There are **four possible classifier categories**, and your output must be a JSON object in the following format:
+
+{
+  "category": "<one of: linear, kernel, decision_tree, KNN, unknown>",
+  "detail": {
+    "decision_boundary": {
+      "<class_label>": "<verbal description of the decision boundary>",
+      ...
+    }
+  }
+}
+
+- The number of class labels may vary (e.g., 2-class, 3-class). Use the labels as they would be returned by the function (e.g., 0, 1, 2).
+- For KNN models, replace decision_boundary with:
+  {
+    "K_val": <integer value of K>
+  }
+- If the function **does not clearly belong to any of the four categories**, classify it as `"unknown"` and return:
+  ```json
+  {
+    "category": "unknown",
+    "detail": {}
+  }
+  ```
+
+Classifier Categories and Identification Rules:
+1. Linear — Decision boundary is linear (e.g., x + y < 1)
+2. Kernel — Decision boundary involves nonlinear transformations (e.g., x^2 + y^2 < 1)
+3. Decision Tree — Decision logic uses nested if/else rules
+4. KNN — Decision is based on nearest neighbors from the data
+
+---
+
+### 🔧 Examples
+
+#### ✅ Linear Classifier (2-class)
+```python
+def model(x, y, data):
+    return 1 if 0.4 * x + 0.6 * y + 0.2 >= 0.5 else 0
+```
+```json
+{
+  "category": "linear",
+  "detail": {
+    "decision_boundary": {
+      "0": "0.4 * x + 0.6 * y + 0.2 < 0.5",
+      "1": "0.4 * x + 0.6 * y + 0.2 >= 0.5"
+    }
+  }
+}
+```
+
+#### ✅ Linear Classifier (3-class)
+```python
+def model(x, y, data):
+    score = 0.5 * x + 0.3 * y
+    if score < 0.3:
+        return 0
+    elif score < 0.6:
+        return 1
+    else:
+        return 2
+```
+```json
+{
+  "category": "linear",
+  "detail": {
+    "decision_boundary": {
+      "0": "0.5 * x + 0.3 * y < 0.3",
+      "1": "0.3 <= 0.5 * x + 0.3 * y < 0.6",
+      "2": "0.5 * x + 0.3 * y >= 0.6"
+    }
+  }
+}
+```
+
+#### ✅ Kernel Classifier (2-class)
+```python
+def model(x, y, data):
+    return 1 if x**2 + y**2 > 1 else 0
+```
+```json
+{
+  "category": "kernel",
+  "detail": {
+    "decision_boundary": {
+      "0": "x^2 + y^2 <= 1",
+      "1": "x^2 + y^2 > 1"
+    }
+  }
+}
+```
+
+#### ✅ Kernel Classifier (3-class)
+```python
+def model(x, y, data):
+    value = x**2 - y**2
+    if value < -0.5:
+        return 0
+    elif value < 0.5:
+        return 1
+    else:
+        return 2
+```
+```json
+{
+  "category": "kernel",
+  "detail": {
+    "decision_boundary": {
+      "0": "x^2 - y^2 < -0.5",
+      "1": "-0.5 <= x^2 - y^2 < 0.5",
+      "2": "x^2 - y^2 >= 0.5"
+    }
+  }
+}
+```
+
+#### ✅ Decision Tree (2-class)
+```python
+def model(x, y, data):
+    if x > 0:
+        return 1
+    else:
+        return 0
+```
+```json
+{
+  "category": "decision_tree",
+  "detail": {
+    "decision_boundary": {
+      "0": "if x <= 0",
+      "1": "if x > 0"
+    }
+  }
+}
+```
+
+#### ✅ Decision Tree (3-class)
+```python
+def model(x, y, data):
+    if x > 1:
+        return 0
+    elif y > 0:
+        return 1
+    else:
+        return 2
+```
+```json
+{
+  "category": "decision_tree",
+  "detail": {
+    "decision_boundary": {
+      "0": "if x > 1",
+      "1": "if x <= 1 and y > 0",
+      "2": "if x <= 1 and y <= 0"
+    }
+  }
+}
+```
+
+#### ✅ KNN (2-class)
+```python
+def model(x, y, data):
+    distances = [(xi - x)**2 + (yi - y)**2 for xi, yi, label in data]
+    nearest_label = data[distances.index(min(distances))][2]
+    return nearest_label
+```
+```json
+{
+  "category": "KNN",
+  "detail": {
+    "K_val": 1
+  }
+}
+```
+
+#### ✅ KNN (3-class, K=3)
+```python
+def model(x, y, data):
+    data_sorted = sorted(data, key=lambda d: (d[0] - x)**2 + (d[1] - y)**2)
+    top3 = data_sorted[:3]
+    votes = [label for _, _, label in top3]
+    return max(set(votes), key=votes.count)
+```
+```json
+{
+  "category": "KNN",
+  "detail": {
+    "K_val": 3
+  }
+}
+```
+
+#### ❌ Unknown Type (Fallback Case)
+```python
+def model(x, y, data):
+    print("This is not a real classifier")
+    return None
+```
+```json
+{
+  "category": "unknown",
+  "detail": {}
+}
+```
