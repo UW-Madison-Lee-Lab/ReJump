@@ -115,7 +115,13 @@ Please select the correct answer from the choices.
             """
             answer_raw = ["A", "B", "C", "D"][answers.index(correct_answer)]
 
-            question = make_other_prefix(question_raw, args.template_type, "A")
+            question = make_other_prefix(
+                question = question_raw, 
+                template_type = args.template_type, 
+                solution_example = "A", 
+                answer_format = "tags",
+                label_str = "letter of the correct answer"
+            )
             # GPQA answers are typically direct strings, no complex extraction needed
             solution = {"label": [answer_raw]} # Ensure label is a list of strings
 

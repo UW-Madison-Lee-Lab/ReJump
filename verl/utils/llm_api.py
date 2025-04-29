@@ -9,10 +9,10 @@ import pdb
 import re, openai
 import json
 
-from examples.data_preprocess.helper import _select_rm_score_fn
+from examples.data_preprocess.helper import _select_rm_score_fn, get_answer_format
 from google import genai 
 import httpx
-
+from constants import supported_datasets
 class APIRewardManager:
     """The reward manager for API outputs.
     """
@@ -134,7 +134,6 @@ class LLMAPI:
         else:
             raise ValueError(f"Unsupported model: {model_name}")
 
-
         if "reasoning_api" in template_type:
             self.thinking = "enabled"
         elif "no_reasoning" in template_type:
@@ -143,7 +142,13 @@ class LLMAPI:
             self.thinking = "cot"
         
 
-    def generate(self, messages: List[Dict[str, str]], max_tokens: int = 8000, temperature: float = 0.1) -> str:
+    def generate(
+        self, 
+        messages: List[Dict[str, str]], 
+        max_tokens: int = 8000, 
+        temperature: float = 0.1,
+        data_source: str = None,
+    ) -> str:
         max_retries = 1000  # Increased retry count
         if max_retries <= 0: raise ValueError("max_retries must be greater than 0")
         timeout = 120  # Increased timeout to 120 seconds
@@ -242,24 +247,31 @@ class LLMAPI:
                         reasoning = ""
                         output = completion.choices[0].message.content
 
+                answer_format = get_answer_format(supported_datasets[data_source]['answer_format'], "")
                 if self.thinking == "enabled":
                     reasoning_content = reasoning
                     answer_content = output
-                    response_content = f"<think>{reasoning_content}\n<answer>{answer_content}</answer>"
+                    if answer_format["left"] in answer_content:
+                        response_content = f"<think>{reasoning_content}</think>\n{answer_content}"
+                    else:
+                        response_content = f"<think>{reasoning_content}</think>\n{get_answer_format(supported_datasets[data_source]['answer_format'], answer_content)['example']}"
                 elif self.thinking == "cot":
                     reasoning_match = re.search(r'<think>(.*?)</think>', output, re.DOTALL)
                     reasoning_content = reasoning_match.group(1).strip() if reasoning_match else ""
                     
-                    answer_match = re.search(r'<answer>(.*?)</answer>', output, re.DOTALL)
+                    answer_match = re.search(rf"{get_answer_format(supported_datasets[data_source]['answer_format'], '.*?')['example']}", output, re.DOTALL)
                     answer_content = answer_match.group(1).strip() if answer_match else ""
                     response_content = output
                 else:
                     reasoning_content = ""
                     answer_content = output
-                    response_content = f"<answer>{answer_content}</answer>"
+                    if answer_format["left"] in answer_content:
+                        response_content = answer_content
+                    else:
+                        response_content = f"{get_answer_format(supported_datasets[data_source]['answer_format'], answer_content)['example']}"
                     
                 # Check if response is complete (ends with proper tags or punctuation)
-                if '</answer>' not in response_content:
+                if answer_format["right"] not in response_content:
                     print(f"output: {output}")
                     print(f"reasoning: {reasoning}")
 
@@ -310,7 +322,8 @@ class LLMAPI:
             response_content, reasoning_content, answer_content = self.generate(
                 messages=chat,
                 max_tokens=config.rollout.response_length,
-                temperature=config.rollout.temperature if config else 0.7
+                temperature=config.rollout.temperature if config else 0.7,
+                data_source=data_sources[sample_idx],
             )
             response_length = len(response_content.split())
             generation_time = time.time() - gen_start_time

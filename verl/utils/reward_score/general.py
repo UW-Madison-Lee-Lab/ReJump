@@ -14,23 +14,29 @@
 # Adapted from https://github.com/EleutherAI/lm-evaluation-harness/blob/main/lm_eval/tasks/hendrycks_math/utils.py
 import re
 import pdb
+from examples.data_preprocess.helper import get_answer_format
 
-def last_answer_string(string):
+def last_answer_string(string, answer_format):
     """Extract the last answer from a string, looking for <answer></answer> tags."""
-    
-    # Find all matches of content between <answer> and </answer> tags
-    answer_matches = re.findall(r'<answer>(.*?)</answer>', string, re.DOTALL)
+    if answer_format == "tags":
+        answer_left, answer_right = "<answer>", "</answer>"
+        answer_matches = re.findall(rf"{answer_left}(.*?){answer_right}", string, re.DOTALL)
+        if answer_matches:
+            return answer_matches[-1].strip()
+    elif answer_format == "box":
+       return extract_solution(string)["label"][0]
+    else:
+        raise ValueError(f"Invalid answer format: {answer_format}")
     
     # Return the last match if any were found, otherwise return None
-    if answer_matches:
-        return answer_matches[-1].strip()
+
     return None
 
 
-def compute_score(solution_str, ground_truth) -> float:
+def compute_score(solution_str, ground_truth, answer_format) -> float:
     retval = 0.
     try:
-        string_in_last_boxed = last_answer_string(solution_str)
+        string_in_last_boxed = last_answer_string(solution_str, answer_format)
         # if string_in_last_boxed is not None:
         #     answer = remove_boxed(string_in_last_boxed)
 
@@ -76,6 +82,11 @@ def remove_boxed(s):
     assert s[-1] == "}"
 
     return s[len(left):-1]
+
+def extract_solution(solution_str):
+    return {
+        "label": [remove_boxed(last_boxed_only_string(solution_str))],
+    }
 
 
 def last_boxed_only_string(string):

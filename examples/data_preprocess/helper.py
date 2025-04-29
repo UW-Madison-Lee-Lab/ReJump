@@ -336,63 +336,85 @@ def make_regression_prefix(
 
 def get_answer_format(answer_format, solution_str):
     if answer_format == "tags":
-        return f"<answer>{solution_str}</answer>"
+        return {
+            "example": f"<answer>{solution_str}</answer>",
+            "left": "<answer>",
+            "right": "</answer>",
+            "mention": "<answer> and </answer> tags"
+        }
     elif answer_format == "box":
-        return f"\\boxed{{{solution_str}}}"
+        return {
+            "example": f"\\boxed{{{solution_str}}}",
+            "left": "\\boxed{{",
+            "right": "}}",
+            "mention": "\\boxed{}",
+        }
+    elif answer_format == "none":
+        return {
+            "example": solution_str,
+            "left": "",
+            "right": "",
+            "mention": ""
+        }
     else:
         raise ValueError(f"Invalid answer format: {answer_format}")
 
-def make_other_prefix(question, template_type, solution_example="0"):
+def make_other_prefix(
+    question, 
+    template_type, 
+    solution_example="0", 
+    answer_format="tags",
+    label_str="answer"
+):
     if "reasoning_api" in template_type or "standard_api_no_reasoning" in template_type:
-        answer_example = solution_example
+        answer_example = get_answer_format("none", solution_example)
     else:
-        answer_example = f"<answer>{solution_example}</answer>"
+        answer_example = get_answer_format(answer_format, solution_example)
+    
     if template_type == 'base':
         instruction_following = f"""
         A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
-        User: {question} Please provide your thinking process in <think> </think> tags. Your final answer should be enclosed in <answer> and </answer> tags, containing only answer with no additional text—for example, {answer_example}
+        User: {question} Please provide your thinking process in <think> </think> tags. Your final answer should be enclosed in {answer_example['mention']}, containing only {label_str} with no additional text—for example, {answer_example['example']}
         Assistant: Let me solve this step by step.
-        <think>
         """
     elif template_type == 'base_no_reasoning':
-        instruction_following = """
+        instruction_following = f"""
         A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
-        User: {question} Your final answer should be enclosed in <answer> and </answer> tags, containing only answer with no additional text—for example, {answer_example}
+        User: {question} Your final answer should be enclosed in {answer_example['mention']}, containing only {label_str} with no additional text—for example, {answer_example['example']}
         Assistant: 
         """
     elif template_type == "qwen-instruct":
-        instruction_following = """
+        instruction_following = f"""
         <|im_start|>system
         You are a helpful assistant. You first think about the reasoning process in your mind and then provide the user with the answer.
         <|im_end|>
         <|im_start|>user
-        {question} Please provide your thinking process in <think> </think> tags. Your final answer should be enclosed in <answer> and </answer> tags, containing only answer with no additional text—for example, {answer_example}
+        {question} Please provide your thinking process in <think> </think> tags. Your final answer should be enclosed in {answer_example['mention']}, containing only {label_str} with no additional text—for example, {answer_example['example']}
         <|im_end|>
         <|im_start|>assistant
         Let me solve this step by step.
-        <think>
         """
     elif template_type == "qwen-instruct_no_reasoning":
-        instruction_following = """
+        instruction_following = f"""
         <|im_start|>system
         You are a helpful assistant. You always provide the user directly with the answer without any reasoning.
         <|im_end|>
         <|im_start|>user
-        {question} Your response should contain only the final answer enclosed in <answer> and </answer> tags, with no additional text—specifically, just {label_str}, for example: {answer_example}
+        {question} Your response should contain only the final answer enclosed in {answer_example['mention']}, with no additional text—specifically, just {label_str}, for example: {answer_example['example']}
         <|im_end|>
         <|im_start|>assistant
         """
     elif template_type == "reasoning_api":
         instruction_following = f"""
-        {question} Your response should just be the answer with no additional text—for example, {answer_example}
+        {question} Your response should just be the answer containing only {label_str} with no additional text—for example, {answer_example['example']}
         """
     elif template_type == "standard_api_no_reasoning":
         instruction_following = f"""
-        {question} Your response should just be the answer, containing only answer with no additional text—for example, {answer_example}
+        {question} Your response should just be the answer containing only {label_str} with no additional text—for example, {answer_example['example']}
         """
     elif template_type == "standard_api":
         instruction_following = f"""
-        {question} Please provide your thinking process in <think> </think> tags. Your final answer should be enclosed in <answer> and </answer> tags, containing only answer with no additional text—for example, {answer_example}
+        {question} Please provide your thinking process in <think> </think> tags. Your final answer should be enclosed in {answer_example['mention']}, containing only {label_str} with no additional text—for example, {answer_example['example']}
         """
     else:
         raise ValueError(f"Template type {template_type} is not supported for GSM8k")
@@ -769,9 +791,9 @@ def _select_rm_score_fn(data_source):
     if data_source == 'gsm8k':
         from verl.utils.reward_score import gsm8k
         return gsm8k.compute_score
-    elif data_source in ['math', 'math500', 'gpqa-diamond']:
-        from verl.utils.reward_score import math
-        return math.compute_score
+    elif data_source in ['math', 'math500', "gpqa-diamond"]:
+        from verl.utils.reward_score import general
+        return lambda solution_str, ground_truth: general.compute_score(solution_str, ground_truth, answer_format = supported_datasets[data_source]['answer_format'])
     elif "multiply" in data_source or "arithmetic" in data_source:
         from verl.utils.reward_score import multiply
         return multiply.compute_score
@@ -788,9 +810,9 @@ def _select_rm_score_fn(data_source):
         raise NotImplementedError
     
 def _select_parse_fn(data_source):
-    if data_source in ['gsm8k', 'math', 'math500', 'gpqa-diamond']:
-        from verl.utils.reward_score import math
-        return math.last_answer_string
+    if data_source in ['math', 'math500', "gpqa-diamond", "gsm8k"]:
+        from verl.utils.reward_score import general
+        return lambda solution_str: general.last_answer_string(solution_str, answer_format = supported_datasets[data_source]['answer_format'])
     elif "multiply" in data_source or "arithmetic" in data_source:
         from verl.utils.reward_score import multiply
         return multiply.extract_solution
