@@ -111,7 +111,7 @@ Choices:
 (B) {answers[1]}
 (C) {answers[2]}
 (D) {answers[3]}
-Please select the correct answer from the choices. 
+Please select the correct answer from the choices.
             """
             answer_raw = ["A", "B", "C", "D"][answers.index(correct_answer)]
 

@@ -215,7 +215,7 @@ def inference(
     data_mode="default",
     train_step=0,
     wandb=2,
-    api_workers=16
+    api_workers=16,
 ):
     dataset_dir = get_dataset_dir(
         dataset_name=dataset_name,

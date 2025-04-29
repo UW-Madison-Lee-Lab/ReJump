@@ -111,6 +111,13 @@ class LLMAPI:
             self.client_type = "anthropic"
             if "thinking" in self.model: 
                 self.model = self.model.replace("-thinking", "")
+        elif model_name.startswith("xai/"):
+            self.client = OpenAI(
+                api_key=api_key,
+                base_url="https://api.x.ai/v1"
+            )
+            self.model = model_name.replace("xai/", "")
+            self.client_type = "xai"
         elif model_name.startswith("google/"):
             self.client = genai.Client(api_key=api_key)
             self.model = model_name.replace("google/", "")
@@ -182,7 +189,7 @@ class LLMAPI:
                     else:
                         output = response.candidates[0].content.parts[0].text
                         reasoning = ""
-                elif self.client_type in ["openai", "deepseek", "openrouter"]:
+                elif self.client_type in ["openai", "deepseek", "openrouter", "xai"]:
                     response = self.client.chat.completions.create(
                         model=self.model,
                         messages=messages,

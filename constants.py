@@ -1,6 +1,6 @@
 import os, re
 import pdb
-from environment import root_dir, DEEPSEEK_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY, ALIBABA_API_KEY
+from environment import root_dir, DEEPSEEK_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY, ALIBABA_API_KEY, XAI_API_KEY
 
 
 data_dir = os.path.join(root_dir, 'datasets')
@@ -355,6 +355,12 @@ supported_llms = {
         "model_size": 0,
         "type": "api",
         "api_key": ALIBABA_API_KEY,
+    },
+    "xai/grok-3-mini-beta": {
+        "template_type": "reasoning_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": XAI_API_KEY,
     },
 }
 
