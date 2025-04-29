@@ -344,24 +344,31 @@ supported_llms = {
         "type": "api",
         "api_key": OPENROUTER_API_KEY,
     },
-    "alibaba/qwen-plus-latest-thinking": {
+    "alibaba/qwen-plus-2025-04-28-thinking": {
         "template_type": "reasoning_api",
         "model_size": 0,
         "type": "api",
         "api_key": ALIBABA_API_KEY,
     },
-    "alibaba/qwen-plus-latest": {
+    "alibaba/qwen-plus-2025-04-28": {
         "template_type": "standard_api",
         "model_size": 0,
         "type": "api",
         "api_key": ALIBABA_API_KEY,
     },
-    "alibaba/qwq-plus": {
+    "alibaba/qwq-plus-thinking": {
         "template_type": "reasoning_api",
         "model_size": 0,
         "type": "api",
         "api_key": ALIBABA_API_KEY,
     },
+    "alibaba/qwen-turbo-2025-04-28-thinking": {
+        "template_type": "reasoning_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": ALIBABA_API_KEY,
+    },
+    
     "xai/grok-3-mini-beta": {
         "template_type": "reasoning_api",
         "model_size": 0,
