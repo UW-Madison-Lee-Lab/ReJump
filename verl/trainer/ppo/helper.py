@@ -1,3 +1,4 @@
+
 from verl import DataProto
 import torch, re
 from examples.data_preprocess.helper import _select_rm_score_fn
@@ -17,7 +18,7 @@ class RewardManager():
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
         self.return_dict = return_dict
     
-    def __call__(self, data: DataProto, probs):
+    def __call__(self, data: DataProto):
         """We will expand this function gradually based on the available datasets"""
 
         # If there is rm score, we directly return rm score. Otherwise, we compute via rm_score_fn
@@ -43,7 +44,19 @@ class RewardManager():
             response_ids = data_item.batch['responses']
             valid_response_length = data_item.batch['attention_mask'][prompt_length:].sum()
             valid_response_ids = response_ids[:valid_response_length]
+            probs = data_item.batch['log_probs']
+            for j in range(valid_response_length):
+                if len(probs)>valid_response_length:
+                    item_logprob_dict = {'tokens': [], 'logprobs': []}
+                    item_logprob_dict['tokens'].append(self.tokenizer.decode([int(valid_response_ids[j])]))
+                    item_logprob_dict['logprobs'].append(float(probs[j][0]))  # Assuming probs[i] is a tuple of (token_id, logprob)
+                else:
+                    item_logprob_dict = None
 
+                    # --- Store the dictionary for this batch item ---
+                    # Note: No padding applied to lists inside the dict
+                probs_token_list.append(item_logprob_dict)
+            # else: logprobs not requested or not returned, batch_logprob_dicts[i] remains None
             # decode
             # sequences = torch.cat((valid_prompt_ids, valid_response_ids))
             sequences = valid_response_ids
@@ -56,21 +69,7 @@ class RewardManager():
             # print("type of sequences_str: ", type(sequences_str))
             # input("Press Enter to continue...")
             # print(f"sequences_str: {sequences_str}")
-            probs_dict = probs[i]  # (seq_length, tuple )
-            if probs_dict is not None and isinstance(probs_dict, dict) and 'tokens' in probs_dict: # 检查类型和正确的键
-                try:
-                    token_ids = probs_dict['tokens']
-                    decoded_tokens = [self.tokenizer.decode([int(token_id)])
-                                      for token_id in token_ids
-                                      if token_id != self.pad_token_id and token_id != -1] # 使用正确的 pad_token_id
 
-                    probs_dict['tokens'] = decoded_tokens
-                except Exception as e:
-                    print(f"Error during token decoding for item {i}: {e}")
-
-                    pass 
-
-            probs_token_list.append(probs_dict)
 
             # select rm_score
             data_source = data_item.non_tensor_batch['data_source']
