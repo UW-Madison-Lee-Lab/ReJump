@@ -169,6 +169,9 @@ def main(config):
     reasonings_lst = [[] for _ in range(config.data.n_samples)]
     answer_lst = [[] for _ in range(config.data.n_samples)]
     rule_lst = [[] for _ in range(config.data.n_samples)]
+    output_probs_lst = [[] for _ in range(config.data.n_samples)]
+    rule_probs_lst = [[] for _ in range(config.data.n_samples)]
+    
     if not use_api:
         reward_fn = RewardManager(
             tokenizer=tokenizer, 
@@ -194,7 +197,7 @@ def main(config):
             batch_data_sources = test_batch.non_tensor_batch['data_source']
             
             # Process batch and get rewards
-            batch_output_lst, reward_dict, batch_reasoning_lst, batch_answer_lst = model.process_batch(
+            batch_output_lst, reward_dict, batch_reasoning_lst, batch_answer_lst, batch_pob_lst = model.process_batch(
                 batch_chat_lst=batch_chat_lst,
                 n_samples=config.data.n_samples,
                 config=config,
@@ -225,8 +228,10 @@ def main(config):
                 reward_tensor_lst[i].extend(reward_dict['reward_tensor'].tolist())
                 reasonings_lst[i].extend([seq[-1] for seq in batch_reasoning_lst[i]])
                 answer_lst[i].extend([seq[-1] for seq in batch_answer_lst[i]])
+                output_probs_lst[i].extend([list[-1] for list in batch_pob_lst[i]])
                 if len(batch_output_lst[0][0]) >1:
                     rule_lst[i].extend([seq[0] for seq in batch_output_lst[i]])
+                    rule_probs_lst[i].extend([list[0] for list in batch_pob_lst[i]])
         else:
             # Process with HuggingFace model
             test_batch = DataProto.from_single_dict(test_data)
@@ -243,12 +248,12 @@ def main(config):
             
             
             for i in range(config.data.n_samples):
-                test_output_gen_batch_padded = wg.generate_sequences(test_gen_batch_padded)
+                test_output_gen_batch_padded, logprobs_batch_padded = wg.generate_sequences(test_gen_batch_padded)
                 test_output_gen_batch_padded = test_output_gen_batch_padded[:test_batch.batch.batch_size[0]]
                 test_output_gen_batch = unpad_dataproto(test_output_gen_batch_padded, pad_size=pad_size)
 
                 test_batch = test_batch.union(test_output_gen_batch)
-                reward_dict = reward_fn(test_batch)
+                reward_dict = reward_fn(test_batch, logprobs_batch_padded)
                 reward_tensor = reward_dict['reward_tensor']
                 indexes = [item.non_tensor_batch["extra_info"]["index"] for item in test_batch]
                 sort_idx = np.argsort(indexes)
@@ -256,7 +261,7 @@ def main(config):
                 output_lst[i].extend(np.array(reward_dict['sequences_lst'])[sort_idx].tolist())
                 answer_lst[i].extend(np.array(reward_dict['answer_lst'])[sort_idx].tolist())
                 reasonings_lst[i].extend(np.array(reward_dict['reasoning_lst'])[sort_idx].tolist())
-                
+                output_probs_lst[i].extend(np.array(reward_dict['probs_token_list'])[sort_idx].tolist())    # list (batch size) of lists (response length) of tuple (token, logprob)        
                 # Debug: Print first sample's output
                 if batch_idx == 0 and i == 0:
                     print("Output:", reward_dict['sequences_lst'][0])
@@ -277,12 +282,24 @@ def main(config):
     reasonings_lst = np.transpose(reasonings_lst, axes=(1, 0)).tolist()
     dataset["reasonings"] = reasonings_lst
 
+    if len(output_probs_lst) != 0:
+        output_probs_lst = np.array(output_probs_lst, dtype=list)
+        output_probs_lst = np.transpose(output_probs_lst, axes=(1, 0)).tolist()
+        dataset["probs"] = output_probs_lst
+        if rule_probs_lst[0][0] is not None:
+            # convert rule_probs_lst from (n_samples, n_data) to (n_data, n_samples)
+            rule_probs_lst = np.array(rule_probs_lst, dtype=list)
+            rule_probs_lst = np.transpose(rule_probs_lst, axes=(1, 0)).tolist()
+            dataset["rule_probs"] = rule_probs_lst
+
 
     if rule_lst[0][0] is not None:
         # convert rule_lst from (n_samples, n_data) to (n_data, n_samples)
         rule_lst = np.array(rule_lst, dtype=object)
         rule_lst = np.transpose(rule_lst, axes=(1, 0)).tolist()
         dataset["rules"] = rule_lst
+
+
     # convert reward_tensor_lst from (n_samples, n_data) to (n_data, n_samples)
     reward_tensor_lst = np.array(reward_tensor_lst, dtype=object)
     reward_tensor_lst = np.transpose(reward_tensor_lst, axes=(1, 0)).tolist() 

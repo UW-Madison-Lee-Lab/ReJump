@@ -179,6 +179,58 @@ class vLLMRollout(BaseRollout):
                 sampling_params=self.sampling_params,
                 prompt_token_ids=idx_list,
                 use_tqdm=False)
+        
+
+        # --- MODIFIED: Process vLLM output correctly ---
+        batch_responses_list = []
+        batch_logprob_dicts = [None] * batch_size # Initialize list for dictionaries
+
+        processed_batch_size = len(output)
+        if processed_batch_size != batch_size:
+             print(f"Warning: vLLM returned {processed_batch_size} outputs for batch size {batch_size}")
+             # Adjust effective batch size or handle error based on requirements
+
+        for i in range(processed_batch_size):
+            request_output = output[i]
+            if not request_output.outputs:
+                 print(f"Warning: Request {i} returned no outputs. Appending empty tensor.")
+                 batch_responses_list.append(torch.tensor([], dtype=torch.long, device=idx.device))
+                 # batch_logprob_dicts[i] remains None
+                 continue
+
+            completion_output = request_output.outputs[0] # Assuming n=1
+
+            # Append generated token IDs
+            generated_ids = completion_output.token_ids
+            batch_responses_list.append(torch.tensor(generated_ids, dtype=torch.long, device=idx.device))
+
+            # Process logprobs if requested and available
+            if completion_output.logprobs:
+                item_logprob_dict = {'tokens': [], 'logprobs': []}
+                # logprobs is List[Dict[int, float]]
+                # For logprobs=1, each dict should have only one key-value pair
+                for step_logprobs_dict in completion_output.logprobs:
+                    if step_logprobs_dict: # Ensure dict is not empty
+                         # Extract the single token ID and its log probability
+                         # Assumes only one item exists when logprobs=1
+                         chosen_token_id = list(step_logprobs_dict.keys())[0]
+                         log_prob = list(step_logprobs_dict.values())[0]
+
+                         item_logprob_dict['tokens'].append(int(chosen_token_id))
+                         item_logprob_dict['logprobs'].append(float(log_prob))
+                    else:
+                         # Should not happen if logprobs=1 and token was generated
+                         print(f"Warning: Empty logprob dict encountered for item {i}.")
+                         # Decide how to handle - skip step? append placeholder?
+                         # Let's skip for now, length will mismatch token_ids list length
+                         pass
+
+                # --- Store the dictionary for this batch item ---
+                # Note: No padding applied to lists inside the dict
+                batch_logprob_dicts[i] = item_logprob_dict
+
+            # else: logprobs not requested or not returned, batch_logprob_dicts[i] remains None
+
 
         # TODO(sgm): disable logprob when recompute_log_prob is enable
         # if n = 1: (bs, response_length) ; if n > 1: (bs * n, response_length)
@@ -225,4 +277,4 @@ class vLLMRollout(BaseRollout):
         if self.config.free_cache_engine:
             self.inference_engine.free_cache_engine()
 
-        return DataProto(batch=batch)
+        return DataProto(batch=batch),batch_logprob_dicts

@@ -154,6 +154,7 @@ class LLMAPI:
         
         for attempt in range(max_retries):
             try:
+                token_logprob_dict = {'tokens': [], 'logprobs': []}# List to store logprobs of tokens. some api do not support this feature, so it will be empty in those cases.
                 if self.client_type == "anthropic":
                     if self.thinking == "enabled":
                         thinking={
@@ -195,8 +196,15 @@ class LLMAPI:
                     response = self.client.chat.completions.create(
                         model=self.model,
                         messages=messages,
+                        logprobs=True, # Request logprobs
                     )
-                
+
+                    if response.choices and response.choices[0].logprobs and response.choices[0].logprobs.content:
+                        for token_info in response.choices[0].logprobs.content:
+                            #token_info contains token,logprob,bytes,top_logprobs...
+                            token_logprob_dict['tokens'].append(token_info.token)
+                            token_logprob_dict['logprobs'].append(token_info.logprob)# Storing chosen token's logprob as an example
+
                     output = response.choices[0].message.content
                     reasoning = getattr(response.choices[0].message, 'reasoning_content', None)
                     if reasoning is None:
@@ -224,7 +232,7 @@ class LLMAPI:
                     print(f"output: {output}")
                     print(f"reasoning: {reasoning}")
 
-                return response_content, reasoning_content, answer_content
+                return response_content, reasoning_content, answer_content, token_logprob_dict
             
             except anthropic.RateLimitError as e:
                 print(f"Rate limit error: {e}")
@@ -276,7 +284,7 @@ class LLMAPI:
             response_contents = []
             reasoning_contents = []
             answer_contents = []
-            rule_contents = []
+            prob_contents = []
 
             try:
                 first_message_text = None
@@ -299,7 +307,7 @@ class LLMAPI:
 
                 messages_1 = [{"role": "user", "content": first_message_text}]
 
-                resp1, reason1, ans1 = self.generate(
+                resp1, reason1, ans1, prob1 = self.generate(
                     messages=messages_1,
                     max_tokens=config.rollout.response_length,
                     temperature=config.rollout.temperature if config else 0.7
@@ -307,13 +315,14 @@ class LLMAPI:
                 response_contents.append(resp1)
                 reasoning_contents.append(reason1)
                 answer_contents.append(ans1)
+                prob_contents.append(prob1)
 
                 if second_message_text is not None:
                     messages_2 = messages_1 + [
                         {"role": "assistant", "content": resp1},
                         {"role": "user", "content": second_message_text}
                     ]
-                    resp2, reason2, ans2 = self.generate(
+                    resp2, reason2, ans2, prob2 = self.generate(
                         messages=messages_2,
                         max_tokens=config.rollout.response_length,
                         temperature=config.rollout.temperature if config else 0.7
@@ -321,6 +330,7 @@ class LLMAPI:
                     response_contents.append(resp2)
                     reasoning_contents.append(reason2)
                     answer_contents.append(ans2)
+                    prob_contents.append(prob2) #pob2 is a list of logprobs tuple for the second response, one tuple (token, logprob) per token. can be empty if the API does not support this feature.
 
                 generation_time = time.time() - gen_start_time
                 total_response_length = sum(len(str(r).split()) for r in response_contents)
@@ -334,7 +344,7 @@ class LLMAPI:
                     'sample_idx': sample_idx
                 }
                 all_metrics.update(metrics)
-                return response_contents, reasoning_contents, answer_contents, all_metrics, None
+                return response_contents, reasoning_contents, answer_contents, prob_contents, all_metrics, None
 
             except Exception as e:
                 print(f"Error processing chat in sample {sample_idx}, batch {batch_idx}: {str(e)}")
@@ -352,12 +362,15 @@ class LLMAPI:
 
             batch_reasoning_lst = [[] for _ in range(n_samples)]
             batch_answer_lst = [[] for _ in range(n_samples)]
+            batch_pob_lst = [[] for _ in range(n_samples)] # lists(a batch of responses) of list( of list(logprobs for each response)
             for future, sample_idx, chat_idx in futures:
-                response_content, reasoning_content, answer_content, metrics, error = future.result()
+                response_content, reasoning_content, answer_content, pob_content, metrics, error = future.result()
                 if error is None:
                     batch_output_lst[sample_idx].append(response_content)
                     batch_reasoning_lst[sample_idx].append(reasoning_content)
                     batch_answer_lst[sample_idx].append(answer_content)
+                    batch_pob_lst[sample_idx].append(pob_content)
+
                     if wandb is not None:
                         wandb.log(metrics)
                 else:
@@ -365,6 +378,8 @@ class LLMAPI:
                     batch_output_lst[sample_idx].append([])  # Append empty string for failed generations
                     batch_reasoning_lst[sample_idx].append([])
                     batch_answer_lst[sample_idx].append([])
+                    batch_pob_lst[sample_idx].append([])
+
 
         # If ground truths and data sources are provided, compute rewards
         if ground_truths is not None and data_sources is not None:
@@ -374,9 +389,9 @@ class LLMAPI:
                 ground_truths=ground_truths,
                 data_sources=data_sources
             )
-            return batch_output_lst, reward_dict, batch_reasoning_lst, batch_answer_lst
+            return batch_output_lst, reward_dict, batch_reasoning_lst, batch_answer_lst, batch_pob_lst
 
-        return batch_output_lst, None, batch_reasoning_lst, batch_answer_lst
+        return batch_output_lst, None, batch_reasoning_lst, batch_answer_lst, batch_pob_lst
 
     @staticmethod
     def convert_chat_list(chat_lst: List[Any]) -> List[Dict[str, str]]:

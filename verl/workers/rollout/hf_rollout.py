@@ -68,6 +68,7 @@ class HFRollout(BaseRollout):
         response_length = prompts.meta_info.get('response_length', self.config.response_length)
         top_p = prompts.meta_info.get('top_p', self.config.get('top_p', 1.0))
         top_k = prompts.meta_info.get('top_k', self.config.get('top_k', 0))
+        output_k_prob = 1 # not configurable right now: prompts.meta_info.get('output_k_prob', self.config.get('output_k_prob', 1))
 
         if top_k is None:
             top_k = 0
@@ -92,11 +93,59 @@ class HFRollout(BaseRollout):
                     pad_token_id=pad_token_id,
                     generation_config=generation_config,
                     # renormalize_logits=True,
-                    output_scores=False,  # this is potentially very large
+                    output_scores=True,  # this is potentially very large
                     return_dict_in_generate=True,
                     use_cache=True)
         # TODO: filter out the seq with no answers like ds-chat
         seq = output.sequences
+        # --- MODIFIED: Process scores into dictionaries ---
+        batch_logprob_dicts = None # Initialize
+        if hasattr(output, "scores") and output.scores is not None:
+            scores = output.scores
+            num_generated_steps = len(scores)
+
+            # Initialize a list of dictionaries, one for each item in the batch
+            batch_logprob_dicts = [{'tokens': [], 'logprobs': []} for _ in range(batch_size)]
+
+            for t in range(num_generated_steps):
+                # Ensure step t is within the intended response part
+                if t >= response_length:
+                    break
+
+                step_logits = scores[t]
+                step_logprobs = torch.log_softmax(step_logits.float(), dim=-1) # (bs, vocab_size)
+
+                # Get the token ID actually generated at this step
+                current_seq_index = prompt_length + t
+                if current_seq_index < seq.shape[1]: # Check bounds of actual generated seq
+                    generated_token_ids = seq[:, current_seq_index] # (bs,)
+
+                    # Gather the log probability corresponding to the generated token ID
+                    chosen_token_logprobs_tensor = torch.gather(
+                        step_logprobs,
+                        dim=1,
+                        index=generated_token_ids.unsqueeze(-1)
+                    ).squeeze(-1) # (bs,)
+
+                    # Store token_id (int) and logprob (float) in the respective lists
+                    generated_token_ids_cpu = generated_token_ids.cpu().numpy()
+                    chosen_token_logprobs_cpu = chosen_token_logprobs_tensor.cpu().numpy()
+
+                    for b in range(batch_size):
+                        actual_token_id = int(generated_token_ids_cpu[b])
+                        # Append ONLY if the generated token is not the pad token
+                        # This naturally handles sequences ending early
+                        if actual_token_id != pad_token_id:
+                            logprob_val = float(chosen_token_logprobs_cpu[b])
+                            batch_logprob_dicts[b]['tokens'].append(actual_token_id) # Store ID (int)
+                            batch_logprob_dicts[b]['logprobs'].append(logprob_val) # Store logprob (float)
+                        # else: if it's a pad_token, we stop appending for this batch item 'b'
+                else:
+                    # This case (t < num_generated_steps but current_seq_index >= seq.shape[1])
+                    # should be less likely if seq includes padding from generate itself,
+                    # but good to handle defensively if needed.
+                    pass
+
 
         # huggingface generate will stop generating when all the batch reaches [EOS].
         # We have to pad to response_length
@@ -129,7 +178,7 @@ class HFRollout(BaseRollout):
                 'responses': response,
                 'input_ids': seq,
                 'attention_mask': attention_mask,
-                'position_ids': position_ids
+                'position_ids': position_ids,
             },
             batch_size=batch_size)
 
@@ -137,4 +186,4 @@ class HFRollout(BaseRollout):
         torch.cuda.empty_cache()
 
         self.module.train()
-        return DataProto(batch=batch)
+        return DataProto(batch=batch), batch_logprob_dicts

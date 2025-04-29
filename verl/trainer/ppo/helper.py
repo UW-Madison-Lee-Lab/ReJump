@@ -17,7 +17,7 @@ class RewardManager():
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
         self.return_dict = return_dict
     
-    def __call__(self, data: DataProto):
+    def __call__(self, data: DataProto, probs):
         """We will expand this function gradually based on the available datasets"""
 
         # If there is rm score, we directly return rm score. Otherwise, we compute via rm_score_fn
@@ -29,7 +29,7 @@ class RewardManager():
         answer_lst = []
         reasoning_lst = []
         already_print_data_sources = {}
-
+        probs_token_list = []
         for i in range(len(data)):
             data_item = data[i]  # DataProtoItem
 
@@ -56,7 +56,21 @@ class RewardManager():
             # print("type of sequences_str: ", type(sequences_str))
             # input("Press Enter to continue...")
             # print(f"sequences_str: {sequences_str}")
+            probs_dict = probs[i]  # (seq_length, tuple )
+            if probs_dict is not None and isinstance(probs_dict, dict) and 'tokens' in probs_dict: # 检查类型和正确的键
+                try:
+                    token_ids = probs_dict['tokens']
+                    decoded_tokens = [self.tokenizer.decode([int(token_id)])
+                                      for token_id in token_ids
+                                      if token_id != self.pad_token_id and token_id != -1] # 使用正确的 pad_token_id
 
+                    probs_dict['tokens'] = decoded_tokens
+                except Exception as e:
+                    print(f"Error during token decoding for item {i}: {e}")
+
+                    pass 
+
+            probs_token_list.append(probs_dict)
 
             # select rm_score
             data_source = data_item.non_tensor_batch['data_source']
@@ -96,6 +110,7 @@ class RewardManager():
                 'sequences_lst': sequences_lst,
                 'answer_lst': answer_lst,
                 'reasoning_lst': reasoning_lst,
+                'probs_token_list': probs_token_list,
             }
         else:
             return reward_tensor
