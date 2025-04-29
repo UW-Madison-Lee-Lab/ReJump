@@ -1,14 +1,14 @@
 import pandas as pd
 import argparse, os
 import numpy as np
-from verl.utils.reward_score import math, gsm8k
+from verl.utils.reward_score import general, gsm8k
 import sys
 import wandb
 from environment import WANDB_INFO
 
 def select_reward_fn(data_source):
     if data_source == 'lighteval/MATH':
-        return math.compute_score
+        return general.compute_score
     elif data_source == "blobs":
         from examples.data_preprocess.blobs import blobs_reward_fn
         return blobs_reward_fn

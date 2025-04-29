@@ -19,7 +19,7 @@ The input is a parquet file that contains N generated sequences and (optional) t
 
 import hydra
 from verl.utils.fs import copy_local_path_from_hdfs
-from verl.utils.reward_score import math, gsm8k
+from verl.utils.reward_score import general, gsm8k
 import os
 import pandas as pd
 import numpy as np

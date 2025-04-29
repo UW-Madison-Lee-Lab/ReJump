@@ -13,6 +13,8 @@ from examples.data_preprocess.helper import _select_rm_score_fn, get_answer_form
 from google import genai 
 import httpx
 from constants import supported_datasets
+from google.genai import types
+
 class APIRewardManager:
     """The reward manager for API outputs.
     """
@@ -188,6 +190,9 @@ class LLMAPI:
                     response = self.client.models.generate_content(
                         model=self.model,
                         contents = [messages[0]['content']],
+                        config = types.GenerateContentConfig(
+                            temperature=temperature,
+                        )
                     )
                     if response is None or response.candidates is None or len(response.candidates) == 0: 
                         reasoning, output = "", ""
@@ -301,6 +306,9 @@ class LLMAPI:
                 print(f"ClientError: {e}")
                 time.sleep(timeout)
                 
+            except openai.RateLimitError as e:
+                print(f"RateLimitError: {e}")
+                time.sleep(timeout)
                 
             except Exception as e:
                 print(type(e), e)
