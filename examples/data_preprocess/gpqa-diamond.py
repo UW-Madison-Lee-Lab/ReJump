@@ -43,7 +43,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     
-    data_source = "gpqa_diamond"
+    data_source = "gpqa-diamond"
     set_seed(42)
     
     if args.n_query != 1:
@@ -94,12 +94,28 @@ if __name__ == '__main__':
         def process_fn(example, idx):
             # Assuming 'Question' and 'Correct Answer' columns exist. Adjust if needed.
             question_raw = example.pop('Question') 
-            answer_raw = example.pop('Correct Answer') 
+            correct_answer = example.pop('Correct Answer') 
+            
+            incorrect_answer1 = example.pop('Incorrect Answer 1')
+            incorrect_answer2 = example.pop('Incorrect Answer 2')
+            incorrect_answer3 = example.pop('Incorrect Answer 3')
+            answers = [incorrect_answer1, incorrect_answer2, incorrect_answer3, correct_answer]
+            np.random.shuffle(answers)
+            
+            question_raw = f"""
+Question: {question_raw}
+Choices: 
+(A) {answers[0]}
+(B) {answers[1]}
+(C) {answers[2]}
+(D) {answers[3]}
+Please select the correct answer from the choices. 
+            """
+            answer_raw = ["A", "B", "C", "D"][answers.index(correct_answer)]
 
-            question = make_other_prefix(question_raw, args.template_type)
-
+            question = make_other_prefix(question_raw, args.template_type, "A")
             # GPQA answers are typically direct strings, no complex extraction needed
-            solution = {"label": [str(answer_raw)]} # Ensure label is a list of strings
+            solution = {"label": [answer_raw]} # Ensure label is a list of strings
 
             data = {
                 "data_source": data_source,

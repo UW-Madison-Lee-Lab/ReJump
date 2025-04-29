@@ -471,7 +471,7 @@ supported_datasets = {
         "type": "other",
         "difficulty": None,
     },
-    "gpqa_diamond": {
+    "gpqa-diamond": {
         "num_classes": None,
         "num_features": None,
         "feature_noise": None,

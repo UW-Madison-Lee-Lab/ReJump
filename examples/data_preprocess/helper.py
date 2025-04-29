@@ -342,11 +342,11 @@ def get_answer_format(answer_format, solution_str):
     else:
         raise ValueError(f"Invalid answer format: {answer_format}")
 
-def make_other_prefix(question, template_type):
+def make_other_prefix(question, template_type, solution_example="0"):
     if "reasoning_api" in template_type or "standard_api_no_reasoning" in template_type:
-        answer_example = "0"
+        answer_example = solution_example
     else:
-        answer_example = "<answer>0</answer>"
+        answer_example = f"<answer>{solution_example}</answer>"
     if template_type == 'base':
         instruction_following = f"""
         A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
@@ -769,7 +769,7 @@ def _select_rm_score_fn(data_source):
     if data_source == 'gsm8k':
         from verl.utils.reward_score import gsm8k
         return gsm8k.compute_score
-    elif data_source in ['math', 'math500', 'gpqa_diamond']:
+    elif data_source in ['math', 'math500', 'gpqa-diamond']:
         from verl.utils.reward_score import math
         return math.compute_score
     elif "multiply" in data_source or "arithmetic" in data_source:
@@ -788,7 +788,7 @@ def _select_rm_score_fn(data_source):
         raise NotImplementedError
     
 def _select_parse_fn(data_source):
-    if data_source in ['gsm8k', 'math', 'math500', 'gpqa_diamond']:
+    if data_source in ['gsm8k', 'math', 'math500', 'gpqa-diamond']:
         from verl.utils.reward_score import math
         return math.last_answer_string
     elif "multiply" in data_source or "arithmetic" in data_source:
