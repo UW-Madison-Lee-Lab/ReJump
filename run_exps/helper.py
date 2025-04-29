@@ -8,20 +8,20 @@ def gen_dataset(
     shot,
     template_type="qwen-instruct",
     num_samples=10000,
+    n_query=10,
     feature_noise=None,
     label_noise=0.0,
     data_mode="default",
+    test_ratio=1,
 ):
     if "ricl" in template_type:
-        datasets = {"regression": [], "classification": []}
-        for dataset in supported_datasets:
-            datasets[supported_datasets[dataset]["type"]].append(dataset)
+        if supported_datasets[dataset_name]["type"] == "regression":
+            example_datasets = ["l1normreg", "cosreg", "quadreg", "expreg"]
+        else:
+            example_datasets = ["circles", "moons", "linear", "blobs"]
             
-        for dataset_type in datasets:
-            datasets[dataset_type].sort(key=lambda x: supported_datasets[x]["difficulty"], reverse=True)
-            
-        example_datasets = datasets[supported_datasets[dataset_name]["type"]]
-        example_datasets.remove(dataset_name)
+        if dataset_name in example_datasets:
+            example_datasets.remove(dataset_name)
         ricl_shot = int(re.match(r".*?ricl_(\d+)", template_type).group(1))
         example_datasets = example_datasets[:ricl_shot]
         
@@ -32,6 +32,7 @@ def gen_dataset(
     "+icl_examples.{i}.label_noise={label_noise}" \
     "+icl_examples.{i}.feature_noise={supported_datasets[example_dataset]['feature_noise']}" \
     "+icl_examples.{i}.shot=50" \
+    "+icl_examples.{i}.n_query={n_query}" \
     "+icl_examples.{i}.response_length=3046" \
     "+icl_examples.{i}.num_samples=500" \
     "+icl_examples.{i}.num_examples=1" \
@@ -40,6 +41,7 @@ def gen_dataset(
         """
             icl_examples.append(icl_example_prompt)
             
+        max_length = 40000 if supported_datasets[dataset_name]["type"] == "regression" else 80000
         icl_examples_prompt = ''.join(icl_examples).replace('\n', '')
         command = f"""
 python -m icl_reasoning.icl_reasoning \
@@ -52,15 +54,17 @@ python -m icl_reasoning.icl_reasoning \
     "+test_data_seed=42" \
     "+train_step=0" \
     "+data_mode=default" \
-    "+icl_example_maxlength=10000" \
+    "+icl_example_maxlength={max_length}" \
     "+test_data.dataset_name={dataset_name}" \
     "+test_data.label_noise={label_noise}" \
     "+test_data.feature_noise={feature_noise}" \
     "+test_data.num_samples={num_samples}" \
+    "+test_data.test_ratio=0.2" \
     "+test_data_examples.dataset_name={dataset_name}" \
     "+test_data_examples.label_noise={label_noise}" \
     "+test_data_examples.feature_noise={feature_noise}" \
-    "+test_data_examples.shot={shot}"
+    "+test_data_examples.shot={shot}" \
+    "+test_data_examples.n_query={n_query}"
         """
     else:
         if dataset_name == "blobs":
@@ -69,16 +73,20 @@ python -m icl_reasoning.icl_reasoning \
             feature_noise = 0.1 if feature_noise is None else feature_noise
         elif dataset_name == "circles":
             feature_noise = 0.01 if feature_noise is None else feature_noise
+        else:
+            feature_noise = 0
         command = f"""
-python {root_dir}/examples/data_preprocess/{dataset_name}.py \
+python -m examples.data_preprocess.{dataset_name} \
     --template_type={template_type} \
     --num_samples={num_samples} \
     --n_shot={shot} \
+    --n_query={n_query} \
     --feature_noise={feature_noise} \
-    --test_ratio=0.2 \
-        --label_noise={label_noise} \
-        --data_mode={data_mode}
+    --test_ratio={test_ratio} \
+    --label_noise={label_noise} \
+    --data_mode={data_mode}
             """ 
+            
     return command
 
 
@@ -107,7 +115,8 @@ def rl_train(
     feature_noise=None,
     label_noise=0.0,
     n_gpus=2,
-    data_mode="default"
+    data_mode="default",
+    n_query=1
 ):
     dataset_dir = get_dataset_dir(
         dataset_name=dataset_name,
@@ -116,7 +125,8 @@ def rl_train(
         num_samples=num_samples,
         feature_noise=feature_noise,
         label_noise=label_noise,
-        data_mode=data_mode
+        data_mode=data_mode,
+        n_query=n_query
     )
     trained_model_name = get_model_name(
         dataset_name=dataset_name,
@@ -127,7 +137,8 @@ def rl_train(
         num_samples=num_samples,
         feature_noise=feature_noise,
         label_noise=label_noise,
-        data_mode=data_mode
+        data_mode=data_mode,
+        n_query=n_query
     )
     result_dir = get_result_dir(
         dataset_name=dataset_name,
@@ -140,6 +151,7 @@ def rl_train(
         label_noise=label_noise,
         data_mode=data_mode,
         train_step=0,
+        n_query=n_query
     )
     output_file = get_dataset_filename(split="test", data_mode=data_mode)
     return f"""
@@ -196,6 +208,7 @@ def inference(
     prompt_length=256,
     response_length=1024,
     num_samples=10000,
+    n_query=1,
     feature_noise=None,
     label_noise=0.0,
     n_gpus=2,
@@ -211,7 +224,8 @@ def inference(
         num_samples=num_samples,
         feature_noise=feature_noise,
         label_noise=label_noise,
-        data_mode=data_mode
+        data_mode=data_mode,
+        n_query=n_query
     )
     result_dir = get_result_dir(
         dataset_name=dataset_name,
@@ -223,7 +237,8 @@ def inference(
         feature_noise=feature_noise,
         label_noise=label_noise,
         data_mode=data_mode,
-        train_step=train_step
+        train_step=train_step,
+        n_query=n_query
     )
     output_file = get_dataset_filename(split="test", data_mode=data_mode)
     return f"""

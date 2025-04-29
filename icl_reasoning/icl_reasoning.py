@@ -28,6 +28,7 @@ class ICLExampleConfig(BaseICLExampleConfig):
     label_noise: float = MISSING  # 0.0, 0.1, 0.2
     feature_noise: float = MISSING  # noise level like 0.1, 1.0
     shot: int = MISSING  # 50, 100
+    n_query: int = MISSING  # 1, 2, 3, 4, 5
     response_length: int = MISSING  # 3046, 5686
     num_samples: int = MISSING  # 500
     num_examples: int = MISSING  # Number of examples to use
@@ -53,7 +54,7 @@ class TestDataConfig:
     label_noise: float = MISSING  # 0.0, 0.1, 0.2
     feature_noise: float = MISSING  # noise level like 0.1, 1.0
     num_samples: int = MISSING  # Number of test samples to use
-
+    test_ratio: float = MISSING  # Ratio of test samples to use
 
 @dataclass
 class TestDataExampleConfig:
@@ -61,6 +62,7 @@ class TestDataExampleConfig:
     label_noise: float = MISSING  # 0.0, 0.1, 0.2
     feature_noise: float = MISSING  # noise level like 0.1, 1.0
     shot: int = MISSING  # Number of examples to use
+    n_query: int = MISSING  # 1, 2, 3, 4, 5
 
 
 @dataclass
@@ -113,6 +115,7 @@ def calculate_token_length(text: str, tokenizer) -> int:
 def load_deepseek_results(
     dataset_name: str,
     shot: int, 
+    n_query: int,
     response_length: int, 
     num_samples: int, 
     feature_noise: float, 
@@ -133,7 +136,8 @@ def load_deepseek_results(
         feature_noise = feature_noise,
         label_noise = label_noise,
         train_step = train_step,
-        data_mode = data_mode
+        data_mode = data_mode,
+        n_query = n_query
     )
     result_path = os.path.join(result_dir, "test_default.parquet")
     
@@ -149,7 +153,7 @@ def generate_test_data(
     num_samples: int, 
     feature_noise: float, 
     label_noise: float, 
-    seed_value: int
+    seed_value: int,
 ) -> pd.DataFrame:
     """
     Generate test data using the appropriate data generator based on task type.
@@ -314,6 +318,7 @@ def sample_icl_examples(
     results = load_deepseek_results(
         dataset_name=config.dataset_name,
         shot=config.shot,
+        n_query=config.n_query,
         response_length=config.response_length,
         num_samples=config.num_samples,
         feature_noise=config.feature_noise,
@@ -335,6 +340,14 @@ def sample_icl_examples(
         if len(sampled_examples) >= config.num_examples:
             break
             
+        if supported_datasets[example["data_source"]]["type"] == "classification":
+            
+            if ', '.join([str(item) for item in example["label"]]) != example["answers"][0]:
+                continue
+        
+        elif supported_datasets[example["data_source"]]["type"] == "regression":
+            if abs(example["label"] - float(example["answers"][0])) > 0.05:
+                continue
         # Check if example is under the maximum token length
         
         prompt_content = extract_test_prompt_content(example)
@@ -348,6 +361,7 @@ def sample_icl_examples(
             # Add metadata about this example
             example['config_info'] = {
                 "shot": config.shot,
+                "n_query": config.n_query,
                 "response_length": config.response_length,
                 "num_samples": config.num_samples,
                 "feature_noise": config.feature_noise,
@@ -381,6 +395,7 @@ def create_prompt(instruction: str, icl_examples: List[Dict], test_examples: Lis
         Formatted prompt text
     """
     # Check for text direct mode example
+    
     if len(icl_examples) == 1 and "text_content" in icl_examples[0]:
         # Use the text content directly as ICL examples
         prompt = instruction + "\n\n" + icl_examples[0]["text_content"] + "\n\n"
@@ -408,10 +423,12 @@ def create_prompt(instruction: str, icl_examples: List[Dict], test_examples: Lis
             else:
                 example_content = example_prompt
                 
+            prompt += "-----------------------------------\n"
             prompt += f"Example {i+1}:\n"
             prompt += f"Problem: {example_content}\n"
             prompt += f"Reasoning: {example_response}\n\n"
     
+    prompt += "-----------------------------------\n"
     # Add generated test examples in the format matching user's example
     if not test_examples:
         raise ValueError("No test examples provided. Test examples are required for the prompt.")
@@ -431,12 +448,44 @@ def create_prompt(instruction: str, icl_examples: List[Dict], test_examples: Lis
     
     prompt += "\n"
     
-    # Add the test problem
-    if num_classes is None:
-        test_prompt = f"Given the data point with features [{test_features[0]:.3f}, {test_features[1]:.3f}], predict the target value. Show your work in <think></think> tags. And return the final answer in <answer></answer> tags, for example <answer>0.126</answer>."
-    else:
-        test_prompt = f"Given the data point with features [{test_features[0]:.3f}, {test_features[1]:.3f}], classify it into one of the possible classes. Show your work in <think></think> tags. And return the final answer in <answer></answer> tags, for example <answer>1</answer>."
     
+    # Add the test problem
+    if len(test_features) > 1:
+        # Multiple test samples
+        query = "Given the following data points with features:\n"
+        for i in range(len(test_features)):
+            query += f"{i+1}. Features: [{test_features[i][0]:.3f}, {test_features[i][1]:.3f}]\n"
+        
+        if num_classes is None:
+            # Regression task with multiple samples
+            query += "predict target values for each data point, separated by commas. "
+            target_str = "predicted values for all samples"
+            random_targets = [np.round(np.random.uniform(0, 10), 3) for _ in range(len(test_features))]
+            answer_example = f"<answer>{', '.join(str(x) for x in random_targets)}</answer>"
+        else:
+            # Classification task with multiple samples
+            query += "classify each data point into one of the possible classes, separated by commas. "
+            target_str = "predicted classes for all samples"
+            random_targets = [np.random.randint(0, num_classes) for _ in range(len(test_features))]
+            answer_example = f"<answer>{', '.join(str(x) for x in random_targets)}</answer>"
+        
+        test_prompt = f"{query}Please provide your thinking process in <think> </think> tags. Your final answer should be enclosed in <answer> and </answer> tags, containing only {target_str} with no additional text—for example, {answer_example}"
+    else:
+        # Single test sample
+        if num_classes is None:
+            # Regression task
+            query = f"Given the data point with features [{test_features[0]:.3f}, {test_features[1]:.3f}], predict the target value. "
+            target_str = "predicted value"
+            random_target = np.round(np.random.uniform(0, 10), 3)
+            answer_example = f"<answer>{random_target}</answer>"
+        else:
+            # Classification task
+            query = f"Given the data point with features [{test_features[0]:.3f}, {test_features[1]:.3f}], classify it into one of the possible classes. "
+            target_str = "predicted class"
+            random_target = np.random.randint(0, num_classes)
+            answer_example = f"<answer>{random_target}</answer>"
+        
+        test_prompt = f"{query}Please provide your thinking process in <think> </think> tags. Your final answer should be enclosed in <answer> and </answer> tags, containing only {target_str} with no additional text—for example, {answer_example}"
     prompt += f"Now, solve this problem:\n{test_prompt}"
     
     return prompt
@@ -581,7 +630,7 @@ def sample_non_duplicate_examples(
     all_feature_vectors: list,
     icl_prompt_contents: set,
     rng: np.random.RandomState,
-    max_attempts: int = 10
+    max_attempts: int = 10,
 ) -> Tuple[List[Tuple], List, set]:
     """
     Sample a specified number of non-duplicate examples
@@ -620,7 +669,7 @@ def sample_non_duplicate_examples(
             num_samples=num_samples * 10,
             feature_noise=feature_noise,
             label_noise=label_noise,
-            seed_value=current_seed
+            seed_value=current_seed,
         )
         
         # Shuffle to get random examples
@@ -633,10 +682,10 @@ def sample_non_duplicate_examples(
             features = row["features"]
             label = row["label"]
             
-            if not is_feature_duplicate(features, label, local_features_str_set, local_feature_vectors, icl_prompt_contents):
-                examples.append((features, label))
-                local_feature_vectors.append(features)
-                local_features_str_set.add(str(features))
+            # if not is_feature_duplicate(features, label, local_features_str_set, local_feature_vectors, icl_prompt_contents):
+            examples.append((features, label))
+            local_feature_vectors.append(features)
+            local_features_str_set.add(str(features))
         
         seed_offset += 1
         attempts += 1
@@ -697,6 +746,7 @@ def load_examples_from_dataset(dataset_path: str, example_indices: List[int], to
                     "index": idx,
                     "token_length": token_length
                 }
+                
             except Exception as e:
                 # print(f"Warning: Could not calculate token length for example {idx}: {e}")
                 # # Add minimal metadata
@@ -809,13 +859,14 @@ def main(cfg: DictConfig) -> None:
         
     # Create output directory if it doesn't exist
     output_path = get_dataset_dir(
-        cfg.test_data.dataset_name, 
-        cfg.test_data_examples.shot, 
-        template_type, 
-        cfg.test_data.num_samples, 
-        cfg.test_data.feature_noise, 
-        cfg.test_data.label_noise, 
-        cfg.data_mode
+        dataset_name=cfg.test_data.dataset_name, 
+        shot=cfg.test_data_examples.shot, 
+        template_type=template_type, 
+        num_samples=cfg.test_data.num_samples, 
+        feature_noise=cfg.test_data.feature_noise, 
+        label_noise=cfg.test_data.label_noise, 
+        data_mode=cfg.data_mode,
+        n_query=cfg.test_data_examples.n_query
     )
     output_path = Path(output_path)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -947,6 +998,7 @@ def main(cfg: DictConfig) -> None:
                 icl_config_info.append({
                     "dataset_name": icl_config.dataset_name,
                     "shot": icl_config.shot,
+                    "n_query": icl_config.n_query,
                     "response_length": icl_config.response_length,
                     "num_samples": icl_config.num_samples,
                     "feature_noise": icl_config.feature_noise,
@@ -975,19 +1027,25 @@ def main(cfg: DictConfig) -> None:
     print(f"Sampling {cfg.test_data.num_samples} test data points...")
     test_data, all_feature_vectors, all_features_str_set = sample_non_duplicate_examples(
         dataset_name=cfg.test_data.dataset_name,
-        num_samples=cfg.test_data.num_samples,
+        num_samples=int(cfg.test_data.num_samples * cfg.test_data_examples.n_query * cfg.test_data.test_ratio),
         feature_noise=cfg.test_data.feature_noise,
         label_noise=cfg.test_data.label_noise,
         seed_value=cfg.test_data_seed,
         all_features_str_set=all_features_str_set,
         all_feature_vectors=all_feature_vectors,
         icl_prompt_contents=icl_prompt_contents,
-        rng=test_rng
+        rng=test_rng,
     )
     
-    # Extract test features and labels
-    test_data_features = [features for features, _ in test_data]
-    test_data_labels = [label for _, label in test_data]
+    
+    test_data_features, test_data_labels = [], []
+    for i, (features, label) in enumerate(test_data):
+        print(i)
+        if i % cfg.test_data_examples.n_query == 0:
+            test_data_features.append([])
+            test_data_labels.append([])
+        test_data_features[-1].append(features)
+        test_data_labels[-1].append(label)
     
     # Sample additional examples for the instructions
     print(f"Sampling {cfg.test_data_examples.shot} examples for instructions...")
@@ -1012,12 +1070,17 @@ def main(cfg: DictConfig) -> None:
     # For each test data point, create a prompt using the same shuffled ICL examples and test examples
     for idx, (test_features, test_label) in enumerate(zip(test_data_features, test_data_labels)):
         # Create prompt using the ICL examples, test examples, and test features
-        prompt_text = create_prompt(instruction, all_icl_examples, test_examples, test_features, num_classes)
+        prompt_text = create_prompt(
+            instruction, 
+            all_icl_examples, 
+            test_examples, 
+            test_features, 
+            num_classes
+        )
         
         # Calculate final prompt length in tokens
         prompt_token_length = calculate_token_length(prompt_text, tokenizer)
         print(f"Test example {idx+1}: Prompt length = {prompt_token_length} tokens")
-        
         # Create dataset entry with the new format
 
         entry = {
@@ -1031,7 +1094,7 @@ def main(cfg: DictConfig) -> None:
                 "style": "rule",
                 "ground_truth": {
                     "features": test_features,
-                    "label": int(test_label)
+                    "label": test_label
                 }
             },
             "icl_example_meta_info": convert_to_serializable(icl_config_info),
@@ -1040,6 +1103,7 @@ def main(cfg: DictConfig) -> None:
             "test_data": convert_to_serializable({
                 "dataset_name": cfg.test_data.dataset_name,
                 "shot": cfg.test_data_examples.shot,
+                "n_query": cfg.test_data_examples.n_query,
                 "feature_noise": cfg.test_data.feature_noise,
                 "label_noise": cfg.test_data.label_noise,
             }),

@@ -42,7 +42,6 @@ class APIRewardManager:
 
             # select rm_score
             compute_score_fn = _select_rm_score_fn(data_source)
-
             score = compute_score_fn(solution_str=sequences_str, ground_truth=ground_truth)
             reward_tensor[i] = score
 
@@ -138,7 +137,7 @@ class LLMAPI:
                     if self.thinking == "enabled":
                         thinking={
                             "type": "enabled",
-                            "budget_tokens": min(30000, max_tokens - 10)
+                            "budget_tokens": max(1048, min(30000, max_tokens - 10))
                         }
                     else:
                         thinking = {
@@ -147,7 +146,7 @@ class LLMAPI:
                     response = self.client.messages.create(
                         model=self.model,
                         system = "You are a helpful data analysis assistant.",
-                        max_tokens=max_tokens,
+                        max_tokens=max(1064, max_tokens),
                         messages=messages,
                         thinking=thinking
                     )
@@ -157,6 +156,7 @@ class LLMAPI:
                         output = response.content[1].text
                     else:
                         output = response.content[0].text
+                        reasoning = ""
                         
                 elif self.client_type == "google":
                     response = self.client.models.generate_content(
@@ -227,8 +227,9 @@ class LLMAPI:
                 print(f"ClientError: {e}")
                 time.sleep(timeout)
                 
+                
             except Exception as e:
-                print(type(e))
+                print(type(e), e)
                 pdb.set_trace()
                 
             print(f"Failed to generate response after {attempt} attempts, max_retries: {max_retries}")

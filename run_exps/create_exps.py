@@ -22,12 +22,14 @@ parser.add_argument("--n_gpus", type=int, default=2)
 parser.add_argument("--response_length_thinking_factor", type=float, default=2.0)
 parser.add_argument("--load_train_step", type=int, default=0)
 parser.add_argument("--n_samples", type=int, nargs="+", default=[10000])
+parser.add_argument("--n_query", type=int, default=10)
 parser.add_argument("--feature_noise", type=float, nargs="+", default=[None])
 parser.add_argument("--label_noise", type=float, default=0.0)
 parser.add_argument("--data_mode", type=str, default="default", choices=["default", "grid", "mixed"])
 parser.add_argument("--wandb", type=int, default=2, choices=[0, 1, 2])
 parser.add_argument("--api_workers", type=int, default=16)
 parser.add_argument("--exp_name", type=str, default="")
+parser.add_argument("--test_ratio", type=float, default=1)
 args = parser.parse_args()
 
 if args.load_train_step:
@@ -47,14 +49,14 @@ mode_list = args.mode
 shot_list = args.shot
 n_samples_list = args.n_samples
 feature_noise_list = args.feature_noise
-
-
+if args.dataset == ["regression"]:
+    dataset_list = ['linreg', 'pwreg', 'cosreg', 'l1normreg', 'quadreg', 'expreg']
 os.makedirs(f"{root_dir}/run_exps/auto", exist_ok=True)
  
 script_paths = []
 for dataset in dataset_list:
     for shot in shot_list:
-        prompt_length = int((24 * shot + 185) * 1.1)
+        prompt_length = int((24 * shot + 160 + 24 * args.n_query) * 1.1)
         for model in model_list:
             for mode in mode_list:
                 for n_samples in n_samples_list:
@@ -84,9 +86,11 @@ for dataset in dataset_list:
                             shot=shot,
                             template_type=template_type,
                             num_samples=n_samples,
+                            n_query=args.n_query,
                             feature_noise=feature_noise,
                             label_noise=args.label_noise,
                             data_mode=args.data_mode,
+                            test_ratio=args.test_ratio
                         )
                         command_list.append(gen_command)
                         if args.train:
@@ -101,7 +105,8 @@ for dataset in dataset_list:
                                 feature_noise=feature_noise,
                                 label_noise=args.label_noise,
                                 n_gpus=args.n_gpus,
-                                data_mode=args.data_mode
+                                data_mode=args.data_mode,
+                                n_query=args.n_query
                             )
                             command_list.append(train_command)
                         else:
@@ -116,19 +121,21 @@ for dataset in dataset_list:
                                     feature_noise=feature_noise,
                                     label_noise=args.label_noise,
                                     data_mode=args.data_mode,
-                                    train_step=args.load_train_step
+                                    train_step=args.load_train_step,
+                                    n_query=args.n_query
                                 )
                             else:
                                 model_path = model
                         
                             inference_command = inference(
                                 dataset_name=dataset,
-                                shot=shot,
+                                shot=shot,                               
                                 model_name=model_path,
                                 template_type=template_type,
                                 prompt_length=prompt_length,
                                 response_length=response_length,
                                 num_samples=n_samples,
+                                n_query=args.n_query, 
                                 feature_noise=feature_noise,
                                 label_noise=args.label_noise,
                                 n_gpus=args.n_gpus,
@@ -149,7 +156,8 @@ for dataset in dataset_list:
                             num_samples=n_samples,
                             feature_noise=feature_noise, 
                             label_noise=args.label_noise,
-                            data_mode=args.data_mode
+                            data_mode=args.data_mode,
+                            n_query=args.n_query
                         )
                         script_path = f"{root_dir}/run_exps/auto/{model_name}_train_{args.train}.sh"
                         script_paths.append(script_path)
