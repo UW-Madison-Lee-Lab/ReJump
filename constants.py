@@ -1,6 +1,6 @@
 import os, re
 import pdb
-from environment import root_dir, DEEPSEEK_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY
+from environment import root_dir, DEEPSEEK_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY, ALIBABA_API_KEY
 
 
 data_dir = os.path.join(root_dir, 'datasets')
@@ -213,7 +213,7 @@ supported_llms = {
         "type": "huggingface",
     },
     # QwQ
-    "Qwen/QwQ-32B-preview": {
+    "Qwen/QwQ-32B": {
         "template_type": "qwen-instruct",
         "model_size": 32_000_000_000,
         "type": "huggingface",
@@ -338,24 +338,24 @@ supported_llms = {
         "type": "api",
         "api_key": OPENAI_API_KEY,
     },
-    "openrouter-deepseek/deepseek-r1": {
+    "openrouter-qwen/qwq-32b": {
         "template_type": "reasoning_api",
         "model_size": 0,
         "type": "api",
         "api_key": OPENROUTER_API_KEY,
     },
-    "claude/claude-3-7-sonnet-20250219": {
-        "template_type": "standard_api",
-        "model_size": 0,
-        "type": "api",
-        "api_key": ANTHROPIC_API_KEY,
-    },
-    "claude/claude-3-7-sonnet-20250219-thinking": {
+    "alibaba/qwen-plus-latest-thinking": {
         "template_type": "reasoning_api",
         "model_size": 0,
         "type": "api",
-        "api_key": ANTHROPIC_API_KEY,
-    }
+        "api_key": ALIBABA_API_KEY,
+    },
+    "alibaba/qwen-plus-latest": {
+        "template_type": "standard_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": ALIBABA_API_KEY,
+    },
 }
 
 supported_datasets = {

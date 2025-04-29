@@ -61,7 +61,12 @@ class APIRewardManager:
             return reward_tensor
 
 class LLMAPI:
-    def __init__(self, api_key: str, model_name: str, template_type: str = None):
+    def __init__(
+        self, 
+        api_key: str, 
+        model_name: str, 
+        template_type: str = None,
+    ):
         """
         Initialize the LLM API client.
         
@@ -110,6 +115,15 @@ class LLMAPI:
             self.client = genai.Client(api_key=api_key)
             self.model = model_name.replace("google/", "")
             self.client_type = "google"
+        elif model_name.startswith("alibaba/"):
+            self.client = OpenAI(
+                api_key=api_key,
+                base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+            )
+            self.model = model_name.replace("alibaba/", "")
+            self.client_type = "alibaba"
+            if "thinking" in self.model: 
+                self.model = self.model.replace("-thinking", "")
         else:
             raise ValueError(f"Unsupported model: {model_name}")
 
@@ -168,17 +182,58 @@ class LLMAPI:
                     else:
                         output = response.candidates[0].content.parts[0].text
                         reasoning = ""
-                else:
+                elif self.client_type in ["openai", "deepseek", "openrouter"]:
                     response = self.client.chat.completions.create(
                         model=self.model,
                         messages=messages,
+                        temperature=temperature,
                     )
                 
                     output = response.choices[0].message.content
                     reasoning = getattr(response.choices[0].message, 'reasoning_content', None)
                     if reasoning is None:
                         reasoning = getattr(response.choices[0].message, 'reasoning', None)
+                elif self.client_type == "alibaba":
+                    if self.thinking == "enabled":
+                        extra_body = {
+                            "enable_thinking": True,
+                            "thinking_budget": max(1048, min(30000, max_tokens - 10)),
+                            "result_format": "message",
+                        }
+                        stream = True
+                    else:
+                        extra_body = None
+                        stream = False
+                    completion = self.client.chat.completions.create(
+                        model=self.model,
+                        messages=messages,
+                        temperature=temperature,
+                        extra_body=extra_body,
+                        stream=stream,
+                    )
                     
+                    if self.thinking == "enabled":
+                        reasoning_content = ""  # Complete reasoning process
+                        answer_content = ""  # Complete response
+                        is_answering = False  # Whether entering the response phase
+                        
+                        for chunk in completion:
+                            if not chunk.choices:
+                                continue 
+                            
+                            delta = chunk.choices[0].delta
+                            if hasattr(delta, "reasoning_content") and delta.reasoning_content is not None:
+                                reasoning_content += delta.reasoning_content
+                            if hasattr(delta, "content") and delta.content:
+                                if not is_answering:
+                                    is_answering = True
+                                answer_content += delta.content
+                        
+                        reasoning = reasoning_content
+                        output = answer_content
+                    else:
+                        reasoning = ""
+                        output = completion.choices[0].message.content
 
                 if self.thinking == "enabled":
                     reasoning_content = reasoning

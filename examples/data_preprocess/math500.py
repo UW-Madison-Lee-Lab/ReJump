@@ -73,11 +73,17 @@ if __name__ == '__main__':
     train_dataset = Dataset.from_list([])
     test_dataset = dataset["test"]
     
+    n_total = len(test_dataset)
+    if args.num_samples > n_total:
+        print(f"Warning: Requested {args.num_samples} samples, but dataset only has {n_total}. Using all examples.")
+        args.num_samples = n_total
+
+    num_samples = args.num_samples if args.num_samples > 0 else n_total
+    n_test = int(num_samples * args.test_ratio) 
+    n_train = num_samples - n_test 
     
     print(f"Loaded {len(train_dataset)} training examples and {len(test_dataset)} test examples")
     
-    n_test = int(args.num_samples * args.test_ratio)
-    n_train = args.num_samples - n_test
     idx_train = np.random.choice(range(len(train_dataset)), size=n_train, replace=False)
     idx_test = np.random.choice(range(len(test_dataset)), size=n_test, replace=False)
 

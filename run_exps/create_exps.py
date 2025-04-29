@@ -6,7 +6,7 @@ import argparse
 from run_exps.helper import gen_dataset, inference, rl_train
 import pdb
 
-model_size_upper_limit = 10_000_000_000
+model_size_upper_limit = 100_000_000_000
 
 supported_model_list = [model for model in supported_llms.keys() if supported_llms[model]["model_size"] <= model_size_upper_limit]
 

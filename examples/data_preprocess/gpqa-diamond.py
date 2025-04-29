@@ -76,11 +76,13 @@ if __name__ == '__main__':
         print(f"Warning: Requested {args.num_samples} samples, but dataset only has {n_total}. Using all examples.")
         args.num_samples = n_total
 
-    n_test = int(args.num_samples * args.test_ratio)
-    n_train = args.num_samples - n_test
+
+    num_samples = args.num_samples if args.num_samples > 0 else n_total
+    n_test = int(num_samples * args.test_ratio) 
+    n_train = num_samples - n_test 
     
     # Select samples
-    sampled_indices = np.random.choice(range(len(dataset)), size=args.num_samples, replace=False)
+    sampled_indices = np.random.choice(range(len(dataset)), size=num_samples, replace=False)
     train_indices = sampled_indices[:n_train]
     test_indices = sampled_indices[n_train:]
 
