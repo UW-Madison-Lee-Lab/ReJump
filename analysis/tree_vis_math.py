@@ -12,6 +12,19 @@ from constants import get_result_dir, supported_datasets
 from utils import save_json, load_json
 import pdb
 from collections import defaultdict, deque
+from openai import OpenAI
+
+from verl.utils.llm_api import LLMAPI
+from constants import supported_llms
+
+# model = "xai/grok-3-mini-beta"
+# model = "claude/claude-3-7-sonnet-20250219-thinking"
+model = "google/gemini-2.5-pro-preview-03-25"
+llm = LLMAPI(
+    api_key=supported_llms[model]["api_key"],
+    model_name=model,
+    template_type="reasoning_api"
+)
 
 def get_divide_prompt(input_str, output_str):
     return f"""
@@ -81,17 +94,18 @@ def get_tree_prompt(parsed_steps):
         * [MOST IMPORTANT] Group verification or re-calculation steps into the *same cluster* as the original steps they verify or calculate. For instance, if step 1 calculates a sum (part of cluster `A1`) and step 3 verifies that sum, step 3 must also be included in cluster `A1`'s step list (e.g., `"A1": {{ "description": "Calculate Sum", "steps": [1, 3] }}`). Similarly, if step 2 calculates a product (part of cluster `A2`) and step 4 verifies it, step 4 must be included in cluster `A2`'s step list (e.g., `"A2": {{ "description": "Calculate Product", "steps": [2, 4] }}`). Avoid creating separate nodes/clusters solely for these verification steps. Therefore, for all nodes, the name shouldn't even contains "Verify" or "Recalculate".
         * Identify which step numbers specifically perform validation, verification, or re-calculation. Populate a `validation_steps` list for each cluster containing these step numbers. If a cluster contains no such steps, use an empty list `[]`
 
-    3.  **Determine Logical Flow (Tree Structure with Branches):**
-        * Based on the clustering results and the reasoning narrative, identify the overall tree structure, including alternative approaches.
-        * Determine the "starting node code" (like `A1`, `B1`, `C1`...) for each distinct top-level approach attempted.
-        * Trace the sequence of function codes *within* each distinct approach branch.
-        * Identify which approach branch leads to the final successful conclusion.
-        * Represent this structure as a tree within the `logical_flow` object:
-            * Include a special key `"root"` whose value is a list of the starting node codes for **all** distinct top-level approaches identified.
-            * For each node code defined (`A1`, `A2`, etc.), create a key. Its value should be a list containing the node code(s) that *directly follow it within its specific approach branch*.
-            * Nodes that represent the end of a failed or abandoned approach branch should have an empty list `[]` as their value.
-            * The **final node** of the **successful** approach branch should have a list containing only the string `"solution"` (i.e., `["solution"]`) as its value.
-
+    3.  **Determine Natural Logical Flow (Tree Structure):**
+        * **Goal:** Represent the reasoning's flow as a tree (`logical_flow`) reflecting sequential dependencies and branching points naturally present in the text. **Crucially, the final structure MUST be a single connected graph originating from the `root`.** Every node code defined in `clustering_results` must be included in the `logical_flow` structure (either as a key or within a value list) and be reachable from the `root`.
+        * **Root Node:** The `"root"` node's value is a list containing the code(s) for the *very first* distinct logical phase(s).
+        * **Successors & Connectivity:** For every node code `X` you identified:
+            * Determine which code(s) `Y` represent functions/phases that directly follow from, build upon, or are the **immediate next logical step(s) in the reasoning narrative** compared to phase `X`.
+            * **The primary guide for linking `Y` after `X` must be the sequence, context, and dependencies presented in the reasoning text.** If `Y`'s steps occur chronologically after `X`'s steps and relate to them or the overall goal, without indicating a branch starting from an earlier point, `Y` should generally be linked as a successor to `X` or another closely preceding, relevant node.
+            * **Crucially, every node code defined** (except the root) **must be placed as a successor to its most logical predecessor node based on the narrative flow.** No nodes should be left disconnected. Actively find the most plausible connection point for all identified phases (including formatting, reflection, justification, etc.) based on where they appear and what they relate to in the text.
+            * List the identified direct successor codes `Y` as the value for key `X`. Example: `"X": ["Y1"]`.
+        * **Branching:** If multiple distinct phases (`Y`, `Z`) start after the *same preceding phase* `X`, then `X` is a branching point: `"X": ["Y", "Z"]`.
+        * **Abandoned Branches:** Handle correctly, ending the abandoned path with `[]` and branching the new approach from the relevant common *prior* node.
+        * **Successful Path:** The final node code of the branch leading to the successful conclusion must have `["solution"]` as its value. (Note: The node pointing to `solution` will be the one representing the very last step in the successful reasoning sequence according to the text).
+        
     **Input:**
     * `STEP_1_OUTPUT_JSON`: A JSON object containing a list called `steps`. Each element has `step`, `summary`, and `text`. (Example structure as before).
 
@@ -104,51 +118,51 @@ def get_tree_prompt(parsed_steps):
             // Part 1 Output: Clustering Information
             // Keys: Uppercase letter codes (A1, A2, B1...) identified from Task 1.
             // Values: Objects containing:
-            //    "description": (string) The concise descriptive label for the function/phase (from Task 1).
+            //    "description": (string) Provide a concise, GENERALIZED, and ABSTRACT descriptive label for the overall function performed by the steps in this cluster. This description MUST capture the mathematical or logical role and MUST NOT contain specific variable names (like 'a', 'x') or minor phrasing copied directly from the text. Examples: 'Calculate Symmetric Distance', 'Simplify Expression`. Ensure the description accurately reflects the purpose of ALL steps grouped under this code.
             //    "steps": (list of integers) All step numbers performing this function (from Task 2, including merged validation steps).
             //    "validation_steps": (list of integers) Step numbers *from the "steps" list above* that specifically perform validation/verification/re-calculation (from Task 2). Empty list `[]` if none.
             // Example (content depends on analysis):
             // "A1": {{
-            //    "description": "Approach 1: Calculate Intermediate Value X",
+            //    "description": "Approach 1: Calculate Addition",
             //    "steps": [1, 4],
-            //    "validation_steps": [4] // Step 4 verifies the calculation in step 1
+            //    "validation_steps": [4] // Step 4 verifies the addition in step 1
             // }},
             // "A2": {{
-            //    "description": "Approach 1: Use Value X for Final Calculation",
+            //    "description": "Approach 1: Simplify Expression",
             //    "steps": [2, 3, 5],
-            //    "validation_steps": [5] // Step 5 re-calculates or verifies step 2 or 4
+            //    "validation_steps": [5] // Step 5 re-calculates or verifies step 2 or 3
             // }},
             // "A3": {{
-            //    "description": "Approach 1: Evaluate Final Result",
+            //    "description": "Approach 1: Calculate Final Result",
             //    "steps": [6],
             //    "validation_steps": [] // No specific validation steps in this cluster
             // }},
             // ... etc. for B1, C1...
         }},
         "logical_flow": {{
-            // Part 2 Output: Tree Flow Information
-            // Matches the structure requested by the user.
-            // Includes a "root" key pointing to starting nodes of each approach.
-            // Other keys are node codes, values are lists of direct successors within that approach branch.
-            // Failed branches end with []. Successful branch ends pointing to "solution".
-            // Example (Based on user's desired structure and A1..D4 nodes):
-            "root": ["A1", "B1", "C1", "D1"],
-            "A1": ["A2"],
-            "A2": ["A3"],
-            "A3": [], // End of failed Approach 1
-            "B1": ["B2"],
-            "B2": ["B3"],
-            "B3": [], // End of failed Approach 2
-            "C1": ["C2"],
-            "C2": ["C3"],
-            "C3": ["C4"],
-            "C4": [], // End of failed Approach 3
-            "D1": ["D2"],
-            "D2": ["D3"],
-            "D3": ["D4"],
-            "D4": ["solution"] // End of successful Approach 4
-        }},
-        "validation_steps": [10, 11, 12]
+            // Part 3 Output: Tree Flow Information
+            // Structure determined naturally based on dependencies and branching.
+            // Example 1 (Natural structure with Setup S1):
+            // "root": ["S1"],
+            // "S1": ["A1", "B1"], // Approaches A and B both follow Setup S1
+            // "A1": ["A2"],
+            // "A2": [], // Branch A abandoned
+            // "B1": ["B2"], // Branch B continues
+            // "B2": ["solution"]
+
+            // Example 2 (Natural structure, two parallel initial approaches):
+            // "root": ["A1", "B1"],
+            // "A1": ["A2"],
+            // "A2": [],
+            // "B1": ["B2"],
+            // "B2": ["solution"]
+
+             // Example 3 (Natural structure, simple linear flow):
+            // "root": ["P1"],
+            // "P1": ["P2"],
+            // "P2": ["P3"],
+            // "P3": ["solution"]
+        }}
     }}
     Instructions Summary:
 
@@ -188,17 +202,6 @@ def parse_json(json_prompt):
     
     return data 
 
-client = genai.Client(api_key=GEMINI_API_KEY)
-
-def call_gemini(prompt, model_name = "gemini-2.5-pro-preview-03-25"):
-    response = client.models.generate_content(
-        model=model_name,
-        contents=[prompt],
-        config=types.GenerateContentConfig(
-            temperature=0.0,
-        )
-    )
-    return response.candidates[0].content.parts[0].text
 
 # Calculate depth for each node (depth from leaves, leaves=0)
 
@@ -460,10 +463,16 @@ def get_graph(idx, results, results_dir, overwrite=False):
         input_str = results.iloc[idx]["prompt"][0]["content"]
         output_str = results.iloc[idx]["responses"][0]
         divide_prompt = get_divide_prompt(input_str, output_str)
-        parsed_steps = call_gemini(divide_prompt)
+        parsed_steps = llm.generate([{
+            "role": "user",
+            "content": divide_prompt
+        }])[2]
         
         tree_prompt = get_tree_prompt(parsed_steps)
-        output_json = call_gemini(tree_prompt)
+        output_json = llm.generate([{
+            "role": "user",
+            "content": tree_prompt
+        }])[2]
         json_data = parse_json(output_json)
         save_json({"parsed_steps": parsed_steps, "visualization": json_data}, result_path)
     else:

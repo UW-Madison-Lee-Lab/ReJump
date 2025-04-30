@@ -148,7 +148,7 @@ class LLMAPI:
         self, 
         messages: List[Dict[str, str]], 
         max_tokens: int = 8000, 
-        temperature: float = 0.1,
+        temperature: float = 0.0,
         data_source: str = None,
     ) -> str:
         max_retries = 1000  # Increased retry count
@@ -252,7 +252,11 @@ class LLMAPI:
                         reasoning = ""
                         output = completion.choices[0].message.content
 
-                answer_format = get_answer_format(supported_datasets[data_source]['answer_format'], "")
+                if data_source is not None:
+                    answer_format = get_answer_format(supported_datasets[data_source]['answer_format'], "")
+                else:
+                    answer_format = get_answer_format("none", "")
+                    
                 if self.thinking == "enabled":
                     reasoning_content = reasoning
                     answer_content = output
