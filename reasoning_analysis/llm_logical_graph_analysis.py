@@ -58,6 +58,15 @@ def process_llm_analysis_logical_graph(llm_json: Dict[str, Any]) -> Optional[Dic
         # Use logging for errors
         logging.error(f"Error analyzing CoT graph: {e}", exc_info=True) # Add traceback info
         return None
+    
+import numpy as np
+def get_robust_avg_prob(logprobs_list: List[float], remove_outliers: bool = True) -> float:
+    #remove -9999.0
+    if remove_outliers:
+        logprobs_list = [x for x in logprobs_list if x != -9999.0]
+    avg_logprob = np.mean(logprobs_list).item()
+    avg_prob = np.exp(avg_logprob)
+    return avg_prob
 
 def postprocess_llm_json_dict(llm_json_dict: Dict[str, Any], llm_analysis_splitted_reasoning_dict: Dict[str, Any]) -> Dict[str, Any]:
     llm_analysis_splitted_reasoning_dict  = json.loads(llm_analysis_splitted_reasoning_dict)
@@ -78,10 +87,12 @@ def postprocess_llm_json_dict(llm_json_dict: Dict[str, Any], llm_analysis_splitt
         
         node['text'] = node_info_dict['sentence']
         node['logprobs'] = node_info_dict['logprobs_list']
-        node['avg_logprob'] = node_info_dict['avg_logprob']
+        # node['avg_logprob'] = node_info_dict['avg_logprob']
         node['n_tokens'] = node_info_dict['n_tokens']
         node['sentence_tokens'] = node_info_dict['sentence_tokens']
-        node['avg_prob'] = node_info_dict['avg_prob']
+
+        # node['avg_prob'] = node_info_dict['avg_prob']
+        node['avg_prob'] = get_robust_avg_prob(node_info_dict['logprobs_list'], remove_outliers=True)
     
     return llm_json_dict
 

@@ -18,6 +18,7 @@ def get_data_type(file_path):
         "pwreg": "regression",
 
         "gsm8k": "unknown",
+        "math500": "unknown",
     }
     for key, value in data_type_dict.items():
         if key in file_path:
