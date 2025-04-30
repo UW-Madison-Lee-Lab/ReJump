@@ -7,11 +7,13 @@ ANTHROPIC_API_KEY = 'sk-ant-api03-AMHIj-ojTz9mtdXMbNsZwW0Bfcnu0LGxseGeBEB81a4MUU
 GEMINI_API_KEY = "AIzaSyARTR4pSoM8hmIIMEg85OMHD1T9KgaGwV4"
 DEEPSEEK_API_KEY = "sk-14609c4a9bb04da6888a7299323cc0e7"
 OPENROUTER_API_KEY = "your-openrouter-api-key"
- 
+ALIBABA_API_KEY = "your-alibaba-api-key"
+XAI_API_KEY = "your-xai-api-key"
+
 HF_HOME = "/data/yzeng58/.cache/huggingface"
 TRANSFORMERS_CACHE = "/data/yzeng58/.cache/huggingface/hub"
 TRITON_CACHE_DIR="/data/yzeng58/cache/triton"
- 
+
 WANDB_INFO = {
     'project': 'liftr-generation',
     'entity': 'lee-lab-uw-madison'

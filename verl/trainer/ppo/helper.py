@@ -45,11 +45,20 @@ class RewardManager():
             valid_response_length = data_item.batch['attention_mask'][prompt_length:].sum()
             valid_response_ids = response_ids[:valid_response_length]
             probs = data_item.batch['log_probs']
+            # import pdb; pdb.set_trace()
             for j in range(valid_response_length):
                 if len(probs)>valid_response_length:
                     item_logprob_dict = {'tokens': [], 'logprobs': []}
                     item_logprob_dict['tokens'].append(self.tokenizer.decode([int(valid_response_ids[j])]))
-                    item_logprob_dict['logprobs'].append(float(probs[j][0]))  # Assuming probs[i] is a tuple of (token_id, logprob)
+                    try:
+                        item_logprob_dict['logprobs'].append(float(probs[j].item()))  # Assuming probs[i] is a tuple of (token_id, logprob)
+                    except:
+                        print(type(probs))
+                        print(type(probs[j]))
+                        print(f"probs[j]: {probs[j]}")
+                        print(f"probs[j].item(): {probs[j].item()}")
+                        input("Press Enter to continue...")
+                        # import pdb; pdb.set_trace()   
                 else:
                     item_logprob_dict = None
 

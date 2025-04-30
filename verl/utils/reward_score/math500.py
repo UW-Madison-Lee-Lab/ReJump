@@ -376,7 +376,11 @@ def last_answer_string(string, answer_format):
 def compute_score(solution_str, ground_truth, answer_format) -> float:
     retval = 0.
     try:
+        if solution_str is None:
+            return 0.
         string_in_last_boxed = last_answer_string(solution_str, answer_format)
+        if string_in_last_boxed is None: 
+            return 0
         # if string_in_last_boxed is not None:
         #     answer = remove_boxed(string_in_last_boxed)
         
@@ -384,6 +388,11 @@ def compute_score(solution_str, ground_truth, answer_format) -> float:
             retval = 1.
     except Exception as e:
         print(type(e))
+        print(e)
+        # print("string_in_last_boxed:")
+        # print(string_in_last_boxed)
+        # print("ground_truth:")
+        # print(ground_truth["label"][0])
         pdb.set_trace()
 
     return retval
@@ -398,6 +407,8 @@ def is_equiv(str1, str2, verbose=False):
 
 
 def remove_boxed(s):
+    if s is None:
+        return None
     if "\\boxed " in s:
         left = "\\boxed "
         assert s[:len(left)] == left
