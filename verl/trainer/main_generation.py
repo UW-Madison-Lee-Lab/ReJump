@@ -288,11 +288,14 @@ def main(config):
     reasonings_lst = np.transpose(reasonings_lst, axes=(1, 0)).tolist()
     dataset["reasonings"] = reasonings_lst
 
-    if rule_lst[0][0] is not None:
-        # convert rule_lst from (n_samples, n_data) to (n_data, n_samples)
+    try:  
+ 
+      # convert rule_lst from (n_samples, n_data) to (n_data, n_samples)
         rule_lst = np.array(rule_lst, dtype=object)
         rule_lst = np.transpose(rule_lst, axes=(1, 0)).tolist()
         dataset["rules"] = rule_lst
+    except Exception as e:
+        print("Skipping rule  processing.")
 
     try:
         output_probs_lst = np.array(output_probs_lst, dtype=list)
