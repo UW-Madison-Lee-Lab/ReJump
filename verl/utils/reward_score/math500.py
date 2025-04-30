@@ -15,7 +15,6 @@
 import re
 import pdb
 from examples.data_preprocess.helper import get_answer_format
-
 import re
 import regex
 import multiprocessing
@@ -27,10 +26,6 @@ from sympy import simplify, N
 from sympy.parsing.sympy_parser import parse_expr
 from sympy.parsing.latex import parse_latex
 from latex2sympy2 import latex2sympy
-
-# from .parser import choice_answer_clean, strip_string
-# from parser import choice_answer_clean
-
 
 def choice_answer_clean(pred: str):
     pred = pred.strip("\n").rstrip(".").rstrip("/").strip(" ").lstrip(":")
@@ -139,40 +134,40 @@ def math_equal(
 
     ## deal with [], (), {}
     pred_str, ref_str = prediction, reference
-    if (
-        prediction.startswith("[")
-        and prediction.endswith("]")
-        and not reference.startswith("(")
-    ) or (
-        prediction.startswith("(")
-        and prediction.endswith(")")
-        and not reference.startswith("[")
-    ):
-        pred_str = pred_str.strip("[]()")
-        ref_str = ref_str.strip("[]()")
-    for s in ["{", "}", "(", ")"]:
-        ref_str = ref_str.replace(s, "")
-        pred_str = pred_str.replace(s, "")
+    # if (
+    #     prediction.startswith("[")
+    #     and prediction.endswith("]")
+    #     and not reference.startswith("(")
+    # ) or (
+    #     prediction.startswith("(")
+    #     and prediction.endswith(")")
+    #     and not reference.startswith("[")
+    # ):
+    #     pred_str = pred_str.strip("[]()")
+    #     ref_str = ref_str.strip("[]()")
+    # for s in ["{", "}", "(", ")"]:
+    #     ref_str = ref_str.replace(s, "")
+    #     pred_str = pred_str.replace(s, "")
     if pred_str.lower() == ref_str.lower():
         return True
 
     ## [a, b] vs. [c, d], return a==c and b==d
-    if (
-        regex.match(r"(\(|\[).+(\)|\])", prediction) is not None
-        and regex.match(r"(\(|\[).+(\)|\])", reference) is not None
-    ):
-        pred_parts = prediction[1:-1].split(",")
-        ref_parts = reference[1:-1].split(",")
-        if len(pred_parts) == len(ref_parts):
-            if all(
-                [
-                    math_equal(
-                        pred_parts[i], ref_parts[i], include_percentage, is_close
-                    )
-                    for i in range(len(pred_parts))
-                ]
-            ):
-                return True
+    # if (
+    #     regex.match(r"(\(|\[).+(\)|\])", prediction) is not None
+    #     and regex.match(r"(\(|\[).+(\)|\])", reference) is not None
+    # ):
+    #     pred_parts = prediction[1:-1].split(",")
+    #     ref_parts = reference[1:-1].split(",")
+    #     if len(pred_parts) == len(ref_parts):
+    #         if all(
+    #             [
+    #                 math_equal(
+    #                     pred_parts[i], ref_parts[i], include_percentage, is_close
+    #                 )
+    #                 for i in range(len(pred_parts))
+    #             ]
+    #         ):
+    #             return True
     if (
         (
             prediction.startswith("\\begin{pmatrix}")
@@ -360,6 +355,7 @@ def call_with_timeout(func, *args, timeout=1, **kwargs):
 
 
 
+
 def last_answer_string(string, answer_format):
     """Extract the last answer from a string, looking for <answer></answer> tags."""
     if answer_format == "tags":
@@ -383,7 +379,7 @@ def compute_score(solution_str, ground_truth, answer_format) -> float:
         string_in_last_boxed = last_answer_string(solution_str, answer_format)
         # if string_in_last_boxed is not None:
         #     answer = remove_boxed(string_in_last_boxed)
-
+        
         if is_equiv(string_in_last_boxed, ground_truth["label"][0]):
             retval = 1.
     except Exception as e:
@@ -395,23 +391,10 @@ def compute_score(solution_str, ground_truth, answer_format) -> float:
 
 # string normalization from https://github.com/EleutherAI/lm-evaluation-harness/blob/master/lm_eval/tasks/hendrycks_math.py
 def is_equiv(str1, str2, verbose=False):
-    if str1 is None and str2 is None:
-        print("WARNING: Both None")
-        return True
-    if str1 is None or str2 is None:
-        return False
-
-    try:
-        print(str1, str2)
-        ss1 = strip_string(str1)
-        ss2 = strip_string(str2)
-        if verbose:
-            print(ss1, ss2)
-        return ss1 == ss2
-    except Exception as e:
-        print(type(e))
-        pdb.set_trace()
-        return str1 == str2
+    if math_equal(str1, str2):
+        return 1
+    else:
+        return 0
 
 
 def remove_boxed(s):
@@ -598,3 +581,87 @@ def strip_string(string):
     string = fix_a_slash_b(string)
 
     return string
+
+
+
+def _test_math_equal():
+    # print(math_equal("0.0833333333333333", "\\frac{1}{12}"))
+    # print(math_equal("(1,4.5)", "(1,\\frac{9}{2})"))
+    # print(math_equal("\\frac{x}{7}+\\frac{2}{7}", "\\frac{x+2}{7}", timeout=True))
+    # print(math_equal("\\sec^2(y)", "\\tan^2(y)+1", timeout=True))
+    # print(math_equal("\\begin{pmatrix}-\\frac{7}{4}&-2\\\\4&\\frac{1}{4}\\end{pmatrix}", "(\\begin{pmatrix}-\\frac{7}{4}&-2\\\\4&\\frac{1}{4}\\\\\\end{pmatrix})", timeout=True))
+
+    # pred = '\\begin{pmatrix}\\frac{1}{3x^{2/3}}&0&0\\\\0&1&0\\\\-\\sin(x)&0&0\\end{pmatrix}'
+    # gt = '(\\begin{pmatrix}\\frac{1}{3\\sqrt[3]{x}^2}&0&0\\\\0&1&0\\\\-\\sin(x)&0&0\\\\\\end{pmatrix})'
+
+    # pred= '-\\frac{8x^2}{9(x^2-2)^{5/3}}+\\frac{2}{3(x^2-2)^{2/3}}'
+    # gt= '-\\frac{2(x^2+6)}{9(x^2-2)\\sqrt[3]{x^2-2}^2}'
+
+    # pred =  '-34x-45y+20z-100=0'
+    # gt = '34x+45y-20z+100=0'
+
+    # pred = '\\frac{100}{3}'
+    # gt = '33.3'
+
+    # pred = '\\begin{pmatrix}0.290243531202435\\\\0.196008371385084\\\\-0.186381278538813\\end{pmatrix}'
+    # gt = '(\\begin{pmatrix}0.29\\\\0.196\\\\-0.186\\\\\\end{pmatrix})'
+
+    # pred = '\\frac{\\sqrt{\\sqrt{11}+\\sqrt{194}}}{2\\sqrt{33}+15}'
+    # gt = '\\frac{\\sqrt{\\sqrt{11}+\\sqrt{194}}}{15+2\\sqrt{33}}'
+
+    # pred = '(+5)(b+2)'
+    # gt = '(a+5)(b+2)'
+
+    # pred = '\\frac{1+\\sqrt{5}}{2}'
+    # gt = '2'
+
+    # pred = '\\frac{34}{16}+\\frac{\\sqrt{1358}}{16}', gt = '4'
+    # pred = '1', gt = '1\\\\sqrt{19}'
+
+    # pred = "(0.6,2.6667]"
+    # gt = "(\\frac{3}{5},\\frac{8}{3}]"
+
+    # gt = "x+2n+1"
+    # pred = "x+1"
+    
+    # print(math_equal(pred, gt, timeout=True))
+    print("testing (9a+11)/20 vs (9a+11)/21")
+    print(is_equiv(r"(9a+11)/20", r"(9a+11)*100"))
+
+    print("testing (9a+11)/20 vs (9a+11)/20")
+    print(is_equiv(r"(9a+11)/20", r"(9a+11)/20"))
+
+    print("testing (9a+11)/20 vs (9a+12)/20")
+    print(is_equiv(r"(9a+11)/20", r"(9a+12)/20"))
+
+    print(r"testing \frac{11+9a}{20} vs \frac{11+9a}{20}")
+    print(is_equiv(r"\frac{11+9a}{20}", r"\frac{11+9a}{20}"))
+
+    print(r"testing \frac{11+9a}{20} vs (11+9a)/20")
+    print(is_equiv(r"\frac{11+9a}{20}", r"(11+9a)/20"))
+
+    print(r"testing \frac{11+9a}{20} vs (9a+11)/20")
+    print(is_equiv(r"\frac{11+9a}{20}", r"(9a+11)/20"))
+
+    print(r"testing \frac{11+9a}{20} vs \frac{11+9a}{21}")
+    print(is_equiv(r"\frac{11+9a}{20}", r"\frac{11+9a}{21}"))
+
+    print(r"testing \frac{11+9a}{20} vs \frac{11+9a}{20}")
+    print(is_equiv(r"\frac{11+9a}{20}", r"\frac{11+9a}{20}"))
+
+    print(r"testing \frac{11+9a}{20} vs \frac{11+9a}{20}")
+    print(is_equiv(r"\frac{11+9a}{20}", r"\frac{11+9a}{20}"))
+
+    print("testing (9a+11)/20 vs (11+9a)*100")
+    print(is_equiv(r"(9a+11)/20", r"(11+9a)*100"))
+
+    print("testing 9019 vs 9019")
+    print(is_equiv(r"9019", r"9019"))
+
+    print("testing 9019 vs 9018")
+    print(is_equiv(r"9019", r"9018"))
+    
+    
+
+if __name__ == "__main__":
+    _test_math_equal()

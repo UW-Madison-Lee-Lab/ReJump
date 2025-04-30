@@ -791,9 +791,12 @@ def _select_rm_score_fn(data_source):
     if data_source == 'gsm8k':
         from verl.utils.reward_score import gsm8k
         return gsm8k.compute_score
-    elif data_source in ['math', 'math500', "gpqa-diamond"]:
+    elif data_source in ["gpqa-diamond"]:
         from verl.utils.reward_score import general
         return lambda solution_str, ground_truth: general.compute_score(solution_str, ground_truth, answer_format = supported_datasets[data_source]['answer_format'])
+    elif data_source in ["math", "math500"]:
+        from verl.utils.reward_score import math500
+        return lambda solution_str, ground_truth: math500.compute_score(solution_str, ground_truth, answer_format = supported_datasets[data_source]['answer_format'])
     elif "multiply" in data_source or "arithmetic" in data_source:
         from verl.utils.reward_score import multiply
         return multiply.compute_score
