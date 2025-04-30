@@ -20,7 +20,6 @@ class RewardManager():
         self.return_dict = return_dict
     
     def __call__(self, data: DataProto):
-    def __call__(self, data: DataProto):
         """We will expand this function gradually based on the available datasets"""
 
         # If there is rm score, we directly return rm score. Otherwise, we compute via rm_score_fn
