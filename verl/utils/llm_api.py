@@ -266,10 +266,10 @@ class LLMAPI:
                         response_content = f"<think>{reasoning_content}</think>\n{get_answer_format(supported_datasets[data_source]['answer_format'], answer_content)['example']}"
                 elif self.thinking == "cot":
                     reasoning_match = re.search(r'<think>(.*?)</think>', output, re.DOTALL)
-                    reasoning_content = reasoning_match.group(1).strip() if reasoning_match else ""
+                    reasoning_content = reasoning_match.group(0).strip() if reasoning_match else ""
                     
                     answer_match = re.search(rf"{get_answer_format(supported_datasets[data_source]['answer_format'], '.*?')['example']}", output, re.DOTALL)
-                    answer_content = answer_match.group(1).strip() if answer_match else ""
+                    answer_content = answer_match.group(0).strip() if answer_match else ""
                     response_content = output
                 else:
                     reasoning_content = ""
