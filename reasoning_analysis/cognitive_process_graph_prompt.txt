@@ -6,7 +6,8 @@ Your goal is to extract the graph structure from this reasoning trace. **Output 
 ## 1. Node Schema
 
 Each node must be an object with these fields:
-- **id** (integer): The index number provided at the beginning of the corresponding input line. This must match the input numbering exactly.
+- **id** (integer): The index number provided at the beginning of the corresponding input line. This must match the input numbering exactly.  
+  > The set of nodes in your output must **match exactly** the number and order of lines in the input; every `id` must correspond to its original input line number, and no node may be skipped or added.
 - **depends_on** (array of integers or null): The `id`(s) (i.e., the index numbers from the input) of the node(s) this step directly uses as input or logically follows from. Dependencies must faithfully reflect the original chain-of-thought. If a node represents an initial statement or thought based only on the implicit input/context, set this field to `null`. You need to infer these dependencies by analyzing the content and flow of the reasoning across the numbered lines.
 - **type** (string): one of the following categories, determined by analyzing the content of the corresponding input line:
     - `Observation/Given`: Information taken directly from the problem, context, or restated/inferred facts derived from prior steps.
