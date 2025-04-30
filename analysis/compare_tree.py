@@ -1,8 +1,14 @@
 
-from analysis.tree_vis_math import parse_json
+from analysis.tree_vis_math import parse_json, get_result_dir
 import zss
 import argparse
-
+from constants import supported_datasets
+import itertools
+import pandas as pd
+from tqdm import tqdm
+import numpy as np
+import pdb
+from utils import load_json
 
 def get_compare_prompt(str1, str2):
     return f"""
@@ -141,7 +147,58 @@ def get_root_node(flow_dict):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, required=True)
+    parser.add_argument("--model", type=str, nargs='+', default=["deepseek-ai/deepseek-reasoner", "xai/grok-3-mini-beta", "alibaba/qwen-turbo-2025-04-28-thinking"])
+    parser.add_argument("--dataset", type=str, nargs='+', default=["math500", "gpqa-diamond"])
     args = parser.parse_args()
+    
+    models = args.model
+    datasets = args.dataset
+    
+    results_dirs = {}
+    
+    for model in models:
+        for dataset in datasets:
+            results_dirs[(model, dataset)] = get_result_dir(
+                dataset_name = dataset,
+                model_name = model,
+                shot = 0,
+                template_type = "reasoning_api",
+                response_length = 404,
+                num_samples = -1,
+                feature_noise = supported_datasets[dataset]["feature_noise"],
+                label_noise = 0.0,
+                data_mode = "default",
+                n_query = 1,
+            )
+            
+    model_pairs = list(itertools.combinations(models, 2))
+    
+    for model_pair in model_pairs:
+        for dataset in datasets:
+            results_dir1 = results_dirs[(model_pair[0], dataset)]
+            results_dir2 = results_dirs[(model_pair[1], dataset)]
+            
+            n_samples = len(pd.read_parquet(f"{results_dir1}/test_default.parquet"))
+            
+            distances = []
+            
+            print("--------------------------------"*2)
+            print(f"|{model_pair[0]}|{model_pair[1]}|{dataset}|")
+            print("--------------------------------"*2)
+            
+            pbar = tqdm(range(n_samples))
+            for i in pbar:
+                flow_dict1 = load_json(f"{results_dir1}/tree_vis/{i}.json")
+                flow_dict2 = load_json(f"{results_dir2}/tree_vis/{i}.json")
+                tree1 = get_root_node(flow_dict1)
+                tree2 = get_root_node(flow_dict2)
+                distance = compute_tree_edit_distance(tree1, tree2)
+                distances.append(distance)
+                # Calculate running average and update tqdm postfix
 
-    flow_dict1 = parse_json(args.file1)
+                current_avg_distance = np.mean(distances)
+                pbar.set_description(f'Avg Dist: {current_avg_distance:.4f}')
+                
+            print(f"Average distance between {model_pair[0]} and {model_pair[1]} on {dataset}: {np.mean(distances)}")
+    
+    

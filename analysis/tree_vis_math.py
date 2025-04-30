@@ -523,12 +523,28 @@ if __name__ == "__main__":
     
     max_depths, breadths, avg_depths, b2d_ratios, validation_rates = [], [], [], [], []
     for idx in tqdm(idxs):
-        graph_metric = get_graph(idx, results, results_dir, args.overwrite)
+        attempts, success, overwrite = 0, False, args.overwrite
+        while attempts < 5 and not success:
+            try:
+                graph_metric = get_graph(idx, results, results_dir, overwrite)
+                success = True
+            except KeyboardInterrupt:
+                raise KeyboardInterrupt
+            except pdb.bdb.BdbQuit:
+                raise pdb.bdb.BdbQuit
+            except Exception as e:
+                print(f"Error: {type(e)} {e}")
+                print(f"Attempt {attempts} failed")
+                # pdb.set_trace()
+                attempts += 1
+                overwrite = True
+                continue
+            
         max_depths.append(graph_metric["max_depth"])
         breadths.append(graph_metric["breadth"])
         avg_depths.append(graph_metric["avg_depth"])
-        b2d_ratios.append(graph_metric["breadth"] / graph_metric["max_depth"])
-        validation_rates.append(graph_metric["validation_rate"])
+    b2d_ratios.append(graph_metric["breadth"] / graph_metric["max_depth"])
+    validation_rates.append(graph_metric["validation_rate"])
         
     max_depth = sum(max_depths) / len(max_depths)
     breadth = sum(breadths) / len(breadths)
