@@ -10,7 +10,7 @@ import re, openai
 import json
 
 from examples.data_preprocess.helper import _select_rm_score_fn, get_answer_format
-from google import genai 
+from google import genai
 import httpx
 from constants import supported_datasets
 from google.genai import types
