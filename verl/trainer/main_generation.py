@@ -255,7 +255,6 @@ def main(config):
 
                 test_batch = test_batch.union(test_output_gen_batch)
                 reward_dict = reward_fn(test_batch)
-                reward_dict = reward_fn(test_batch)
                 reward_tensor = reward_dict['reward_tensor']
                 indexes = [item.non_tensor_batch["extra_info"]["index"] for item in test_batch]
                 sort_idx = np.argsort(indexes)
