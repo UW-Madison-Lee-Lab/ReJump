@@ -62,9 +62,26 @@ def process_llm_analysis_logical_graph(llm_json: Dict[str, Any]) -> Optional[Dic
 def postprocess_llm_json_dict(llm_json_dict: Dict[str, Any], llm_analysis_splitted_reasoning_dict: Dict[str, Any]) -> Dict[str, Any]:
     llm_analysis_splitted_reasoning_dict  = json.loads(llm_analysis_splitted_reasoning_dict)
     # import pdb; pdb.set_trace()
+    reasoning_dict_ids = list(llm_analysis_splitted_reasoning_dict.keys())
+    llm_json_dict_ids = [str(node['id']) for node in llm_json_dict["nodes"]]
+    try:
+        #llm_json_dict_ids should be a subset of reasoning_dict_ids, every id in llm_json_dict_ids should be in reasoning_dict_ids
+        assert set(llm_json_dict_ids) <= set(reasoning_dict_ids), "llm_json_dict_ids is not a subset of reasoning_dict_ids"
+        
+    except Exception as e:
+        return None
+        # import pdb; pdb.set_trace()
+    
     for node in llm_json_dict["nodes"]:
-        node_text = llm_analysis_splitted_reasoning_dict.get(str(node['id']), 'ERROR: Node text not found in original reasoning dict')
-        node['text'] = node_text
+        node_info_dict = llm_analysis_splitted_reasoning_dict.get(str(node['id']))
+        
+        
+        node['text'] = node_info_dict['sentence']
+        node['logprobs'] = node_info_dict['logprobs_list']
+        node['avg_logprob'] = node_info_dict['avg_logprob']
+        node['n_tokens'] = node_info_dict['n_tokens']
+        node['sentence_tokens'] = node_info_dict['sentence_tokens']
+        node['avg_prob'] = node_info_dict['avg_prob']
     
     return llm_json_dict
 
@@ -154,7 +171,6 @@ def process_parquet_file(input_file: str, output_dir: Optional[str] = None,
                 "get_ground_truth": ground_truth_data
             }
             llm_analysis_data["samples"].append(sample_data)
-            processed_samples += 1 # Count as processed even if failed
             continue # Skip analysis and visualization for this sample
 
         # Ensure llm_json_dict is a dictionary before proceeding
@@ -170,12 +186,13 @@ def process_parquet_file(input_file: str, output_dir: Optional[str] = None,
                 "get_ground_truth": ground_truth_data
              }
              llm_analysis_data["samples"].append(sample_data)
-             processed_samples += 1
              continue
 
         # Analyze the CoT graph structure using the parsed dictionary
         
         llm_json_dict = postprocess_llm_json_dict(llm_json_dict, row["llm_analysis_splitted_reasoning_dict"])
+        if llm_json_dict is None:
+            continue
         cot_analysis_metrics = process_llm_analysis_logical_graph(llm_json_dict)
 
         # Generate and save visualization

@@ -137,3 +137,6 @@ reasoning_analysis/*.json
 reasoning_analysis/*.html
 
 gsm8k/*
+test_sample_graph/*
+test_sample_graph_blobs/*
+logical_graph_analysis_results/*

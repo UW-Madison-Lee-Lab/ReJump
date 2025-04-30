@@ -16,6 +16,8 @@ def get_data_type(file_path):
         "linreg": "regression",
         "cosreg": "regression",
         "pwreg": "regression",
+
+        "gsm8k": "unknown",
     }
     for key, value in data_type_dict.items():
         if key in file_path:
@@ -32,8 +34,12 @@ def get_model_name(file_path):
 
 def run_logical_graph_analysis(base_dir="/home/szhang967/liftr/multi-query-results"):
     # Path to analysis script
+
+    ###debug
+    base_dir = "/home/szhang967/liftr/test_sample_graph_blobs"
+     ###
     analysis_script = "/home/szhang967/liftr/reasoning_analysis/analyze_responses.py"
-    instruction_file = "/home/szhang967/liftr/reasoning_analysis/logical_graph_prompt.txt"
+    instruction_file = "/home/szhang967/liftr/reasoning_analysis/cognitive_process_graph_prompt.txt"
     
     # Process all test_default.parquet files
     for root, dirs, files in os.walk(base_dir):
@@ -45,10 +51,10 @@ def run_logical_graph_analysis(base_dir="/home/szhang967/liftr/multi-query-resul
                 model_name = get_model_name(input_file)
             #     if model_name == "unknown":
             #         continue
-                if "blobs" not in input_file:
-                    continue
-                if "deepseek-reasoner" not in input_file:
-                    continue
+                # if "gsm8k" not in input_file:
+                #     continue
+                # if "deepseek" not in input_file:
+                #     continue
                 
                 # Get data type for organization/logging
                 data_type = get_data_type(input_file)
@@ -64,16 +70,21 @@ def run_logical_graph_analysis(base_dir="/home/szhang967/liftr/multi-query-resul
                     "--llm", "gemini",
                     "--temperature", "0",
                     "--max_tokens", "35000",
-                    "--output_suffix", "_logical_graph",
+                    "--output_suffix", "_cognitive_process_graph",
                     "--field_of_interests", "input+reasonings",
-                    "--debug"
+                    # "--debug"
                 ]
-                
                 try:
                     subprocess.run(cmd, check=True)
                     print(f"Successfully processed {input_file}")
                 except subprocess.CalledProcessError as e:
                     print(f"Error processing {input_file}: {e}")
+                
+                gemini_analysis_output_file = input_file.replace("test_default.parquet", "test_default_gemini_analysis_cognitive_process_graph.parquet")
+                logical_graph_analysis_script = "/home/szhang967/liftr/reasoning_analysis/llm_logical_graph_analysis.py"
+                subprocess.run(["python", logical_graph_analysis_script, "--input", gemini_analysis_output_file], check=True)
+                
+
                 
 def parse_args():
     parser = argparse.ArgumentParser(description='Run logical graph analysis pipeline on model results.')

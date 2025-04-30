@@ -7,6 +7,7 @@ import time
 import argparse
 import logging
 import numpy as np
+import tiktoken
 from pathlib import Path
 from tqdm import tqdm
 from typing import Dict, Any, Optional, Union, List
@@ -135,46 +136,153 @@ def read_instruction_file(file_path: str) -> str:
 #         processed_lines.append(f"[Step {i}]: {line}")
 #     return '\n'.join(processed_lines), reasoning_dict
 
-def process_reasoning(input_str: str) -> tuple[str, dict]:
+# def process_reasoning(input_str: str) -> tuple[str, dict]:
 
-    if not input_str:
-        return "", {}
+#     if not input_str:
+#         return "", {}
         
-    parts = re.split(r'([.?!])', input_str)
+#     parts = re.split(r'([.?!])', input_str)
     
-    sentences = []
-    current_sentence = ""
-    for part in parts:
-        # Skip empty parts that can result from the split
-        if not part: 
+#     sentences = []
+#     current_sentence = ""
+#     for part in parts:
+#         # Skip empty parts that can result from the split
+#         if not part: 
+#             continue
+        
+#         # Append the current part (either text or punctuation)
+#         current_sentence += part
+        
+#         # If the part is a punctuation mark, the sentence is complete
+#         if part in ['.', '?', '!']:
+#             sentence_strip = current_sentence.strip()
+#             if sentence_strip: # Avoid adding empty strings if there's only whitespace
+#                  sentences.append(sentence_strip)
+#             # Reset for the next sentence
+#             current_sentence = ""
+
+#     # Add any remaining part if the input doesn't end with punctuation
+#     remaining_strip = current_sentence.strip()
+#     if remaining_strip:
+#         sentences.append(remaining_strip)
+
+#     # Filter out potentially empty strings again (e.g., from consecutive delimiters)
+#     sentences = [s for s in sentences if s]
+
+#     processed_lines = []
+#     reasoning_dict = {}
+#     for i, sentence in enumerate(sentences):
+#         step_key = i # Use integer index as key
+#         reasoning_dict[step_key] = sentence
+#         processed_lines.append(f"[Step {i}]: {sentence}")
+        
+#     # Return the formatted string and the dictionary
+#     return '\n'.join(processed_lines), reasoning_dict
+
+def process_reasoning_with_probs(probs_dict: Dict[str, Any], reasoning_only: bool = True) -> tuple[str, Dict[int, Dict[str, Any]]]:
+    """
+    Process reasoning with probability information, splitting by punctuation
+    
+    Args:
+        probs_dict: Dictionary containing logprobs and tokens
+        reasoning_only: Whether to only include reasoning (exclude answer)
+        
+    Returns:
+        Tuple of (formatted_text, reasoning_dict) where:
+            - formatted_text is a string with line breaks between sentences
+            - reasoning_dict has sentence-level statistics including logprobs
+    """
+    logprobs_list = probs_dict['logprobs']
+    tokens_list = probs_dict['tokens']
+    assert len(logprobs_list) == len(tokens_list)
+    logprob_token_pairs = list(zip(logprobs_list, tokens_list))
+
+    if reasoning_only:
+        # Remove the tokens that are after "<","answer",">", these are 3 consecutive tokens
+        # When this pattern is found, remove the 3 tokens and the following tokens
+        for i, (logprob, token) in enumerate(logprob_token_pairs):
+            if i+2 < len(logprob_token_pairs) and token == "<" and logprob_token_pairs[i+1][1] == "answer" and logprob_token_pairs[i+2][1] == ">":
+                logprob_token_pairs = logprob_token_pairs[:i]
+                break
+    
+    # Remove "<th","ink",">" the 3 consecutive tokens, also remove ":<\/","think",">\n\n" the 3 consecutive tokens
+    # In other words, remove only the 6 tokens and the corresponding logprobs. Keep the rest of the tokens and logprobs.
+    i = 0
+    while i < len(logprob_token_pairs) - 2:
+        if (logprob_token_pairs[i][1] == "<th" and 
+            i+2 < len(logprob_token_pairs) and
+            logprob_token_pairs[i+1][1] == "ink" and 
+            logprob_token_pairs[i+2][1] == ">"):
+            logprob_token_pairs = logprob_token_pairs[:i] + logprob_token_pairs[i+3:]
             continue
+        elif (logprob_token_pairs[i][1] == ":<\/" and 
+             i+2 < len(logprob_token_pairs) and
+             logprob_token_pairs[i+1][1] == "think" and 
+             logprob_token_pairs[i+2][1] == ">\n\n"):
+            logprob_token_pairs = logprob_token_pairs[:i] + logprob_token_pairs[i+3:]
+            continue
+        i += 1
+    
+    
+    # Split text into sentences based on punctuation
+    # Use regex to keep punctuation with the sentence
+    sentences = []
+    current_sentence_tokens = []
+    current_sentence_logprobs = []
+    current_sentence_text = ""
+    
+    for i, (logprob, token) in enumerate(logprob_token_pairs):
+        current_sentence_tokens.append(token)
+        current_sentence_logprobs.append(logprob)
+        current_sentence_text += token
         
-        # Append the current part (either text or punctuation)
-        current_sentence += part
-        
-        # If the part is a punctuation mark, the sentence is complete
-        if part in ['.', '?', '!']:
-            sentence_strip = current_sentence.strip()
-            if sentence_strip: # Avoid adding empty strings if there's only whitespace
-                 sentences.append(sentence_strip)
-            # Reset for the next sentence
-            current_sentence = ""
-
-    # Add any remaining part if the input doesn't end with punctuation
-    remaining_strip = current_sentence.strip()
-    if remaining_strip:
-        sentences.append(remaining_strip)
-
-    # Filter out potentially empty strings again (e.g., from consecutive delimiters)
-    sentences = [s for s in sentences if s]
-
+        # Check if the token ends with punctuation (.!?)
+        if token in ['.\n', ".\n\n", "\n\n", '!', '?']:
+            if current_sentence_text:
+                sentences.append({
+                    'text': current_sentence_text,
+                    'tokens': current_sentence_tokens,
+                    'logprobs': current_sentence_logprobs
+                })
+            # Reset for next sentence
+            current_sentence_tokens = []
+            current_sentence_logprobs = []
+            current_sentence_text = ""
+    
+    # Add the last sentence if it's not empty (might not end with punctuation)
+    if current_sentence_text:
+        sentences.append({
+            'text': current_sentence_text,
+            'tokens': current_sentence_tokens,
+            'logprobs': current_sentence_logprobs
+        })
+    
+    # Format the output and create reasoning dictionary
     processed_lines = []
     reasoning_dict = {}
-    for i, sentence in enumerate(sentences):
-        step_key = i # Use integer index as key
-        reasoning_dict[step_key] = sentence
-        processed_lines.append(f"[Step {i}]: {sentence}")
+    
+    for i, sentence_info in enumerate(sentences):
+        step_key = i
+        sentence_text = sentence_info['text']
+        sentence_tokens = sentence_info['tokens']
+        sentence_logprobs = sentence_info['logprobs']
         
+        # Calculate exact token count using tiktoken
+        n_tokens = len(sentence_tokens)
+        
+        # Create the dictionary entry for this sentence
+        reasoning_dict[step_key] = {
+            'sentence': sentence_text,
+            'sentence_tokens': sentence_tokens,
+            'logprobs_list': sentence_logprobs,
+            'avg_logprob': sum(sentence_logprobs) / n_tokens,
+            'avg_prob': np.exp(sum(sentence_logprobs) / n_tokens),
+            'n_tokens': n_tokens
+        }
+        
+        # Format the line for the string output
+        processed_lines.append(f"[Step {i}]: {sentence_text}")
+    
     # Return the formatted string and the dictionary
     return '\n'.join(processed_lines), reasoning_dict
 
@@ -192,7 +300,8 @@ def process_row(args):
     
     try:
         # Handle responses based on its type (could be string or list)
-        reasonings_str, reasoning_dict = process_reasoning(row['reasonings'][0])
+        # reasonings_str, reasoning_dict = process_reasoning(row['reasonings'][0])
+        reasonings_str, reasoning_dict = process_reasoning_with_probs(row['probs'][0])
         input_prompt = row['prompt'][0]['content']
         responses = row['responses'][0]
 

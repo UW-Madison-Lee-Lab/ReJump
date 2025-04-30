@@ -205,7 +205,7 @@ def preprocess_nodes(data, filter_obs_given=False, merge_obs_given=False):
 
     return new_data
 
-def create_visualization(data, output_dir, filter_obs_given=False, merge_obs_given=False, display=False):
+def create_visualization(data, output_dir, filter_obs_given=False, merge_obs_given=False, display=False, show_avg_prob=True):
     """
     Creates and saves a visualization of the Cognitive Process Graph (CPG).
 
@@ -257,6 +257,7 @@ def create_visualization(data, output_dir, filter_obs_given=False, merge_obs_giv
     for node in processed_data['nodes']:
         nid = node.get('id')
         ntype = node.get('type')
+        avg_prob = node.get('avg_prob', None)  # Get avg_prob value if available
 
         # Ensure node ID is valid
         if not isinstance(nid, int):
@@ -271,7 +272,7 @@ def create_visualization(data, output_dir, filter_obs_given=False, merge_obs_giv
         node_types_present.add(ntype_key)
         color = COLORS.get(ntype_key, '#dddddd') # Default grey for unknown types
 
-        G.add_node(nid, type=ntype_key) # Store the type key
+        G.add_node(nid, type=ntype_key, avg_prob=avg_prob) # Store avg_prob with node
         node_colors_map[nid] = color # Store the assigned color
 
     # Add depends_on edges
@@ -372,11 +373,17 @@ def create_visualization(data, output_dir, filter_obs_given=False, merge_obs_giv
 
     # Prepare labels
     labels_map = {n: str(n) for n in G.nodes()}
-    # Special label for merged node
+    # Special label for merged node and add avg_prob if available and show_avg_prob is True
     for n, attr in G.nodes(data=True):
          if attr.get('type') == 'Observation/Given_merged':
               labels_map[n] = "Obs/Given\n(Merged)"
-
+         # Add avg_prob to label if available and requested
+         if show_avg_prob and attr.get('avg_prob') is not None:
+              avg_prob = attr.get('avg_prob')
+              # Format to 2 decimal places if it's a number
+              if isinstance(avg_prob, (float, int)):
+                  prob_str = f"{avg_prob:.2f}"
+                  labels_map[n] = f"{labels_map[n]}\n{prob_str}"
 
     # Draw labels
     nx.draw_networkx_labels(
