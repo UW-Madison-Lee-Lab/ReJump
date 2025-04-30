@@ -207,21 +207,21 @@ def process_reasoning_with_probs(probs_dict: Dict[str, Any], reasoning_only: boo
     
     # Remove "<th","ink",">" the 3 consecutive tokens, also remove ":<\/","think",">\n\n" the 3 consecutive tokens
     # In other words, remove only the 6 tokens and the corresponding logprobs. Keep the rest of the tokens and logprobs.
-    i = 0
-    while i < len(logprob_token_pairs) - 2:
-        if (logprob_token_pairs[i][1] == "<th" and 
-            i+2 < len(logprob_token_pairs) and
-            logprob_token_pairs[i+1][1] == "ink" and 
-            logprob_token_pairs[i+2][1] == ">"):
-            logprob_token_pairs = logprob_token_pairs[:i] + logprob_token_pairs[i+3:]
-            continue
-        elif (logprob_token_pairs[i][1] == ":<\/" and 
-             i+2 < len(logprob_token_pairs) and
-             logprob_token_pairs[i+1][1] == "think" and 
-             logprob_token_pairs[i+2][1] == ">\n\n"):
-            logprob_token_pairs = logprob_token_pairs[:i] + logprob_token_pairs[i+3:]
-            continue
-        i += 1
+    # i = 0
+    # while i < len(logprob_token_pairs) - 2:
+    #     if (logprob_token_pairs[i][1] == "<th" and 
+    #         i+2 < len(logprob_token_pairs) and
+    #         logprob_token_pairs[i+1][1] == "ink" and 
+    #         logprob_token_pairs[i+2][1] == ">"):
+    #         logprob_token_pairs = logprob_token_pairs[:i] + logprob_token_pairs[i+3:]
+    #         continue
+    #     elif ( (logprob_token_pairs[i][1] == ":<\/" or logprob_token_pairs[i][1] == "<\/") and 
+    #          i+2 < len(logprob_token_pairs) and
+    #          logprob_token_pairs[i+1][1] == "think" and 
+    #          logprob_token_pairs[i+2][1] == ">\n\n"):
+    #         logprob_token_pairs = logprob_token_pairs[:i] + logprob_token_pairs[i+3:]
+    #         continue
+    #     i += 1
     
     
     # Split text into sentences based on punctuation
@@ -237,7 +237,7 @@ def process_reasoning_with_probs(probs_dict: Dict[str, Any], reasoning_only: boo
         current_sentence_text += token
         
         # Check if the token ends with punctuation (.!?)
-        if token in ['.\n', ".\n\n", "\n\n", '!', '?']:
+        if token in ['.\n', ".\n\n", "\n\n", " \n\n",'!', '?']:
             if current_sentence_text:
                 sentences.append({
                     'text': current_sentence_text,
