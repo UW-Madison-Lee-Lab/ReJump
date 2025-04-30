@@ -106,6 +106,7 @@ class HFRollout(BaseRollout):
 
             # Initialize a list of dictionaries, one for each item in the batch
             batch_logprob= [[] * batch_size]
+            # batch_logprob= [[] * batch_size]
 
             for t in range(num_generated_steps):
                 # Ensure step t is within the intended response part
@@ -139,8 +140,7 @@ class HFRollout(BaseRollout):
                             logprob_val = float(chosen_token_logprobs_cpu[b])
                             batch_logprob_dicts[b].append(logprob_val) # Store logprob (float)
                         else: #if it's a pad_token,
-                            batch_logprob_dicts[b].append(logprob_val) # Reset to empty list if pad token encountered
-
+                            batch_logprob_dicts[b].append(float(-1)) # Reset to empty list if pad token encountered
                 else:
                     # This case (t < num_generated_steps but current_seq_index >= seq.shape[1])
                     # should be less likely if seq includes padding from generate itself,

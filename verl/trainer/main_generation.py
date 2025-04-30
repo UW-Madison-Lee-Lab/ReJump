@@ -252,11 +252,13 @@ def main(config):
             
             
             for i in range(config.data.n_samples):
+                # test_output_gen_batch_padded = wg.generate_sequences(test_gen_batch_padded)
                 test_output_gen_batch_padded = wg.generate_sequences(test_gen_batch_padded)
                 test_output_gen_batch_padded = test_output_gen_batch_padded[:test_batch.batch.batch_size[0]]
                 test_output_gen_batch = unpad_dataproto(test_output_gen_batch_padded, pad_size=pad_size)
 
                 test_batch = test_batch.union(test_output_gen_batch)
+                # reward_dict = reward_fn(test_batch)
                 reward_dict = reward_fn(test_batch)
                 reward_tensor = reward_dict['reward_tensor']
                 indexes = [item.non_tensor_batch["extra_info"]["index"] for item in test_batch]
@@ -285,30 +287,29 @@ def main(config):
     reasonings_lst = np.array(reasonings_lst, dtype=object)
     reasonings_lst = np.transpose(reasonings_lst, axes=(1, 0)).tolist()
     dataset["reasonings"] = reasonings_lst
-    if len(rule_probs_lst) == len(dataset):
+
+    if rule_lst[0][0] is not None:
+        # convert rule_lst from (n_samples, n_data) to (n_data, n_samples)
+        rule_lst = np.array(rule_lst, dtype=object)
+        rule_lst = np.transpose(rule_lst, axes=(1, 0)).tolist()
+        dataset["rules"] = rule_lst
+
+    try:
         output_probs_lst = np.array(output_probs_lst, dtype=list)
         output_probs_lst = np.transpose(output_probs_lst, axes=(1, 0)).tolist()
         dataset["probs"] = output_probs_lst
-    try:
-        if len(rule_probs_lst[0]) >0:
-                # convert rule_probs_lst from (n_samples, n_data) to (n_data, n_samples)
-                rule_probs_lst = np.array(rule_probs_lst, dtype=list)
-                rule_probs_lst = np.transpose(rule_probs_lst, axes=(1, 0)).tolist()
-                dataset["rule_probs"] = rule_probs_lst
+        print(dataset["probs"][0][0])
 
+        if rule_probs_lst[0][0] is not []:
+            # convert rule_probs_lst from (n_samples, n_data) to (n_data, n_samples)
+            rule_probs_lst = np.array(rule_probs_lst, dtype=list)
+            rule_probs_lst = np.transpose(rule_probs_lst, axes=(1, 0)).tolist()
+            dataset["rule_probs"] = rule_probs_lst
 
-        if rule_lst[0][0] is not None:
-            # convert rule_lst from (n_samples, n_data) to (n_data, n_samples)
-            rule_lst = np.array(rule_lst, dtype=object)
-            rule_lst = np.transpose(rule_lst, axes=(1, 0)).tolist()
-            dataset["rules"] = rule_lst
-
+    
     except Exception as e:
         print("Skipping rule_probs_lst and rule_lst processing.")
 
-    # convert reward_tensor_lst from (n_samples, n_data) to (n_data, n_samples)
-    reward_tensor_lst = np.array(reward_tensor_lst, dtype=object)
-    reward_tensor_lst = np.transpose(reward_tensor_lst, axes=(1, 0)).tolist() 
 
     # Log final summary statistics to wandb
     if config.trainer.wandb:

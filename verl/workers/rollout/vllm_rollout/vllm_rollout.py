@@ -169,8 +169,10 @@ class vLLMRollout(BaseRollout):
                 'top_k': -1,
                 'min_p': 0.0,
                 'temperature': 0,
-                'n': 1  # if greedy, only 1 response
+                'n': 1,  # if greedy, only 1 response
+                'logprobs':1
             }
+  
 
         # users can customize different sampling_params at different run
         with self.update_sampling_params(**kwargs):
@@ -179,6 +181,7 @@ class vLLMRollout(BaseRollout):
                 sampling_params=self.sampling_params,
                 prompt_token_ids=idx_list,
                 use_tqdm=False)
+
 
         # TODO(sgm): disable logprob when recompute_log_prob is enable
         # if n = 1: (bs, response_length) ; if n > 1: (bs * n, response_length)
@@ -215,7 +218,7 @@ class vLLMRollout(BaseRollout):
                 'prompts': idx,
                 'responses': response,
                 'input_ids': seq,  # here input_ids become the whole sentences
-                'log_probs': log_probs, # we will recompute old log prob with actor
+                'log_probs': log_probs, 
                 'attention_mask': attention_mask,
                 'position_ids': position_ids
             },
