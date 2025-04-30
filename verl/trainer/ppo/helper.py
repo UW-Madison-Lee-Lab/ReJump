@@ -1,4 +1,5 @@
 
+
 from verl import DataProto
 import torch, re
 from examples.data_preprocess.helper import _select_rm_score_fn
@@ -18,6 +19,7 @@ class RewardManager():
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
         self.return_dict = return_dict
     
+    def __call__(self, data: DataProto):
     def __call__(self, data: DataProto):
         """We will expand this function gradually based on the available datasets"""
 
@@ -45,17 +47,17 @@ class RewardManager():
             valid_response_length = data_item.batch['attention_mask'][prompt_length:].sum()
             valid_response_ids = response_ids[:valid_response_length]
             probs = data_item.batch['log_probs']
-            for j in range(valid_response_length):
-                if len(probs)>valid_response_length:
-                    item_logprob_dict = {'tokens': [], 'logprobs': []}
+            
+            if len(probs)>=valid_response_length:
+                item_logprob_dict = {'tokens': [], 'logprobs': []}
+                for j in range(valid_response_length):
                     item_logprob_dict['tokens'].append(self.tokenizer.decode([int(valid_response_ids[j])]))
-                    item_logprob_dict['logprobs'].append(float(probs[j][0]))  # Assuming probs[i] is a tuple of (token_id, logprob)
-                else:
-                    item_logprob_dict = None
-
+                    item_logprob_dict['logprobs'].append(float(probs[j]))  # Assuming probs[i] is a tuple of (token_id, logprob)
+            else:
+                item_logprob_dict = {None}
                     # --- Store the dictionary for this batch item ---
                     # Note: No padding applied to lists inside the dict
-                probs_token_list.append(item_logprob_dict)
+            probs_token_list.append(item_logprob_dict)
             # else: logprobs not requested or not returned, batch_logprob_dicts[i] remains None
             # decode
             # sequences = torch.cat((valid_prompt_ids, valid_response_ids))
@@ -69,6 +71,7 @@ class RewardManager():
             # print("type of sequences_str: ", type(sequences_str))
             # input("Press Enter to continue...")
             # print(f"sequences_str: {sequences_str}")
+
 
 
             # select rm_score

@@ -106,6 +106,7 @@ class HFRollout(BaseRollout):
 
             # Initialize a list of dictionaries, one for each item in the batch
             batch_logprob= [[] * batch_size]
+            batch_logprob= [[] * batch_size]
 
             for t in range(num_generated_steps):
                 # Ensure step t is within the intended response part
@@ -141,6 +142,9 @@ class HFRollout(BaseRollout):
                         else: #if it's a pad_token,
                             batch_logprob_dicts[b].append(logprob_val) # Reset to empty list if pad token encountered
 
+                            batch_logprob_dicts[b].append(logprob_val) # Store logprob (float)
+                        else: #if it's a pad_token,
+                            batch_logprob_dicts[b].append(float(-1)) # Reset to empty list if pad token encountered
                 else:
                     # This case (t < num_generated_steps but current_seq_index >= seq.shape[1])
                     # should be less likely if seq includes padding from generate itself,
@@ -181,6 +185,7 @@ class HFRollout(BaseRollout):
                 'attention_mask': attention_mask,
                 'position_ids': position_ids,
                 "log_probs": batch_logprob
+                "log_probs": batch_logprob
             },
             batch_size=batch_size)
 
@@ -188,4 +193,5 @@ class HFRollout(BaseRollout):
         torch.cuda.empty_cache()
 
         self.module.train()
+        return DataProto(batch=batch)
         return DataProto(batch=batch)

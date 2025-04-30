@@ -182,6 +182,7 @@ class vLLMRollout(BaseRollout):
                 prompt_token_ids=idx_list,
                 use_tqdm=False)
 
+
         # TODO(sgm): disable logprob when recompute_log_prob is enable
         # if n = 1: (bs, response_length) ; if n > 1: (bs * n, response_length)
         response = output[0].to(idx.device)
@@ -217,7 +218,7 @@ class vLLMRollout(BaseRollout):
                 'prompts': idx,
                 'responses': response,
                 'input_ids': seq,  # here input_ids become the whole sentences
-                'log_probs': log_probs, # we will recompute old log prob with actor
+                'log_probs': log_probs, 
                 'attention_mask': attention_mask,
                 'position_ids': position_ids
             },
@@ -227,4 +228,5 @@ class vLLMRollout(BaseRollout):
         if self.config.free_cache_engine:
             self.inference_engine.free_cache_engine()
 
+        return DataProto(batch=batch)
         return DataProto(batch=batch)
