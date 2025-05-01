@@ -296,7 +296,7 @@ def main(config):
         dataset["rules"] = rule_lst
     except Exception as e:
         print("Skipping rule  processing.")
-
+ 
     try:
         output_probs_lst = np.array(output_probs_lst, dtype=list)
         output_probs_lst = np.transpose(output_probs_lst, axes=(1, 0)).tolist()
