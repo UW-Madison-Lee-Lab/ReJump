@@ -9,6 +9,8 @@ from tqdm import tqdm
 import numpy as np
 import pdb
 from utils import load_json
+import wandb
+from environment import WANDB_INFO
 
 def get_compare_prompt(str1, str2):
     return f"""
@@ -149,6 +151,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, nargs='+', default=["deepseek-ai/deepseek-reasoner", "xai/grok-3-mini-beta", "alibaba/qwen-turbo-2025-04-28-thinking"])
     parser.add_argument("--dataset", type=str, nargs='+', default=["math500", "gpqa-diamond"])
+    parser.add_argument("--wandb", action="store_true")
     args = parser.parse_args()
     
     models = args.model
@@ -175,6 +178,16 @@ if __name__ == "__main__":
     
     for model_pair in model_pairs:
         for dataset in datasets:
+            if args.wandb:
+                wandb.init(
+                    project=f"{WANDB_INFO['project']}-tree-compare",
+                    entity=WANDB_INFO["entity"],
+                    config={
+                        "model_pair": sorted(model_pair),
+                        "dataset": dataset,
+                    }
+                )
+            
             results_dir1 = results_dirs[(model_pair[0], dataset)]
             results_dir2 = results_dirs[(model_pair[1], dataset)]
             
@@ -201,4 +214,7 @@ if __name__ == "__main__":
                 
             print(f"Average distance between {model_pair[0]} and {model_pair[1]} on {dataset}: {np.mean(distances)}")
     
+            if args.wandb:
+                wandb.log({"distance": np.mean(distances)})
+                wandb.finish()
     

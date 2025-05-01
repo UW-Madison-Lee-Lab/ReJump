@@ -1,7 +1,6 @@
 import json
 from google import genai 
 from google.genai import types
-from environment import GEMINI_API_KEY
 import re
 import graphviz
 import argparse
@@ -16,6 +15,8 @@ from openai import OpenAI
 
 from verl.utils.llm_api import LLMAPI
 from constants import supported_llms
+import wandb
+from environment import WANDB_INFO
 
 # model = "xai/grok-3-mini-beta"
 # model = "claude/claude-3-7-sonnet-20250219-thinking"
@@ -499,14 +500,25 @@ if __name__ == "__main__":
     parser.add_argument("--model_name", type=str, default="deepseek-ai/deepseek-reasoner")
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--num_samples", type=int, default=500)
+    parser.add_argument("--wandb", action="store_true")
     args = parser.parse_args()
     
+    if args.wandb:
+        wandb.init(
+            project=f"{WANDB_INFO['project']}-tree-vis", 
+            entity=WANDB_INFO["entity"], 
+            config={
+                "dataset_name": args.dataset_name,
+                "model_name": args.model_name,
+                "num_samples": args.num_samples,
+            }
+        )
     
     results_dir = get_result_dir(
         dataset_name = args.dataset_name,
         model_name = args.model_name,
         shot = 0,
-        template_type = "reasoning_api",
+        template_type = supported_llms[args.model_name]["template_type"],
         response_length = 404,
         num_samples = args.num_samples,
         feature_noise = supported_datasets[args.dataset_name]["feature_noise"],
@@ -553,3 +565,12 @@ if __name__ == "__main__":
     validation_rate = sum(validation_rates) / len(validation_rates)
     print(f"Max depth: {max_depth}, Breadth: {breadth}, Avg depth: {avg_depth}, B2D ratio: {b2d_ratio}, Validation rate: {validation_rate}")
         
+    if args.wandb:
+        wandb.log({
+            "max_depth": max_depth,
+            "breadth": breadth,
+            "avg_depth": avg_depth,
+            "b2d_ratio": b2d_ratio,
+            "validation_rate": validation_rate,
+        })
+        wandb.finish()
