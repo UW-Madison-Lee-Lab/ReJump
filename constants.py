@@ -1,6 +1,6 @@
 import os, re
 import pdb
-from environment import root_dir, DEEPSEEK_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY
+from environment import root_dir, DEEPSEEK_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, OPENROUTER_API_KEY, GEMINI_API_KEY, ALIBABA_API_KEY, XAI_API_KEY
 
 
 data_dir = os.path.join(root_dir, 'datasets')
@@ -213,7 +213,7 @@ supported_llms = {
         "type": "huggingface",
     },
     # QwQ
-    "Qwen/QwQ-32B-preview": {
+    "Qwen/QwQ-32B": {
         "template_type": "qwen-instruct",
         "model_size": 32_000_000_000,
         "type": "huggingface",
@@ -338,24 +338,43 @@ supported_llms = {
         "type": "api",
         "api_key": OPENAI_API_KEY,
     },
-    "openrouter-deepseek/deepseek-r1": {
+    "openrouter-qwen/qwq-32b": {
         "template_type": "reasoning_api",
         "model_size": 0,
         "type": "api",
         "api_key": OPENROUTER_API_KEY,
     },
-    "claude/claude-3-7-sonnet-20250219": {
-        "template_type": "standard_api",
-        "model_size": 0,
-        "type": "api",
-        "api_key": ANTHROPIC_API_KEY,
-    },
-    "claude/claude-3-7-sonnet-20250219-thinking": {
+    "alibaba/qwen-plus-2025-04-28-thinking": {
         "template_type": "reasoning_api",
         "model_size": 0,
         "type": "api",
-        "api_key": ANTHROPIC_API_KEY,
-    }
+        "api_key": ALIBABA_API_KEY,
+    },
+    "alibaba/qwen-plus-2025-04-28": {
+        "template_type": "standard_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": ALIBABA_API_KEY,
+    },
+    "alibaba/qwq-plus-thinking": {
+        "template_type": "reasoning_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": ALIBABA_API_KEY,
+    },
+    "alibaba/qwen-turbo-2025-04-28-thinking": {
+        "template_type": "reasoning_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": ALIBABA_API_KEY,
+    },
+    
+    "xai/grok-3-mini-beta": {
+        "template_type": "reasoning_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": XAI_API_KEY,
+    },
 }
 
 supported_datasets = {
@@ -366,6 +385,7 @@ supported_datasets = {
         "label_noise": 0.0,
         "type": "classification",
         "difficulty": 1,
+        "answer_format": "tags",
     },
     "moons": {
         "num_classes": 2,
@@ -374,6 +394,7 @@ supported_datasets = {
         "label_noise": 0.0,
         "type": "classification",
         "difficulty": 2,
+        "answer_format": "tags",
     },
     "linear": {
         "num_classes": 2,
@@ -382,14 +403,16 @@ supported_datasets = {
         "label_noise": 0.0,
         "type": "classification",
         "difficulty": 1,
+        "answer_format": "tags",
     },  
     "circles": {
         "num_classes": 2,
         "num_features": 2,
         "feature_noise": 0.01,
-        "label_noise": 0.01,
+        "label_noise": 0.0,
         "type": "classification",
         "difficulty": 3,
+        "answer_format": "tags",
     },
     "linreg": {
         "num_classes": None,
@@ -398,6 +421,7 @@ supported_datasets = {
         "label_noise": 0.0,
         "type": "regression",
         "difficulty": 1,
+        "answer_format": "tags",
     },
     "quadreg": {
         "num_classes": None,
@@ -406,6 +430,7 @@ supported_datasets = {
         "label_noise": 0.0,
         "type": "regression",
         "difficulty": 2,
+        "answer_format": "tags",
     },
     "expreg": {
         "num_classes": None,
@@ -414,6 +439,7 @@ supported_datasets = {
         "label_noise": 0.0,
         "type": "regression",
         "difficulty": 1,
+        "answer_format": "tags",
     },
     "cosreg": {
         "num_classes": None,
@@ -421,7 +447,8 @@ supported_datasets = {
         "feature_noise": 0.02,
         "label_noise": 0.0,
         "type": "regression",
-        "difficulty": 3,
+        "difficulty": 3,    
+        "answer_format": "tags",
     },
     "l1normreg": {
         "num_classes": None,
@@ -430,6 +457,7 @@ supported_datasets = {
         "label_noise": 0.0,
         "type": "regression",
         "difficulty": 2,
+        "answer_format": "tags",
     },
     "pwreg": {
         "num_classes": None,
@@ -438,6 +466,7 @@ supported_datasets = {
         "label_noise": 0.0,
         "type": "regression",
         "difficulty": 2,
+        "answer_format": "tags",
     },
     "gsm8k": {
         "num_classes": None,
@@ -446,6 +475,7 @@ supported_datasets = {
         "label_noise": None,
         "type": "other",
         "difficulty": None,
+        "answer_format": "tags",
     },
     "aime": {
         "num_classes": None,
@@ -454,6 +484,7 @@ supported_datasets = {
         "label_noise": None,
         "type": "other",
         "difficulty": None,
+        "answer_format": "tags",
     },
     "math": {
         "num_classes": None,
@@ -462,6 +493,25 @@ supported_datasets = {
         "label_noise": None,
         "type": "other",
         "difficulty": None,
+        "answer_format": "box",
+    },
+    "math500": {
+        "num_classes": None,
+        "num_features": None,
+        "feature_noise": None,
+        "label_noise": None,
+        "type": "other",
+        "difficulty": None,
+        "answer_format": "box",
+    },
+    "gpqa-diamond": {
+        "num_classes": None,
+        "num_features": None,
+        "feature_noise": None,
+        "label_noise": None,
+        "type": "other",
+        "difficulty": None,
+        "answer_format": "tags",
     },
     "regression":{},
     "classification":{},

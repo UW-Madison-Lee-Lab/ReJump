@@ -99,7 +99,11 @@ def main(config):
     use_api = supported_llms[config.model.path]["type"] == "api"
     if use_api:
         api_key = supported_llms[config.model.path]["api_key"]
-        model = LLMAPI(api_key=api_key, model_name=config.model.path, template_type=wandb_configs["template_type"])
+        model = LLMAPI(
+            api_key=api_key, 
+            model_name=config.model.path, 
+            template_type=wandb_configs["template_type"],
+        )
         chat_lst_converter = LLMAPI.convert_chat_list
         # Use Qwen tokenizer for API mode
         local_path = "Qwen/Qwen2.5-3B-Instruct"
@@ -225,6 +229,7 @@ def main(config):
             # Add batch outputs and rewards to the main lists
             for i in range(config.data.n_samples):
                 output_lst[i].extend([seq[-1] for seq in batch_output_lst[i]])
+                
                 reward_tensor_lst[i].extend(reward_dict['reward_tensor'].tolist())
                 reasonings_lst[i].extend([seq[-1] for seq in batch_reasoning_lst[i]])
                 answer_lst[i].extend([seq[-1] for seq in batch_answer_lst[i]])
@@ -232,6 +237,7 @@ def main(config):
                 if len(batch_output_lst[0][0]) >1:
                     rule_lst[i].extend([seq[0] for seq in batch_output_lst[i]])
                     rule_probs_lst[i].extend([list[0] for list in batch_pob_lst[i]])
+            print(f"reward_tensor_lst: {reward_tensor_lst}")
         else:
             # Process with HuggingFace model
             test_batch = DataProto.from_single_dict(test_data)
@@ -248,12 +254,13 @@ def main(config):
             
             
             for i in range(config.data.n_samples):
-                test_output_gen_batch_padded = wg.generate_sequences(test_gen_batch_padded)
+                # test_output_gen_batch_padded = wg.generate_sequences(test_gen_batch_padded)
                 test_output_gen_batch_padded = wg.generate_sequences(test_gen_batch_padded)
                 test_output_gen_batch_padded = test_output_gen_batch_padded[:test_batch.batch.batch_size[0]]
                 test_output_gen_batch = unpad_dataproto(test_output_gen_batch_padded, pad_size=pad_size)
 
                 test_batch = test_batch.union(test_output_gen_batch)
+                # reward_dict = reward_fn(test_batch)
                 reward_dict = reward_fn(test_batch)
                 reward_tensor = reward_dict['reward_tensor']
                 indexes = [item.non_tensor_batch["extra_info"]["index"] for item in test_batch]
@@ -282,13 +289,17 @@ def main(config):
     reasonings_lst = np.array(reasonings_lst, dtype=object)
     reasonings_lst = np.transpose(reasonings_lst, axes=(1, 0)).tolist()
     dataset["reasonings"] = reasonings_lst
-
-    if rule_lst[0][0] is not None:
-        # convert rule_lst from (n_samples, n_data) to (n_data, n_samples)
+    reward_tensor_lst = np.array(reward_tensor_lst, dtype=object)
+    reward_tensor_lst = np.transpose(reward_tensor_lst, axes=(1, 0)).tolist() 
+    try:  
+ 
+      # convert rule_lst from (n_samples, n_data) to (n_data, n_samples)
         rule_lst = np.array(rule_lst, dtype=object)
         rule_lst = np.transpose(rule_lst, axes=(1, 0)).tolist()
         dataset["rules"] = rule_lst
-
+    except Exception as e:
+        print("Skipping rule  processing.")
+ 
     try:
         output_probs_lst = np.array(output_probs_lst, dtype=list)
         output_probs_lst = np.transpose(output_probs_lst, axes=(1, 0)).tolist()

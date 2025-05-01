@@ -6,7 +6,7 @@ import argparse
 from run_exps.helper import gen_dataset, inference, rl_train
 import pdb
 
-model_size_upper_limit = 10_000_000_000
+model_size_upper_limit = 100_000_000_000
 
 supported_model_list = [model for model in supported_llms.keys() if supported_llms[model]["model_size"] <= model_size_upper_limit]
 
@@ -30,6 +30,8 @@ parser.add_argument("--wandb", type=int, default=2, choices=[0, 1, 2])
 parser.add_argument("--api_workers", type=int, default=16)
 parser.add_argument("--exp_name", type=str, default="")
 parser.add_argument("--inductive", type=bool, default=False)
+parser.add_argument("--test_ratio", type=float, default=1)
+parser.add_argument("--temperature", type=float, default=0.0)
 args = parser.parse_args()
 
 if args.load_train_step:
@@ -97,6 +99,7 @@ for dataset in dataset_list:
                             feature_noise=feature_noise,
                             label_noise=args.label_noise,
                             data_mode=args.data_mode,
+                            test_ratio=args.test_ratio
                         )
                         command_list.append(gen_command)
                         if args.train:
@@ -112,7 +115,7 @@ for dataset in dataset_list:
                                 label_noise=args.label_noise,
                                 n_gpus=args.n_gpus,
                                 data_mode=args.data_mode,
-                                n_query=args.n_query
+                                n_query=args.n_query,
                             )
                             command_list.append(train_command)
                         else:
@@ -128,7 +131,7 @@ for dataset in dataset_list:
                                     label_noise=args.label_noise,
                                     data_mode=args.data_mode,
                                     train_step=args.load_train_step,
-                                    n_query=args.n_query
+                                    n_query=args.n_query,
                                 )
                             else:
                                 model_path = model
@@ -148,7 +151,8 @@ for dataset in dataset_list:
                                 data_mode=args.data_mode,
                                 wandb=args.wandb,
                                 train_step=args.load_train_step,
-                                api_workers=args.api_workers
+                                api_workers=args.api_workers,
+                                temperature=args.temperature
                             )
                             command_list.append(inference_command)
 

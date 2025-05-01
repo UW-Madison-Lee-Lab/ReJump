@@ -106,7 +106,7 @@ class HFRollout(BaseRollout):
 
             # Initialize a list of dictionaries, one for each item in the batch
             batch_logprob= [[] * batch_size]
-            batch_logprob= [[] * batch_size]
+            # batch_logprob= [[] * batch_size]
 
             for t in range(num_generated_steps):
                 # Ensure step t is within the intended response part
