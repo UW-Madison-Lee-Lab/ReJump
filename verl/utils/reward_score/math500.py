@@ -380,20 +380,21 @@ def compute_score(solution_str, ground_truth, answer_format) -> float:
             return 0.
         string_in_last_boxed = last_answer_string(solution_str, answer_format)
         if string_in_last_boxed is None: 
-            return 0
+            return 0.
         # if string_in_last_boxed is not None:
         #     answer = remove_boxed(string_in_last_boxed)
         
         if is_equiv(string_in_last_boxed, ground_truth["label"][0]):
             retval = 1.
     except Exception as e:
-        print(type(e))
-        print(e)
-        # print("string_in_last_boxed:")
-        # print(string_in_last_boxed)
-        # print("ground_truth:")
-        # print(ground_truth["label"][0])
-        pdb.set_trace()
+        # print(type(e))
+        # print(e)
+        # # print("string_in_last_boxed:")
+        # # print(string_in_last_boxed)
+        # # print("ground_truth:")
+        # # print(ground_truth["label"][0])
+        # pdb.set_trace()
+        return 0.
 
     return retval
 
