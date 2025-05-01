@@ -374,6 +374,12 @@ supported_llms = {
         "type": "api",
         "api_key": ALIBABA_API_KEY,
     },
+    "alibaba/qwen2.5-32b-instruct": {
+        "template_type": "standard_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": ALIBABA_API_KEY,
+    },
     "xai/grok-3-mini-beta": {
         "template_type": "reasoning_api",
         "model_size": 0,
