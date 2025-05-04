@@ -5,9 +5,14 @@ import pandas as pd
 import wandb
 api = wandb.Api(timeout=300)
 from environment import WANDB_INFO
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--task", type=str, default="evaluation", choices=["evaluation", "tree-vis", "tree-compare", "generation"])
+args = parser.parse_args()
 
 # Project is specified by <entity/project-name>
-runs = api.runs(f"{WANDB_INFO['entity']}/{WANDB_INFO['project']}-evaluation")
+runs = api.runs(f"{WANDB_INFO['entity']}/{WANDB_INFO['project']}-{args.task}")
 
 summary_list, config_list, name_list, id_list = [], [], [], []
 for run in runs: 
@@ -40,6 +45,6 @@ df = pd.concat([
     pd.DataFrame({'run_id':id_list}),
 ], axis = 1)
 
-save_path = f"{root_dir}/results/results.pkl"
+save_path = f"{root_dir}/results/results-{args.task}.pkl"
 os.makedirs(os.path.dirname(save_path), exist_ok=True)
 df.to_pickle(save_path)

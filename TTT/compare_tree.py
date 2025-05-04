@@ -1,16 +1,18 @@
 
-from analysis.tree_vis_math import parse_json, get_result_dir
+from TTT.tree_vis_math import parse_json, get_result_dir
 import zss
 import argparse
-from constants import supported_datasets
+from constants import supported_datasets, supported_llms
 import itertools
 import pandas as pd
 from tqdm import tqdm
 import numpy as np
 import pdb
-from utils import load_json
+from utils import load_json, wandb_init
 import wandb
 from environment import WANDB_INFO
+from utils import set_seed
+import signal
 
 def get_compare_prompt(str1, str2):
     return f"""
@@ -89,15 +91,30 @@ def compute_tree_edit_distance(tree1_root, tree2_root):
     # The zss.simple_distance function requires the root nodes and access methods.
     # It uses default costs and does not accept insert_cost, remove_cost, or update_cost keywords.
     # We provide our SimpleNode methods directly.
-    distance = zss.simple_distance(
-        tree1_root,
-        tree2_root,
-        get_children=SimpleNode.get_children,
-        get_label=SimpleNode.get_description,
-        label_dist=get_distance,
-        # No cost functions passed here; simple_distance uses defaults:
-        # insert_cost=1, remove_cost=1, update_cost=1 if labels differ, 0 otherwise.
-    )
+    
+    def timeout_handler(signum, frame):
+        raise TimeoutError("Tree edit distance computation timed out")
+    
+    # Set the signal handler and a 20-second alarm
+    signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(2)
+    
+    try:
+        distance = zss.simple_distance(
+            tree1_root,
+            tree2_root,
+            get_children=SimpleNode.get_children,
+            get_label=SimpleNode.get_description,
+            label_dist=get_distance,
+            # No cost functions passed here; simple_distance uses defaults:
+            # insert_cost=1, remove_cost=1, update_cost=1 if labels differ, 0 otherwise.
+        )
+        # Cancel the alarm if computation completes
+        signal.alarm(0)
+    except TimeoutError:
+        # Return None if timeout occurs
+        distance = None
+        signal.alarm(0)
     return distance
 
 
@@ -165,7 +182,7 @@ if __name__ == "__main__":
                 dataset_name = dataset,
                 model_name = model,
                 shot = 0,
-                template_type = "reasoning_api",
+                template_type = supported_llms[model]["template_type"],
                 response_length = 404,
                 num_samples = -1,
                 feature_noise = supported_datasets[dataset]["feature_noise"],
@@ -179,14 +196,16 @@ if __name__ == "__main__":
     for model_pair in model_pairs:
         for dataset in datasets:
             if args.wandb:
-                wandb.init(
-                    project=f"{WANDB_INFO['project']}-tree-compare",
-                    entity=WANDB_INFO["entity"],
-                    config={
-                        "model_pair": sorted(model_pair),
-                        "dataset": dataset,
-                    }
-                )
+                model1, model2 = sorted(model_pair)
+                wandb_config = {
+                    "model1": model1,
+                    "model2": model2,
+                    "dataset": dataset,
+                }
+                if not wandb_init(f"{WANDB_INFO['project']}-tree-compare", WANDB_INFO["entity"], wandb_config):
+                    continue
+                
+            set_seed(234)
             
             results_dir1 = results_dirs[(model_pair[0], dataset)]
             results_dir2 = results_dirs[(model_pair[1], dataset)]
@@ -203,16 +222,20 @@ if __name__ == "__main__":
             for i in pbar:
                 flow_dict1 = load_json(f"{results_dir1}/tree_vis/{i}.json")
                 flow_dict2 = load_json(f"{results_dir2}/tree_vis/{i}.json")
-                tree1 = get_root_node(flow_dict1)
-                tree2 = get_root_node(flow_dict2)
-                distance = compute_tree_edit_distance(tree1, tree2)
+                try:
+                    tree1 = get_root_node(flow_dict1)
+                    tree2 = get_root_node(flow_dict2)
+                    distance = compute_tree_edit_distance(tree1, tree2)
+                except KeyError:
+                    distance = None
+                if distance is None: continue
                 distances.append(distance)
                 # Calculate running average and update tqdm postfix
 
                 current_avg_distance = np.mean(distances)
                 pbar.set_description(f'Avg Dist: {current_avg_distance:.4f}')
                 
-            print(f"Average distance between {model_pair[0]} and {model_pair[1]} on {dataset}: {np.mean(distances)}")
+            print(f"Average distance between {model_pair[0]} and {model_pair[1]} on {dataset}: {np.mean(distances):.2f}")
     
             if args.wandb:
                 wandb.log({"distance": np.mean(distances)})

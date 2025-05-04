@@ -8,7 +8,7 @@ import pandas as pd
 import os
 from tqdm import tqdm
 from constants import get_result_dir, supported_datasets
-from utils import save_json, load_json
+from utils import save_json, load_json, wandb_init
 import pdb
 from collections import defaultdict, deque
 from openai import OpenAI
@@ -17,6 +17,11 @@ from verl.utils.llm_api import LLMAPI
 from constants import supported_llms
 import wandb
 from environment import WANDB_INFO
+
+import numpy as np
+# Note: The following import might need to be moved to the top of the file
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score
 
 # model = "xai/grok-3-mini-beta"
 # model = "claude/claude-3-7-sonnet-20250219-thinking"
@@ -463,6 +468,8 @@ def get_graph(idx, results, results_dir, overwrite=False):
         os.makedirs(os.path.dirname(result_path), exist_ok=True)
         input_str = results.iloc[idx]["prompt"][0]["content"]
         output_str = results.iloc[idx]["responses"][0]
+        pdb.set_trace()
+        corr = results.iloc[idx]["answers"][0] == results.iloc[idx]["label"]
         divide_prompt = get_divide_prompt(input_str, output_str)
         parsed_steps = llm.generate([{
             "role": "user",
@@ -480,6 +487,7 @@ def get_graph(idx, results, results_dir, overwrite=False):
         json_data = load_json(result_path)["visualization"]
     
     visit_order = get_node_visit_order(json_data)
+    corr = results.iloc[idx]["answers"][0] == results.iloc[idx]["reward_model"]["ground_truth"]["label"][0] 
     graph, max_depth, breadth, avg_depth = create_flowchart_from_dict(json_data)
     graph = add_highlighted_path(graph, visit_order, color='#0077b6', penwidth='2.5')
     if graph is not None:
@@ -491,6 +499,7 @@ def get_graph(idx, results, results_dir, overwrite=False):
         "breadth": breadth,
         "avg_depth": avg_depth,
         "validation_rate": compute_validation_rate(visit_order),
+        "corr": corr,
     }
 
 if __name__ == "__main__":
@@ -504,16 +513,16 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     if args.wandb:
-        wandb.init(
-            project=f"{WANDB_INFO['project']}-tree-vis", 
-            entity=WANDB_INFO["entity"], 
-            config={
-                "dataset_name": args.dataset_name,
-                "model_name": args.model_name,
-                "num_samples": args.num_samples,
-            }
-        )
-    
+        wandb_config = {
+            "dataset_name": args.dataset_name,
+            "model_name": args.model_name,
+            "num_samples": args.num_samples,
+        }
+        project_name = f"{WANDB_INFO['project']}-tree-vis"
+        
+        if not wandb_init(project_name, WANDB_INFO["entity"], wandb_config):
+            exit()
+            
     results_dir = get_result_dir(
         dataset_name = args.dataset_name,
         model_name = args.model_name,
@@ -533,7 +542,7 @@ if __name__ == "__main__":
     else:
         idxs = args.idx
     
-    max_depths, breadths, avg_depths, b2d_ratios, validation_rates = [], [], [], [], []
+    max_depths, breadths, avg_depths, b2d_ratios, validation_rates, corrs = [], [], [], [], [], []
     for idx in tqdm(idxs):
         attempts, success, overwrite = 0, False, args.overwrite
         while attempts < 5 and not success:
@@ -555,8 +564,9 @@ if __name__ == "__main__":
         max_depths.append(graph_metric["max_depth"])
         breadths.append(graph_metric["breadth"])
         avg_depths.append(graph_metric["avg_depth"])
-    b2d_ratios.append(graph_metric["breadth"] / graph_metric["max_depth"])
-    validation_rates.append(graph_metric["validation_rate"])
+        b2d_ratios.append(graph_metric["breadth"] / graph_metric["max_depth"])
+        validation_rates.append(graph_metric["validation_rate"])
+        corrs.append(graph_metric["corr"])
         
     max_depth = sum(max_depths) / len(max_depths)
     breadth = sum(breadths) / len(breadths)
@@ -565,6 +575,52 @@ if __name__ == "__main__":
     validation_rate = sum(validation_rates) / len(validation_rates)
     print(f"Max depth: {max_depth}, Breadth: {breadth}, Avg depth: {avg_depth}, B2D ratio: {b2d_ratio}, Validation rate: {validation_rate}")
         
+
+
+    print("\n--- XGBoost Analysis ---")
+    # Prepare data for XGBoost
+    # Ensure all lists have the same length and are not empty
+    if len(max_depths) > 0 and len(max_depths) == len(breadths) == len(avg_depths) == len(b2d_ratios) == len(validation_rates) == len(corrs):
+        X = np.array([max_depths, breadths, avg_depths, b2d_ratios, validation_rates]).T
+        y = np.array(corrs) # Assuming corrs contains binary correctness labels (e.g., 0 or 1)
+
+        # Check if there are at least two classes in the target variable
+        unique_classes = np.unique(y)
+        if len(unique_classes) >= 2:
+            # Check if there are enough samples relative to features
+            if X.shape[0] > X.shape[1]:
+                # Import XGBoost
+                from xgboost import XGBClassifier
+                
+                # Instantiate the XGBoost model
+                xgb_model = XGBClassifier(
+                    random_state=42,
+                    scale_pos_weight=len(y) / sum(y) - 1 if sum(y) > 0 else 1  # For imbalanced classes
+                )
+
+                # Train the model
+                xgb_model.fit(X, y)
+
+                y_pred = xgb_model.predict(X)
+                accuracy = accuracy_score(y, y_pred)
+                print(f"\nModel Training Accuracy: {accuracy:.4f}")
+                print(f"Baseline Accuracy (predicting majority class): {max(np.mean(y), 1 - np.mean(y)):.4f}")
+                
+                # Feature importance
+                importance = xgb_model.feature_importances_
+                features = ['max_depth', 'breadth', 'avg_depth', 'b2d_ratio', 'validation_rate']
+                print("\nFeature Importance:")
+                for i, feat in enumerate(features):
+                    print(f"{feat}: {importance[i]:.4f}")
+
+            else:
+                print("Skipping XGBoost: Not enough samples relative to the number of features.")
+        else:
+            print(f"Skipping XGBoost: Only one class ({unique_classes[0]}) found in the target variable 'corrs'.")
+    else:
+        print("Skipping XGBoost: Data lists are empty or have inconsistent lengths.")
+    print("--- End XGBoost Analysis ---\n")
+    
     if args.wandb:
         wandb.log({
             "max_depth": max_depth,

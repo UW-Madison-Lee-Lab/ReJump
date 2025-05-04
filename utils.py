@@ -7,6 +7,8 @@ import pandas as pd
 from constants import get_result_dir
 from omegaconf import DictConfig
 import re
+import wandb
+
 def set_seed(seed):
     np.random.seed(seed)
     random.seed(seed)
@@ -75,3 +77,24 @@ def load_json(file_path):
 def save_json(data, file_path):
     with open(file_path, 'w') as f:
         json.dump(data, f)
+
+def wandb_init(project_name, entity_name, config):
+    
+    api = wandb.Api()
+    project_path = f"{entity_name}/{project_name}"
+    runs = api.runs(project_path)
+    for run in runs:
+        for key in config:
+            if run.config[key] != config[key]:
+                break
+        else:
+            print(f"Run with this config already exists: {run.url}")
+            print("Exiting.")
+            return 0
+        
+    wandb.init(
+        project=project_name, 
+        entity=entity_name, 
+        config=config
+    )
+    return 1
