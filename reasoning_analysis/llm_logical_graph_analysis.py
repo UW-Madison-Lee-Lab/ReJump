@@ -42,30 +42,57 @@ def process_llm_analysis_logical_graph(llm_json: Dict[str, Any]) -> Optional[Dic
     Returns:
         A dictionary containing metrics about the CoT graph, or None if analysis fails.
     """
-    return {"summary": {"test": "test_cpg"}}
-    # import pdb; pdb.set_trace()
-    ##convert llm_json to dict
-    if not isinstance(llm_json, dict) or 'nodes' not in llm_json:
-        # Use logging instead of print for warnings/errors
-        logging.warning("Input 'llm_json' is not a valid dictionary or is missing 'nodes' key.")
-        return None
+    # return {"summary": {"test": "test_cpg"}}
+    # # import pdb; pdb.set_trace()
+    # ##convert llm_json to dict
+    # if not isinstance(llm_json, dict) or 'nodes' not in llm_json:
+    #     # Use logging instead of print for warnings/errors
+    #     logging.warning("Input 'llm_json' is not a valid dictionary or is missing 'nodes' key.")
+    #     return None
     
-    try:
-        # Call the analyze_hypotheses function from visualize_cot
-        cot_metrics = analyze_hypotheses(llm_json)
-        return cot_metrics
-    except Exception as e:
-        # Use logging for errors
-        logging.error(f"Error analyzing CoT graph: {e}", exc_info=True) # Add traceback info
-        return None
+    # try:
+    #     # Call the analyze_hypotheses function from visualize_cot
+    #     cot_metrics = analyze_hypotheses(llm_json)
+    #     return cot_metrics
+    # except Exception as e:
+    #     # Use logging for errors
+    #     logging.error(f"Error analyzing CoT graph: {e}", exc_info=True) # Add traceback info
+    #     return None
+    #统计llm_json中nodes每种类型的数量以及他们对应的avg_prob的平均值，请注意，avg_prob可能为None，为None的话就只统计数量，avg_prob的平均值设置为0
+    node_type_counts = {}
+    node_avg_prob_sum = {}
+    node_avg_prob_counts = {}  # Track counts of non-None avg_prob values
+    for node in llm_json['nodes']:
+        node_type = node['type']
+        avg_prob = node['avg_prob']
+        if node_type not in node_type_counts:
+            node_type_counts[node_type] = 0
+            node_avg_prob_sum[node_type] = 0
+            node_avg_prob_counts[node_type] = 0
+        
+        node_type_counts[node_type] += 1
+        
+        if avg_prob is not None:
+            node_avg_prob_sum[node_type] += avg_prob
+            node_avg_prob_counts[node_type] += 1
     
+    for node_type in node_type_counts.keys():
+        if node_avg_prob_counts[node_type] > 0:  # Only divide if there are non-None values
+            node_avg_prob_sum[node_type] /= node_avg_prob_counts[node_type]
+        else:
+            node_avg_prob_sum[node_type] = None  # Set to None if all avg_prob values were None
+    return {"summary": {"node_type_counts": node_type_counts, "node_avg_prob_sum": node_avg_prob_sum}}
+
+
 import numpy as np
 def get_robust_avg_prob(logprobs_list: List[float], remove_outliers: bool = True) -> float:
     #remove -9999.0
+    if logprobs_list is None:
+        return None
     if remove_outliers:
         logprobs_list = [x for x in logprobs_list if x != -9999.0]
     avg_logprob = np.mean(logprobs_list).item()
-    avg_prob = np.exp(avg_logprob)
+    avg_prob = np.exp(avg_logprob).item()
     return avg_prob
 
 def postprocess_llm_json_dict(llm_json_dict: Dict[str, Any], llm_analysis_splitted_reasoning_dict: Dict[str, Any]) -> Dict[str, Any]:
@@ -86,10 +113,10 @@ def postprocess_llm_json_dict(llm_json_dict: Dict[str, Any], llm_analysis_splitt
         
         
         node['text'] = node_info_dict['sentence']
-        node['logprobs'] = node_info_dict['logprobs_list']
+        # node['logprobs'] = node_info_dict['logprobs_list']
         # node['avg_logprob'] = node_info_dict['avg_logprob']
         node['n_tokens'] = node_info_dict['n_tokens']
-        node['sentence_tokens'] = node_info_dict['sentence_tokens']
+        # node['sentence_tokens'] = node_info_dict['sentence_tokens']
 
         # node['avg_prob'] = node_info_dict['avg_prob']
         node['avg_prob'] = get_robust_avg_prob(node_info_dict['logprobs_list'], remove_outliers=True)
@@ -143,6 +170,10 @@ def process_parquet_file(input_file: str, output_dir: Optional[str] = None,
 
     processed_samples = 0
     valid_samples_for_avg = 0
+    # Counter for visualizations
+    visualization_count = 0
+    # Maximum number of visualizations
+    max_visualizations = 23
 
     # Limit rows if max_samples is set
     if max_samples > 0:
@@ -167,6 +198,8 @@ def process_parquet_file(input_file: str, output_dir: Optional[str] = None,
         
         # Process LLM analysis - Parse JSON first
         llm_json_str = row['llm_analysis_extracted_json']
+        if llm_json_str is None:
+            continue
         llm_json_dict = None
         try:
             llm_json_dict = json.loads(llm_json_str)
@@ -206,8 +239,8 @@ def process_parquet_file(input_file: str, output_dir: Optional[str] = None,
             continue
         cot_analysis_metrics = process_llm_analysis_logical_graph(llm_json_dict)
 
-        # Generate and save visualization
-        if llm_json_dict and 'nodes' in llm_json_dict: # Check if dict has nodes before visualizing
+        # Generate and save visualization - limit to max_visualizations
+        if llm_json_dict and 'nodes' in llm_json_dict and visualization_count < max_visualizations:
             sample_viz_dir = viz_main_dir / f"sample_{index}"
             sample_viz_dir.mkdir(exist_ok=True)
             try:
@@ -217,17 +250,16 @@ def process_parquet_file(input_file: str, output_dir: Optional[str] = None,
                     llm_json_dict,
                     output_dir=str(sample_viz_dir),
                     display=False, # Do not show the plot interactively
+                    show_avg_prob=True
                 )
-                # create_visualization(
-                #     llm_json_dict,
-                #     output_dir=str(sample_viz_dir),
-                #     display=False, # Do not show the plot interactively
-                # )
-                logging.info(f"Saved visualization for sample {index} to {sample_viz_dir}")
+                visualization_count += 1
+                logging.info(f"Saved visualization {visualization_count}/{max_visualizations} for sample {index} to {sample_viz_dir}")
             except Exception as e:
                 logging.error(f"Error generating visualization for sample {index}: {e}", exc_info=True)
-        else:
-             logging.warning(f"Skipping visualization for sample {index} due to missing 'nodes' in parsed JSON.")
+        elif visualization_count >= max_visualizations and 'nodes' in llm_json_dict:
+            logging.info(f"Skipping visualization for sample {index}: reached the maximum limit of {max_visualizations} visualizations")
+        elif 'nodes' not in llm_json_dict:
+            logging.warning(f"Skipping visualization for sample {index} due to missing 'nodes' in parsed JSON.")
 
         # Continue with metric aggregation only if analysis was successful
         if cot_analysis_metrics and "summary" in cot_analysis_metrics:
@@ -278,6 +310,7 @@ def process_parquet_file(input_file: str, output_dir: Optional[str] = None,
     llm_analysis_data["metadata"]["processed_samples"] = processed_samples
     llm_analysis_data["metadata"]["average_summary_metrics"] = average_metrics
     llm_analysis_data["metadata"]["samples_used_for_averages"] = valid_samples_for_avg
+    llm_analysis_data["metadata"]["visualizations_created"] = visualization_count
 
     # Determine output file path
     if output_dir:
@@ -294,6 +327,7 @@ def process_parquet_file(input_file: str, output_dir: Optional[str] = None,
         json.dump(llm_analysis_data, f, indent=2, default=str)
     
     print(f"Processed {processed_samples} samples with LLM analysis data")
+    print(f"Created {visualization_count} visualizations (limited to {max_visualizations})")
     print(f"LLM analysis data saved to: {json_output_file}")
     
     return str(json_output_file)

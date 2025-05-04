@@ -136,48 +136,63 @@ def read_instruction_file(file_path: str) -> str:
 #         processed_lines.append(f"[Step {i}]: {line}")
 #     return '\n'.join(processed_lines), reasoning_dict
 
-# def process_reasoning(input_str: str) -> tuple[str, dict]:
+def process_reasoning(input_str: str) -> tuple[str, dict]:
 
-#     if not input_str:
-#         return "", {}
+    if not input_str:
+        return "", {}
         
-#     parts = re.split(r'([.?!])', input_str)
+    parts = re.split(r'([.?!])', input_str)
     
-#     sentences = []
-#     current_sentence = ""
-#     for part in parts:
-#         # Skip empty parts that can result from the split
-#         if not part: 
-#             continue
+    sentences = []
+    current_sentence = ""
+    for part in parts:
+        # Skip empty parts that can result from the split
+        if not part: 
+            continue
         
-#         # Append the current part (either text or punctuation)
-#         current_sentence += part
+        # Append the current part (either text or punctuation)
+        current_sentence += part
         
-#         # If the part is a punctuation mark, the sentence is complete
-#         if part in ['.', '?', '!']:
-#             sentence_strip = current_sentence.strip()
-#             if sentence_strip: # Avoid adding empty strings if there's only whitespace
-#                  sentences.append(sentence_strip)
-#             # Reset for the next sentence
-#             current_sentence = ""
+        # If the part is a punctuation mark, the sentence is complete
+        if part in ['.', '?', '!']:
+            sentence_strip = current_sentence.strip()
+            if sentence_strip: # Avoid adding empty strings if there's only whitespace
+                 sentences.append(sentence_strip)
+            # Reset for the next sentence
+            current_sentence = ""
 
-#     # Add any remaining part if the input doesn't end with punctuation
-#     remaining_strip = current_sentence.strip()
-#     if remaining_strip:
-#         sentences.append(remaining_strip)
+    # Add any remaining part if the input doesn't end with punctuation
+    remaining_strip = current_sentence.strip()
+    if remaining_strip:
+        sentences.append(remaining_strip)
 
-#     # Filter out potentially empty strings again (e.g., from consecutive delimiters)
-#     sentences = [s for s in sentences if s]
+    # Filter out potentially empty strings again (e.g., from consecutive delimiters)
+    sentences = [s for s in sentences if s]
 
-#     processed_lines = []
-#     reasoning_dict = {}
-#     for i, sentence in enumerate(sentences):
-#         step_key = i # Use integer index as key
-#         reasoning_dict[step_key] = sentence
-#         processed_lines.append(f"[Step {i}]: {sentence}")
+    processed_lines = []
+    reasoning_dict = {}
+    for i, sentence in enumerate(sentences):
+        step_key = i # Use integer index as key
+        processed_lines.append(f"[Step {i}]: {sentence}")
+        #reasoning_dict[step_key] = {
+        #     'sentence': sentence_text,
+        #     'sentence_tokens': sentence_tokens,
+        #     'logprobs_list': sentence_logprobs,
+        #     'avg_logprob': sum(sentence_logprobs) / n_tokens,
+        #     'avg_prob': np.exp(sum(sentence_logprobs) / n_tokens),
+        #     'n_tokens': n_tokens
+        # }
+        reasoning_dict[step_key] = {
+            "sentence": sentence,
+            "n_tokens": None,
+            "avg_logprob": None,
+            "avg_prob": None,
+            "logprobs_list": None,
+            "sentence_tokens": None
+        }
         
-#     # Return the formatted string and the dictionary
-#     return '\n'.join(processed_lines), reasoning_dict
+    # Return the formatted string and the dictionary
+    return '\n'.join(processed_lines), reasoning_dict
 
 def process_reasoning_with_probs(probs_dict: Dict[str, Any], reasoning_only: bool = True) -> tuple[str, Dict[int, Dict[str, Any]]]:
     """
@@ -237,7 +252,7 @@ def process_reasoning_with_probs(probs_dict: Dict[str, Any], reasoning_only: boo
         current_sentence_text += token
         
         # Check if the token ends with punctuation (.!?)
-        if token in ['.\n', ".\n\n", "\n\n", " \n\n",'!', '?']:
+        if token in ['.\n', ".\n\n", "\n\n", " \n\n",'!', '?', ").\n\n","]\n\n", ]:
             if current_sentence_text:
                 sentences.append({
                     'text': current_sentence_text,
@@ -488,7 +503,7 @@ def parse_arguments():
     parser.add_argument('--continue_on_error', '-c', action='store_true',
                         help='Continue processing after errors (default: False)')
     
-    parser.add_argument('--batch_size', '-b', type=int, default=10,
+    parser.add_argument('--batch_size', '-b', type=int, default=50,
                         help='Batch size for parallel processing and saving (default: 10)')
     
     parser.add_argument('--output_suffix', '-s', type=str, default='',

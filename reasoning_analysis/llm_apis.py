@@ -64,8 +64,11 @@ class ResponseAnalyzer:
         elif self.llm_type == "gemini":
             # api_key = os.getenv("GOOGLE_API_KEY")
             #key is in environment.py
-            from environment import GEMINI_API_KEY
-            api_key = GEMINI_API_KEY
+            # from environment import GEMINI_API_KEY
+            # api_key = GEMINI_API_KEY
+            # api_key ='AIzaSyCLqGz8Zebz15ITUZEoKwf7R-51jtibSss'
+            api_key = 'AIzaSyDQQKBdtRs8RN8RwHtfeg9aduThMFQ94jk'
+            # import pdb; pdb.set_trace()
             
             if not api_key:
                 raise ValueError("GOOGLE_API_KEY environment variable is not set")
@@ -184,6 +187,7 @@ class ResponseAnalyzer:
     def _analyze_with_gemini(self, prompt: str) -> str:
         """Use Google's Gemini API with full prompt"""
         model = self.client.GenerativeModel('gemini-2.5-pro-preview-03-25')
+        # model = self.client.GenerativeModel('gemini-2.5-pro-exp-03-25')
         # model = self.client.GenerativeModel('gemini-2.0-flash')
         result = model.generate_content(
             f"System: You are a helpful assistant that extracts information from model outputs.\n\nUser: {prompt}",

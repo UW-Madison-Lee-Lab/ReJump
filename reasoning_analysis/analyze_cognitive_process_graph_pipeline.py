@@ -37,7 +37,9 @@ def run_logical_graph_analysis(base_dir="/home/szhang967/liftr/multi-query-resul
     # Path to analysis script
 
     ###debug
-    base_dir = "/home/szhang967/liftr/test_sample_graph_blobs"
+    # base_dir = "/home/szhang967/liftr/test_sample_graph_blobs"
+    # base_dir = "/home/szhang967/liftr/results"
+    base_dir = "/staging/szhang967/liftr/results/openai-gpt-4o/math500_0_shot_1_query_standard_api_reslen_404_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0"
      ###
     analysis_script = "/home/szhang967/liftr/reasoning_analysis/analyze_responses.py"
     instruction_file = "/home/szhang967/liftr/reasoning_analysis/cognitive_process_graph_prompt.txt"
@@ -52,11 +54,12 @@ def run_logical_graph_analysis(base_dir="/home/szhang967/liftr/multi-query-resul
                 model_name = get_model_name(input_file)
             #     if model_name == "unknown":
             #         continue
-                # if "gsm8k" not in input_file:
+                # if "circles" not in input_file:
                 #     continue
                 # if "deepseek" not in input_file:
                 #     continue
-                
+                # if "alibaba-qwen-turbo-2025-04-28-thinking" in input_file:
+                #     continue
                 # Get data type for organization/logging
                 data_type = get_data_type(input_file)
                 

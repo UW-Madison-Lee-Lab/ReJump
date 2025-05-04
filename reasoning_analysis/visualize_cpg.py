@@ -258,6 +258,7 @@ def create_visualization(data, output_dir, filter_obs_given=False, merge_obs_giv
         nid = node.get('id')
         ntype = node.get('type')
         avg_prob = node.get('avg_prob', None)  # Get avg_prob value if available
+        # import pdb; pdb.set_trace()
 
         # Ensure node ID is valid
         if not isinstance(nid, int):
@@ -378,12 +379,17 @@ def create_visualization(data, output_dir, filter_obs_given=False, merge_obs_giv
          if attr.get('type') == 'Observation/Given_merged':
               labels_map[n] = "Obs/Given\n(Merged)"
          # Add avg_prob to label if available and requested
+         
          if show_avg_prob and attr.get('avg_prob') is not None:
               avg_prob = attr.get('avg_prob')
+              if not avg_prob:
+                  import pdb; pdb.set_trace()
               # Format to 2 decimal places if it's a number
               if isinstance(avg_prob, (float, int)):
                   prob_str = f"{avg_prob:.2f}"
                   labels_map[n] = f"{labels_map[n]}\n{prob_str}"
+        
+
 
     # Draw labels
     nx.draw_networkx_labels(
