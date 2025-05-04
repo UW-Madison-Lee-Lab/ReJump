@@ -257,7 +257,7 @@ def main(config):
             for i in range(config.data.n_samples):
                 # test_output_gen_batch_padded = wg.generate_sequences(test_gen_batch_padded)
                 test_output_gen_batch_padded = wg.generate_sequences(test_gen_batch_padded)
-                import pdb; pdb.set_trace()
+                # import pdb; pdb.set_trace()
                 test_output_gen_batch_padded = test_output_gen_batch_padded[:test_batch.batch.batch_size[0]]
                 test_output_gen_batch = unpad_dataproto(test_output_gen_batch_padded, pad_size=pad_size)
 
