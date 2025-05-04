@@ -33,13 +33,14 @@ def get_model_name(file_path):
     else:
         return "unknown"
 
-def run_logical_graph_analysis(base_dir="/home/szhang967/liftr/multi-query-results"):
+def run_logical_graph_analysis(base_dir):
     # Path to analysis script
 
     ###debug
     # base_dir = "/home/szhang967/liftr/test_sample_graph_blobs"
     # base_dir = "/home/szhang967/liftr/results"
-    base_dir = "/staging/szhang967/liftr/results/openai-gpt-4o/math500_0_shot_1_query_standard_api_reslen_404_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0"
+    # base_dir = "/staging/szhang967/liftr/results/openai-gpt-4o/math500_0_shot_1_query_standard_api_reslen_404_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0"
+    # base_dir = '/staging/szhang967/results'
      ###
     analysis_script = "/home/szhang967/liftr/reasoning_analysis/analyze_responses.py"
     instruction_file = "/home/szhang967/liftr/reasoning_analysis/cognitive_process_graph_prompt.txt"
@@ -94,7 +95,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Run logical graph analysis pipeline on model results.')
     parser.add_argument('--base-dir', 
                       type=str, 
-                      default="/home/szhang967/liftr/multi-query-results",
+                    #   default="/home/szhang967/liftr/multi-query-results",
+                      default = '/staging/szhang967/results',
                       help='Base directory to search for test_default.parquet files')
     return parser.parse_args()
 
