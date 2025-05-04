@@ -1,5 +1,8 @@
 import pandas as pd
 import os
+import sys
+# Add the parent directory to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from constants import supported_llms, get_model_name, get_model_dir, supported_datasets
 from environment import root_dir
 import argparse
@@ -13,7 +16,7 @@ supported_model_list = [model for model in supported_llms.keys() if supported_ll
 shot_list = [10, 50, 100, 200]
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--dataset", type=str, nargs="+", default=["blobs", "moons", "linear", "circles"], choices=supported_datasets.keys())
+parser.add_argument("--dataset", type=str, nargs="+", choices=supported_datasets.keys())
 parser.add_argument("--model", type=str, nargs="+", default=supported_model_list, choices=supported_model_list)
 parser.add_argument("--mode", type=str, nargs="+", default=["reasoning", "no_reasoning"], choices=["reasoning", "no_reasoning", "customized", "ricl_1", "ricl_2", "ricl_3"])
 parser.add_argument("--shot", type=int, nargs="+", default=shot_list)
