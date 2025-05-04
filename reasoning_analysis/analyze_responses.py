@@ -194,7 +194,7 @@ def process_reasoning(input_str: str) -> tuple[str, dict]:
     # Return the formatted string and the dictionary
     return '\n'.join(processed_lines), reasoning_dict
 
-def process_reasoning_with_probs(probs_dict: Dict[str, Any], reasoning_only: bool = True) -> tuple[str, Dict[int, Dict[str, Any]]]:
+def process_reasoning_with_probs(probs_dict: Dict[str, Any], processed_input_file_path: str, reasoning_only: bool = True) -> tuple[str, Dict[int, Dict[str, Any]]]:
     """
     Process reasoning with probability information, splitting by punctuation
     
@@ -252,7 +252,19 @@ def process_reasoning_with_probs(probs_dict: Dict[str, Any], reasoning_only: boo
         current_sentence_text += token
         
         # Check if the token ends with punctuation (.!?)
-        if token in ['.\n', ".\n\n", "\n\n", " \n\n",'!', '?', ").\n\n","]\n\n", ]:
+        if "gpt-4o" in processed_input_file_path.lower():
+            split_token_list = ['.\n', ".\n\n", "\n\n", " \n\n",'!', '?', ").\n\n","]\n\n", ]
+        elif "llama" in processed_input_file_path.lower():
+            split_token_list = ["!\n\n", "?\n\n", ".\n\n", "!\n", "?\n", ".\n", ">\n"," \n",]
+        elif "qwen" in processed_input_file_path.lower():
+            split_token_list = [".\n", ".\n\n", "!\n", "\n\n", "\n", 
+                                "<|im_end|>", 
+                                ").\n\n", ").\n",
+                                "]\n\n","]\n",
+                                ]
+        else:
+            raise NotImplementedError(f"Model {processed_input_file_path} not supported")
+        if token in split_token_list:
             if current_sentence_text:
                 sentences.append({
                     'text': current_sentence_text,
@@ -301,7 +313,7 @@ def process_reasoning_with_probs(probs_dict: Dict[str, Any], reasoning_only: boo
     # Return the formatted string and the dictionary
     return '\n'.join(processed_lines), reasoning_dict
 
-def process_row(args):
+def process_row(args, input_file_path: str):
     """
     Process a single row from the dataframe using LLM API
     
@@ -316,7 +328,7 @@ def process_row(args):
     try:
         # Handle responses based on its type (could be string or list)
         # reasonings_str, reasoning_dict = process_reasoning(row['reasonings'][0])
-        reasonings_str, reasoning_dict = process_reasoning_with_probs(row['probs'][0])
+        reasonings_str, reasoning_dict = process_reasoning_with_probs(row['probs'][0], input_file_path)
         input_prompt = row['prompt'][0]['content']
         responses = row['responses'][0]
 
@@ -428,7 +440,7 @@ def process_file(
             ]
             
             # Submit all tasks for this batch
-            future_to_idx = {executor.submit(process_row, task): task[0] for task in tasks}
+            future_to_idx = {executor.submit(process_row, task, input_file): task[0] for task in tasks}
             
             # Process completed tasks as they finish
             batch_errors = []
