@@ -50,8 +50,9 @@ class RewardManager():
             if len(probs)>=valid_response_length:
                 item_logprob_dict = {'tokens': [], 'logprobs': []}
                 for j in range(valid_response_length):
-                    item_logprob_dict['tokens'].append(self.tokenizer.decode([int(valid_response_ids[j])]))
-                    item_logprob_dict['logprobs'].append(float(probs[j]))  # Assuming probs[i] is a tuple of (token_id, logprob)
+                    if valid_response_ids[j] != self.tokenizer.pad_token_id:
+                        item_logprob_dict['tokens'].append(self.tokenizer.decode([int(valid_response_ids[j])]))
+                        item_logprob_dict['logprobs'].append(float(probs[j]))  # Assuming probs[i] is a tuple of (token_id, logprob)
             else:
                 item_logprob_dict = {None}
                     # --- Store the dictionary for this batch item ---
@@ -103,7 +104,6 @@ class RewardManager():
 
             if already_print_data_sources[data_source] < self.num_examine:
                 already_print_data_sources[data_source] += 1
-                print(sequences_str)
 
         if self.return_dict:
             return {

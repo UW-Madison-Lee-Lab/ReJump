@@ -127,7 +127,6 @@ class RLHFDataset(Dataset):
 
         prompt_with_chat_template = chat[0]['content']
         # prompt_with_chat_template = chat
-
         input_ids, attention_mask = verl_F.tokenize_and_postprocess_data(prompt=prompt_with_chat_template,
                                                                          tokenizer=self.tokenizer,
                                                                          max_length=self.max_prompt_length,

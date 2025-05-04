@@ -63,7 +63,7 @@ os.makedirs(f"{root_dir}/run_exps/auto", exist_ok=True)
 script_paths = []
 for dataset in dataset_list:
     for shot in shot_list:
-        prompt_length = int((24 * shot + 160 + 24 * args.n_query) * 1.1)
+        prompt_length = int((24 * shot + 260 + 24 * args.n_query) * 1.1)
         for model in model_list:
             for mode in mode_list:
                 for n_samples in n_samples_list:

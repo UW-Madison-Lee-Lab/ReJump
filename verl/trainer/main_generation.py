@@ -149,6 +149,7 @@ def main(config):
         max_prompt_length = 100_000
     else:
         max_prompt_length = config.rollout.prompt_length
+        print(f"Max prompt length: {max_prompt_length}")
         
     rlhf_dataset = RLHFDataset(
         parquet_files=config.data.path,
