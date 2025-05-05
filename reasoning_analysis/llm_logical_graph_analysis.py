@@ -173,7 +173,7 @@ def process_parquet_file(input_file: str, output_dir: Optional[str] = None,
     # Counter for visualizations
     visualization_count = 0
     # Maximum number of visualizations
-    max_visualizations = 23
+    max_visualizations = 1
 
     # Limit rows if max_samples is set
     if max_samples > 0:
@@ -235,12 +235,14 @@ def process_parquet_file(input_file: str, output_dir: Optional[str] = None,
         # Analyze the CoT graph structure using the parsed dictionary
         
         llm_json_dict = postprocess_llm_json_dict(llm_json_dict, row["llm_analysis_splitted_reasoning_dict"])
+
         if llm_json_dict is None:
             continue
         cot_analysis_metrics = process_llm_analysis_logical_graph(llm_json_dict)
 
         # Generate and save visualization - limit to max_visualizations
         if llm_json_dict and 'nodes' in llm_json_dict and visualization_count < max_visualizations:
+
             sample_viz_dir = viz_main_dir / f"sample_{index}"
             sample_viz_dir.mkdir(exist_ok=True)
             try:
@@ -257,13 +259,16 @@ def process_parquet_file(input_file: str, output_dir: Optional[str] = None,
             except Exception as e:
                 logging.error(f"Error generating visualization for sample {index}: {e}", exc_info=True)
         elif visualization_count >= max_visualizations and 'nodes' in llm_json_dict:
-            logging.info(f"Skipping visualization for sample {index}: reached the maximum limit of {max_visualizations} visualizations")
+            pass
+            # logging.info(f"Skipping visualization for sample {index}: reached the maximum limit of {max_visualizations} visualizations")
         elif 'nodes' not in llm_json_dict:
             logging.warning(f"Skipping visualization for sample {index} due to missing 'nodes' in parsed JSON.")
 
         # Continue with metric aggregation only if analysis was successful
+
         if cot_analysis_metrics and "summary" in cot_analysis_metrics:
             # import pdb; pdb.set_trace()
+
             summary = cot_analysis_metrics["summary"]
             valid_samples_for_avg += 1
             
@@ -290,6 +295,7 @@ def process_parquet_file(input_file: str, output_dir: Optional[str] = None,
             }
             llm_analysis_data["samples"].append(sample_data)
             processed_samples += 1
+
         
     # Calculate averages
     average_metrics = {}

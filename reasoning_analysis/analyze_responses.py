@@ -194,7 +194,7 @@ def process_reasoning(input_str: str) -> tuple[str, dict]:
     # Return the formatted string and the dictionary
     return '\n'.join(processed_lines), reasoning_dict
 
-def process_reasoning_with_probs(probs_dict: Dict[str, Any], processed_input_file_path: str, reasoning_only: bool = True) -> tuple[str, Dict[int, Dict[str, Any]]]:
+def process_reasoning_with_probs(probs_dict: Dict[str, Any], processed_input_file_path: str, reasoning_only: bool = False) -> tuple[str, Dict[int, Dict[str, Any]]]:
     """
     Process reasoning with probability information, splitting by punctuation
     
@@ -415,16 +415,45 @@ def process_file(
     # Create new columns for analysis results
     column_prefix = "llm_analysis"
     df[f'{column_prefix}_llm_type'] = llm_type
-    df[f'{column_prefix}_raw_output'] = None
-    df[f'{column_prefix}_extracted_json'] = None
-    df[f'{column_prefix}_total_input'] = None  # Add new column for total_input
-    df[f'{column_prefix}_splitted_reasoning_dict'] = None # Add new column for reasoning dict
     
-    logger.info(f"Processing {len(df)} rows using {llm_type} API with batch size {batch_size}")
+    # Check if output file exists to resume processing
+    skip_rows = set()
+    if os.path.exists(output_file):
+        logger.info(f"Output file {output_file} exists. Loading to resume processing...")
+        existing_df = pd.read_parquet(output_file)
+        
+        # Find rows that have already been processed
+        processed_mask = ~existing_df[f'{column_prefix}_raw_output'].isna()
+        processed_indices = existing_df.index[processed_mask].tolist()
+        
+        if processed_indices:
+            skip_rows = set(processed_indices)
+            logger.info(f"Found {len(skip_rows)} already processed rows to skip")
+            
+            # Copy processed data to current dataframe
+            common_indices = set(df.index).intersection(set(processed_indices))
+            for idx in common_indices:
+                df.at[idx, f'{column_prefix}_raw_output'] = existing_df.at[idx, f'{column_prefix}_raw_output']
+                df.at[idx, f'{column_prefix}_extracted_json'] = existing_df.at[idx, f'{column_prefix}_extracted_json']
+                df.at[idx, f'{column_prefix}_total_input'] = existing_df.at[idx, f'{column_prefix}_total_input']
+                df.at[idx, f'{column_prefix}_splitted_reasoning_dict'] = existing_df.at[idx, f'{column_prefix}_splitted_reasoning_dict']
+    
+    # Ensure columns exist in dataframe
+    if f'{column_prefix}_raw_output' not in df.columns:
+        df[f'{column_prefix}_raw_output'] = None
+    if f'{column_prefix}_extracted_json' not in df.columns:
+        df[f'{column_prefix}_extracted_json'] = None
+    if f'{column_prefix}_total_input' not in df.columns:
+        df[f'{column_prefix}_total_input'] = None
+    if f'{column_prefix}_splitted_reasoning_dict' not in df.columns:
+        df[f'{column_prefix}_splitted_reasoning_dict'] = None
+    
+    logger.info(f"Processing {len(df) - len(skip_rows)} rows using {llm_type} API with batch size {batch_size}")
     
     # Create progress bar for overall progress
     pbar = tqdm(total=len(df), desc="Overall Progress")
-    processed_count = 0
+    pbar.update(len(skip_rows))  # Update progress bar with skipped rows
+    processed_count = len(skip_rows)
     
     # Process in batches using ThreadPoolExecutor
     with concurrent.futures.ThreadPoolExecutor(max_workers=batch_size) as executor:
@@ -433,12 +462,16 @@ def process_file(
             batch_end = min(batch_start + batch_size, len(df))
             logger.info(f"Processing batch: rows {batch_start} to {batch_end-1}")
             
-            # Create list of tasks for this batch
+            # Create list of tasks for this batch, skipping already processed rows
             tasks = [
                 (i, df.iloc[i], instruction, analyzer, column_prefix, continue_on_error, field_of_interests)
-                for i in range(batch_start, batch_end)
+                for i in range(batch_start, batch_end) if i not in skip_rows
             ]
             
+            if not tasks:
+                logger.info(f"All rows in batch {batch_start}-{batch_end-1} already processed, skipping")
+                continue
+                
             # Submit all tasks for this batch
             future_to_idx = {executor.submit(process_row, task, input_file): task[0] for task in tasks}
             

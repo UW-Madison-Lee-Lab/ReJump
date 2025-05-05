@@ -3,35 +3,64 @@ import subprocess
 import argparse
 from pathlib import Path
 
-def get_data_type(file_path):
-    data_type_dict = {
-        "circles": "classification",
-        "blobs": "classification",
-        "moons": "classification",
-        "linear": "classification",
+# google_api_key_list =[
+    # yzeng58
+# GEMINI_API_KEY = "AIzaSyARTR4pSoM8hmIIMEg85OMHD1T9KgaGwV4"
+# zycbb
+# GEMINI_API_KEY = "AIzaSyDa6IZiztMRZl_j2_em_MjruiCyZs9vEFs"
+# shuibai
+# GEMINI_API_KEY = "AIzaSyA0vPcRshKiv5fftazBAbxdIHvtLyHCCiE"
+# Jungtaek
+# GEMINI_API_KEY = "AIzaSyBgM3S40tAiRJ5J1f-jx8xgecBmbelnPXg"
+# yuchenzeng.1998
+# GEMINI_API_KEY = "AIzaSyDIAq1UMSGx1-svNob46Rt616JF0UHW3VY"
+# shutong
+# GEMINI_API_KEY = "AIzaSyCCnSBSjD1CgtighzPQyx03HZWvrVSWTHM"
+# lynnix
+# GEMINI_API_KEY = "AIzaSyBUhgp-FBViNj8VTxM3Tw8gXJsARgyx-dc"
+# ziqian
+# GEMINI_API_KEY = "AIzaSyD8PQnKv6AYN_oUVmlNKG8dviEr6mO_J_0"
+# ]
+#concvert the above info into a list with the name as comments
+gemini_api_key_list = [
+    "AIzaSyARTR4pSoM8hmIIMEg85OMHD1T9KgaGwV4",
+    "AIzaSyDa6IZiztMRZl_j2_em_MjruiCyZs9vEFs",
+    "AIzaSyA0vPcRshKiv5fftazBAbxdIHvtLyHCCiE",
+    "AIzaSyBgM3S40tAiRJ5J1f-jx8xgecBmbelnPXg",
+    "AIzaSyDIAq1UMSGx1-svNob46Rt616JF0UHW3VY",
+    "AIzaSyCCnSBSjD1CgtighzPQyx03HZWvrVSWTHM",
+    "AIzaSyBUhgp-FBViNj8VTxM3Tw8gXJsARgyx-dc",
+    "AIzaSyD8PQnKv6AYN_oUVmlNKG8dviEr6mO_J_0",
+]#use these keys by turns
+# def get_data_type(file_path):
+#     data_type_dict = {
+#         "circles": "classification",
+#         "blobs": "classification",
+#         "moons": "classification",
+#         "linear": "classification",
         
-        "expreg": "regression",
-        "l1normreg": "regression",
-        "quadreg": "regression",
-        "linreg": "regression",
-        "cosreg": "regression",
-        "pwreg": "regression",
+#         "expreg": "regression",
+#         "l1normreg": "regression",
+#         "quadreg": "regression",
+#         "linreg": "regression",
+#         "cosreg": "regression",
+#         "pwreg": "regression",
 
-        "gsm8k": "unknown",
-        "math500": "unknown",
-    }
-    for key, value in data_type_dict.items():
-        if key in file_path:
-            return value
-    raise NotImplementedError(f"Unknown data type for file: {file_path}")
+#         "gsm8k": "unknown",
+#         "math500": "unknown",
+#     }
+#     for key, value in data_type_dict.items():
+#         if key in file_path:
+#             return value
+#     raise NotImplementedError(f"Unknown data type for file: {file_path}")
 
-def get_model_name(file_path):
-    if "deepseek-ai-deepseek-reasoner" in file_path:
-        return "deepseek-reasoner"
-    elif "claude-claude-3-7-sonnet-20250219-thinking" in file_path:
-        return "claude-3-7-sonnet"
-    else:
-        return "unknown"
+# def get_model_name(file_path):
+#     if "deepseek-ai-deepseek-reasoner" in file_path:
+#         return "deepseek-reasoner"
+#     elif "claude-claude-3-7-sonnet-20250219-thinking" in file_path:
+#         return "claude-3-7-sonnet"
+#     else:
+#         return "unknown"
 
 def run_logical_graph_analysis(base_dir):
     # Path to analysis script
@@ -45,29 +74,29 @@ def run_logical_graph_analysis(base_dir):
     analysis_script = "/home/szhang967/liftr/reasoning_analysis/analyze_responses.py"
     instruction_file = "/home/szhang967/liftr/reasoning_analysis/cognitive_process_graph_prompt.txt"
     
+    model_name_list = [
+        "results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Qwen-7B",
+        "results_temperature_0/Qwen-Qwen2.5-7B-Instruct",
+        "results_temperature_0/meta-llama-Llama-3.1-8B-Instruct",
+        "results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Llama-8B"
+    ]
+    
     # Process all test_default.parquet files
+    key_idx = 0
     for root, dirs, files in os.walk(base_dir):
-        for file in files:
+        for idx, file in enumerate(files):
+            key = gemini_api_key_list[key_idx % len(gemini_api_key_list)]
+            os.environ["GEMINI_API_KEY"] = key
+            key_idx += 1
+
             if file == "test_default.parquet":
                 input_file = os.path.join(root, file)
-                
-                # Skip files that aren't from the models we're interested in
-                model_name = get_model_name(input_file)
-            #     if model_name == "unknown":
-            #         continue
-                # if "circles" not in input_file:
-                #     continue
-                # if "deepseek" not in input_file:
-                #     continue
-                # if "alibaba-qwen-turbo-2025-04-28-thinking" in input_file:
-                #     continue
-                # Get data type for organization/logging
-                data_type = get_data_type(input_file)
-                
+                if not any(model_name in input_file for model_name in model_name_list):
+                    continue
                 print(f"Processing file: {input_file}")
-                print(f"Model: {model_name}, Data type: {data_type}")
                 
                 # Run analysis
+                # import pdb; pdb.set_trace()
                 cmd = [
                     "python", analysis_script,
                     "--input", input_file,
@@ -88,7 +117,7 @@ def run_logical_graph_analysis(base_dir):
                 gemini_analysis_output_file = input_file.replace("test_default.parquet", "test_default_gemini_analysis_cognitive_process_graph.parquet")
                 logical_graph_analysis_script = "/home/szhang967/liftr/reasoning_analysis/llm_logical_graph_analysis.py"
                 subprocess.run(["python", logical_graph_analysis_script, "--input", gemini_analysis_output_file], check=True)
-                
+                os.environ["GEMINI_API_KEY"] = ""
 
                 
 def parse_args():
@@ -96,7 +125,7 @@ def parse_args():
     parser.add_argument('--base-dir', 
                       type=str, 
                     #   default="/home/szhang967/liftr/multi-query-results",
-                      default = '/staging/szhang967/results',
+                      default = '/staging/szhang967/results_temperature_0',
                       help='Base directory to search for test_default.parquet files')
     return parser.parse_args()
 

@@ -25,7 +25,7 @@ class ResponseAnalyzer:
     Analyzes model responses using various LLM APIs
     """
     
-    def __init__(self, llm_type: str = "openai", temperature: float = 0.3, max_tokens: int = 1000, max_retries: int = 50):
+    def __init__(self, llm_type: str = "openai", temperature: float = 0, max_tokens: int = 1000, max_retries: int = 50):
         """
         Initialize the response analyzer
         
@@ -44,6 +44,7 @@ class ResponseAnalyzer:
         self.api_lock = threading.Lock()
         self.last_call_time = 0
         self.rate_limit_delay = 0.5  # Default delay between API calls (in seconds)
+        self.api_key = None
         
     def _initialize_client(self):
         """Initialize the appropriate LLM client based on llm_type"""
@@ -51,6 +52,7 @@ class ResponseAnalyzer:
             api_key = os.getenv("OPENAI_API_KEY")
             if not api_key:
                 raise ValueError("OPENAI_API_KEY environment variable is not set")
+            self.api_key = api_key
             return OpenAI(api_key=api_key)
             
         elif self.llm_type == "claude":
@@ -59,6 +61,7 @@ class ResponseAnalyzer:
             api_key = ANTHROPIC_API_KEY
             if not api_key:
                 raise ValueError("ANTHROPIC_API_KEY environment variable is not set")
+            self.api_key = api_key
             return anthropic.Anthropic(api_key=api_key)
             
         elif self.llm_type == "gemini":
@@ -67,11 +70,11 @@ class ResponseAnalyzer:
             # from environment import GEMINI_API_KEY
             # api_key = GEMINI_API_KEY
             # api_key ='AIzaSyCLqGz8Zebz15ITUZEoKwf7R-51jtibSss'
-            api_key = 'AIzaSyDQQKBdtRs8RN8RwHtfeg9aduThMFQ94jk'
-            # import pdb; pdb.set_trace()
-            
+            # api_key = 'AIzaSyDQQKBdtRs8RN8RwHtfeg9aduThMFQ94jk'
+            api_key = os.getenv("GEMINI_API_KEY")
             if not api_key:
-                raise ValueError("GOOGLE_API_KEY environment variable is not set")
+                raise ValueError("GEMINI_API_KEY environment variable is not set")
+            self.api_key = api_key
             genai.configure(api_key=api_key)
             return genai
             
@@ -79,6 +82,7 @@ class ResponseAnalyzer:
             api_key = os.getenv("DEEPSEEK_API_KEY")
             if not api_key:
                 raise ValueError("DEEPSEEK_API_KEY environment variable is not set")
+            self.api_key = api_key
             return DeepSeekAPI(api_key=api_key)
             
         else:
@@ -150,6 +154,7 @@ class ResponseAnalyzer:
                     f"Error calling {self.llm_type} API: {str(e)}. "
                     f"Retry {retry_count}/{self.max_retries} after {wait_time} seconds."
                 )
+                print("api key: ", self.api_key)
                 
                 # Wait before retrying
                 time.sleep(wait_time)
