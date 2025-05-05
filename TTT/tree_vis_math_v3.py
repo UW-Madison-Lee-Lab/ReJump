@@ -181,8 +181,11 @@ def parse_json(json_prompt):
         return {}
     
     json_content = json_match.group(1) 
-    json_content = re.sub(r'\\(?![\\\"/bfnrtu])', r'\\\\', json_content)
-    
+    json_content = re.sub(
+        r'(?<!\\)\\([a-zA-Z{}()\[\]\|\$%_#&\s])',
+        r'\\\\\1',
+        json_content
+    )
     # Parse the JSON content
     try: 
         data = json.loads(json_content)
