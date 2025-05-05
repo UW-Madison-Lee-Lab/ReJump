@@ -255,7 +255,7 @@ def process_reasoning_with_probs(probs_dict: Dict[str, Any], processed_input_fil
         if "gpt-4o" in processed_input_file_path.lower():
             split_token_list = ['.\n', ".\n\n", "\n\n", " \n\n",'!', '?', ").\n\n","]\n\n", ]
         elif "llama" in processed_input_file_path.lower():
-            split_token_list = ["!\n\n", "?\n\n", ".\n\n", "!\n", "?\n", ".\n", ">\n"," \n",]
+            split_token_list = ["!\n\n", "?\n\n", ".\n\n", "!\n", "?\n", ".\n"," \n",]
         elif "qwen" in processed_input_file_path.lower():
             split_token_list = [".\n", ".\n\n", "!\n", "\n\n", "\n", 
                                 "<|im_end|>", 

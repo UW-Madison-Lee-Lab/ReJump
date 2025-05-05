@@ -1,0 +1,432 @@
+====================================================================================================
+LLM Cognitive Process Graph Analysis - Detailed Report
+Generated on: 2025-05-05 04:36:53
+====================================================================================================
+
+Analyzed Files:
+--------------------------------------------------------------------------------
+1. /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-3B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+2. /staging/szhang967/results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+3. /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-7B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+4. /staging/szhang967/results_temperature_0/meta-llama-Llama-3.1-8B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+
+Node Types (in alphabetical order):
+--------------------------------------------------
+1. Calculation/Process Step
+2. Conclusion/Assertion
+3. Meta-Cognition/Plan
+4. Observation/Given
+
+
+Individual File Analysis:
+====================================================================================================
+
+File 1: /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-3B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+--------------------------------------------------------------------------------
+
+Available data keys: ['node_type_counts', 'node_avg_prob_sum', 'dependency', 'source_confidence', 'target_confidence', 'confidence_difference']
+
+Node Type Counts:
+  Calculation/Process Step: 7.3446
+  Conclusion/Assertion: 2.8689
+  Meta-Cognition/Plan: 3.0000
+  Observation/Given: 2.3200
+
+Node Average Probabilities:
+  Calculation/Process Step: 0.9245
+  Conclusion/Assertion: 0.8891
+  Meta-Cognition/Plan: 0.8632
+  Observation/Given: 0.8674
+
+Dependency Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio       6.57       2.51       2.44       3.53
+Conclusion       2.01       2.71       1.26       1.15
+Meta-Cogni       3.72       1.29       1.72       1.45
+Observatio       3.89       1.70       1.74       2.02
+
+Source Confidence Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio     0.9418     0.9368     0.9349     0.9648
+Conclusion     0.8956     0.9243     0.8809     0.8674
+Meta-Cogni     0.8385     0.8171     0.8266     0.8099
+Observatio     0.8902     0.8364     0.8605     0.8614
+
+Target Confidence Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio     0.9577     0.9070     0.8976     0.9437
+Conclusion     0.9357     0.9378     0.9114     0.9141
+Meta-Cogni     0.9569     0.8718     0.8677     0.8803
+Observatio     0.9478     0.8178     0.8078     0.8861
+
+Source-Target Confidence Difference Matrix (Source - Target):
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio    -0.0159     0.0298     0.0374     0.0211
+Conclusion    -0.0401    -0.0135    -0.0305    -0.0467
+Meta-Cogni    -0.1184    -0.0548    -0.0411    -0.0704
+Observatio    -0.0576     0.0186     0.0527    -0.0247
+
+
+====================================================================================================
+
+File 2: /staging/szhang967/results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+--------------------------------------------------------------------------------
+
+Available data keys: ['node_type_counts', 'node_avg_prob_sum', 'dependency', 'source_confidence', 'target_confidence', 'confidence_difference']
+
+Node Type Counts:
+  Calculation/Process Step: 36.4926
+  Conclusion/Assertion: 17.5846
+  Meta-Cognition/Plan: 29.5130
+  Observation/Given: 17.5294
+
+Node Average Probabilities:
+  Calculation/Process Step: 0.9532
+  Conclusion/Assertion: 0.9276
+  Meta-Cognition/Plan: 0.8880
+  Observation/Given: 0.9183
+
+Dependency Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio      30.64      15.27      10.75       7.84
+Conclusion       8.23      12.68      11.12       7.41
+Meta-Cogni      12.69       6.57      18.20       4.62
+Observatio      16.69       8.69      15.95      12.05
+
+Source Confidence Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio     0.9765     0.9767     0.9717     0.9595
+Conclusion     0.9582     0.9286     0.9478     0.9565
+Meta-Cogni     0.9371     0.9163     0.9203     0.8828
+Observatio     0.9613     0.9366     0.9705     0.9510
+
+Target Confidence Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio     0.9802     0.9622     0.9258     0.9478
+Conclusion     0.9675     0.9450     0.9184     0.9471
+Meta-Cogni     0.9754     0.9339     0.9230     0.9309
+Observatio     0.9772     0.9471     0.9578     0.9596
+
+Source-Target Confidence Difference Matrix (Source - Target):
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio    -0.0037     0.0145     0.0459     0.0117
+Conclusion    -0.0094    -0.0164     0.0294     0.0094
+Meta-Cogni    -0.0383    -0.0176    -0.0026    -0.0481
+Observatio    -0.0159    -0.0104     0.0126    -0.0086
+
+
+====================================================================================================
+
+File 3: /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-7B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+--------------------------------------------------------------------------------
+
+Available data keys: ['node_type_counts', 'node_avg_prob_sum', 'dependency', 'source_confidence', 'target_confidence', 'confidence_difference']
+
+Node Type Counts:
+  Calculation/Process Step: 8.7593
+  Conclusion/Assertion: 2.0000
+  Meta-Cognition/Plan: 2.2730
+  Observation/Given: 2.4220
+
+Node Average Probabilities:
+  Calculation/Process Step: 0.9357
+  Conclusion/Assertion: 0.9029
+  Meta-Cognition/Plan: 0.8576
+  Observation/Given: 0.8756
+
+Dependency Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio       9.39       2.21       1.81       1.34
+Conclusion       1.86       1.59       1.26       1.36
+Meta-Cogni       2.90       1.31       2.48       1.21
+Observatio       3.23       1.66       1.76       2.00
+
+Source Confidence Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio     0.9593     0.9438     0.9341     0.9353
+Conclusion     0.9150     0.8887     0.9085     0.9103
+Meta-Cogni     0.8559     0.8537     0.8220     0.8323
+Observatio     0.8830     0.8672     0.8665     0.8628
+
+Target Confidence Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio     0.9678     0.9046     0.8921     0.9157
+Conclusion     0.9396     0.8949     0.8952     0.9293
+Meta-Cogni     0.9468     0.8937     0.8610     0.9166
+Observatio     0.9382     0.8811     0.8333     0.8901
+
+Source-Target Confidence Difference Matrix (Source - Target):
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio    -0.0085     0.0392     0.0421     0.0196
+Conclusion    -0.0246    -0.0062     0.0132    -0.0190
+Meta-Cogni    -0.0908    -0.0401    -0.0390    -0.0843
+Observatio    -0.0552    -0.0139     0.0332    -0.0273
+
+
+====================================================================================================
+
+File 4: /staging/szhang967/results_temperature_0/meta-llama-Llama-3.1-8B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+--------------------------------------------------------------------------------
+
+Available data keys: ['node_type_counts', 'node_avg_prob_sum', 'dependency', 'source_confidence', 'target_confidence', 'confidence_difference']
+
+Node Type Counts:
+  Calculation/Process Step: 12.9041
+  Conclusion/Assertion: 11.2921
+  Meta-Cognition/Plan: 29.3486
+  Observation/Given: 8.4206
+
+Node Average Probabilities:
+  Calculation/Process Step: 0.9000
+  Conclusion/Assertion: 0.8794
+  Meta-Cognition/Plan: 0.8251
+  Observation/Given: 0.8287
+
+Dependency Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio      13.31       7.16       5.51      10.80
+Conclusion       7.55      12.98      12.98      13.90
+Meta-Cogni       6.84      12.86      55.69       7.97
+Observatio      10.23       6.42      10.22      15.61
+
+Source Confidence Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio     0.9567     0.9510     0.9460     0.9440
+Conclusion     0.9649     0.9411     0.9726     0.8920
+Meta-Cogni     0.9165     0.9786     0.9831     0.9488
+Observatio     0.8909     0.9141     0.9236     0.8732
+
+Target Confidence Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio     0.9753     0.9644     0.9338     0.9777
+Conclusion     0.9753     0.9786     0.9717     0.9797
+Meta-Cogni     0.9688     0.9795     0.9870     0.9543
+Observatio     0.9728     0.9551     0.9637     0.9763
+
+Source-Target Confidence Difference Matrix (Source - Target):
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio    -0.0185    -0.0134     0.0123    -0.0336
+Conclusion    -0.0104    -0.0375     0.0009    -0.0877
+Meta-Cogni    -0.0523    -0.0009    -0.0039    -0.0054
+Observatio    -0.0819    -0.0410    -0.0402    -0.1031
+
+
+====================================================================================================
+
+Similarity Analysis:
+====================================================================================================
+
+node_type_counts Similarities:
+--------------------------------------------------------------------------------
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.9636
+    Full paths:
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-3B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.9844
+    Full paths:
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-3B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-7B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.7662
+    Full paths:
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-3B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/meta-llama-Llama-3.1-8B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.9130
+    Full paths:
+    - /staging/szhang967/results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-7B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.9053
+    Full paths:
+    - /staging/szhang967/results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/meta-llama-Llama-3.1-8B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.6640
+    Full paths:
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-7B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/meta-llama-Llama-3.1-8B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+
+  Average node_type_counts similarity: 0.8661
+
+node_avg_prob_sum Similarities:
+--------------------------------------------------------------------------------
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.9999
+    Full paths:
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-3B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 1.0000
+    Full paths:
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-3B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-7B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.9999
+    Full paths:
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-3B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/meta-llama-Llama-3.1-8B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.9999
+    Full paths:
+    - /staging/szhang967/results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-7B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.9998
+    Full paths:
+    - /staging/szhang967/results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/meta-llama-Llama-3.1-8B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.9999
+    Full paths:
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-7B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/meta-llama-Llama-3.1-8B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+
+  Average node_avg_prob_sum similarity: 0.9999
+
+dependency Similarities:
+--------------------------------------------------------------------------------
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.9461
+    Full paths:
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-3B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.9425
+    Full paths:
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-3B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-7B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.6221
+    Full paths:
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-3B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/meta-llama-Llama-3.1-8B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.9394
+    Full paths:
+    - /staging/szhang967/results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-7B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.7623
+    Full paths:
+    - /staging/szhang967/results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/meta-llama-Llama-3.1-8B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.6110
+    Full paths:
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-7B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/meta-llama-Llama-3.1-8B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+
+  Average dependency similarity: 0.8039
+
+source_confidence Similarities:
+--------------------------------------------------------------------------------
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.9992
+    Full paths:
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-3B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.9997
+    Full paths:
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-3B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-7B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.9981
+    Full paths:
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-3B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/meta-llama-Llama-3.1-8B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.9996
+    Full paths:
+    - /staging/szhang967/results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-7B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.9989
+    Full paths:
+    - /staging/szhang967/results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/meta-llama-Llama-3.1-8B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.9985
+    Full paths:
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-7B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/meta-llama-Llama-3.1-8B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+
+  Average source_confidence similarity: 0.9990
+
+target_confidence Similarities:
+--------------------------------------------------------------------------------
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.9990
+    Full paths:
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-3B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.9996
+    Full paths:
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-3B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-7B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.9989
+    Full paths:
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-3B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/meta-llama-Llama-3.1-8B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.9995
+    Full paths:
+    - /staging/szhang967/results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-7B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.9998
+    Full paths:
+    - /staging/szhang967/results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/meta-llama-Llama-3.1-8B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.9993
+    Full paths:
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-7B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/meta-llama-Llama-3.1-8B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+
+  Average target_confidence similarity: 0.9994
+
+confidence_difference Similarities:
+--------------------------------------------------------------------------------
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.6808
+    Full paths:
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-3B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.9247
+    Full paths:
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-3B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-7B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.4332
+    Full paths:
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-3B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/meta-llama-Llama-3.1-8B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.8572
+    Full paths:
+    - /staging/szhang967/results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-7B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.2552
+    Full paths:
+    - /staging/szhang967/results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/meta-llama-Llama-3.1-8B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+  test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json vs test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json: 0.4347
+    Full paths:
+    - /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-7B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+    - /staging/szhang967/results_temperature_0/meta-llama-Llama-3.1-8B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+
+  Average confidence_difference similarity: 0.5976
+
+
+====================================================================================================
+End of Report

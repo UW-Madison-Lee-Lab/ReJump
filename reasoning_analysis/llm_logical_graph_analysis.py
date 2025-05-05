@@ -31,6 +31,96 @@ from data_processing import (
 # from visualize_cot import analyze_hypotheses, create_visualization # Import create_visualization
 from visualize_cpg import analyze_cpg, create_visualization # Import create_visualization
 
+def analyze_node_dependencies(llm_json: Dict[str, Any]) -> Dict[str, Dict[str, Dict[str, int]]]:
+    """
+    Analyzes the dependencies between different node types in the logical graph.
+    
+    Args:
+        llm_json: The parsed JSON data from the LLM's analysis with nodes and dependencies.
+        
+    Returns:
+        A dictionary mapping each node type to the node types that follow it, with counts.
+    """
+    # Initialize dependency structure
+    dependency_stats = {}
+    # Create a map of node IDs to node types for quick lookup
+    node_id_to_type = {node['id']: node['type'] for node in llm_json['nodes']}
+    
+    # Count occurrences of each dependency relationship
+    for node in llm_json['nodes']:
+        node_type = node['type']
+        depends_on = node['depends_on']
+        
+        # Skip nodes without dependencies
+        if depends_on is None or not depends_on:
+            continue
+            
+        # Process dependencies - for each node the current node depends on
+        for dep_id in depends_on:
+            if dep_id in node_id_to_type:
+                dep_type = node_id_to_type[dep_id]
+                
+                # This is the key change: dep_type is followed by node_type
+                if dep_type not in dependency_stats:
+                    dependency_stats[dep_type] = {}
+                    
+                if node_type not in dependency_stats[dep_type]:
+                    dependency_stats[dep_type][node_type] = 0
+                    
+                dependency_stats[dep_type][node_type] += 1
+    
+    return dependency_stats
+
+def analyze_confidence_transitions(llm_json: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Analyzes the confidence transitions between connected nodes in the logical graph.
+    
+    Args:
+        llm_json: The parsed JSON data from the LLM's analysis with nodes and dependencies.
+        
+    Returns:
+        A list of dictionaries containing source and target node types with their confidence values.
+    """
+    # Create maps for quick lookups
+    node_id_to_type = {}
+    node_id_to_prob = {}
+    
+    for node in llm_json['nodes']:
+        node_id = node['id']
+        node_id_to_type[node_id] = node['type']
+        node_id_to_prob[node_id] = node['avg_prob']
+    
+    transitions = []
+    
+    # Process the dependencies to find connections
+    for node in llm_json['nodes']:
+        node_id = node['id']
+        depends_on = node['depends_on']
+        
+        # Skip nodes without dependencies
+        if depends_on is None or not depends_on:
+            continue
+            
+        # Current node is the target
+        target_type = node_id_to_type[node_id]
+        target_prob = node_id_to_prob[node_id]
+        
+        # Process each dependency
+        for source_id in depends_on:
+            if source_id in node_id_to_type:
+                source_type = node_id_to_type[source_id]
+                source_prob = node_id_to_prob[source_id]
+                
+                # Add transition data
+                transitions.append({
+                    "source_node": source_type,
+                    "source_avg_prob": source_prob,
+                    "target_node": target_type,
+                    "target_avg_prob": target_prob
+                })
+    
+    return transitions
+
 def process_llm_analysis_logical_graph(llm_json: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
     Analyzes the logical graph (CoT) structure within the LLM's analysis JSON.
@@ -81,7 +171,21 @@ def process_llm_analysis_logical_graph(llm_json: Dict[str, Any]) -> Optional[Dic
             node_avg_prob_sum[node_type] /= node_avg_prob_counts[node_type]
         else:
             node_avg_prob_sum[node_type] = None  # Set to None if all avg_prob values were None
-    return {"summary": {"node_type_counts": node_type_counts, "node_avg_prob_sum": node_avg_prob_sum}}
+    
+    # Analyze node dependencies
+    dependency_stats = analyze_node_dependencies(llm_json)
+    
+    # Analyze confidence transitions between nodes
+    confidence_transitions = analyze_confidence_transitions(llm_json)
+    
+    return {
+        "summary": {
+            "node_type_counts": node_type_counts, 
+            "node_avg_prob_sum": node_avg_prob_sum, 
+            "dependency": dependency_stats,
+            "node_confidence_transitions": confidence_transitions
+        }
+    }
 
 
 import numpy as np
@@ -165,15 +269,24 @@ def process_parquet_file(input_file: str, output_dir: Optional[str] = None,
     # Use defaultdicts for easier aggregation
     metric_sums = defaultdict(float) # Initialize top-level keys to 0.0
     metric_counts = defaultdict(int) # Initialize top-level keys to 0
-    nested_metric_sums = defaultdict(lambda: defaultdict(float)) # For nested keys
-    nested_metric_counts = defaultdict(lambda: defaultdict(int)) # For nested keys
+    
+    # 创建两个不同的嵌套结构字典
+    # 标准二级嵌套
+    regular_nested_metric_sums = defaultdict(lambda: defaultdict(float))
+    regular_nested_metric_counts = defaultdict(lambda: defaultdict(int))
+    # 三级嵌套，用于dependency
+    dependency_metric_sums = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
+    dependency_metric_counts = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+    
+    # 收集所有样本的节点置信度转换
+    all_confidence_transitions = []
 
     processed_samples = 0
     valid_samples_for_avg = 0
     # Counter for visualizations
     visualization_count = 0
     # Maximum number of visualizations
-    max_visualizations = 1
+    max_visualizations = 10
 
     # Limit rows if max_samples is set
     if max_samples > 0:
@@ -274,14 +387,30 @@ def process_parquet_file(input_file: str, output_dir: Optional[str] = None,
             
             # Accumulate sums and counts
             for key, value in summary.items():
-                if isinstance(value, dict):
+                if key == "dependency":
+                    # Handle dependency dictionary which has a nested structure
+                    if key not in dependency_metric_sums:
+                        dependency_metric_sums[key] = defaultdict(lambda: defaultdict(float))
+                        dependency_metric_counts[key] = defaultdict(lambda: defaultdict(int))
+                    
+                    # For each node type
+                    for node_type, followers in value.items():
+                        # For each follower type
+                        for follower_type, count in followers.items():
+                            if isinstance(count, (int, float)):
+                                dependency_metric_sums[key][node_type][follower_type] += count
+                                dependency_metric_counts[key][node_type][follower_type] += 1
+                elif key == "node_confidence_transitions":
+                    all_confidence_transitions.extend(value)
+                elif isinstance(value, dict):
                     for sub_key, sub_value in value.items():
                         if isinstance(sub_value, (int, float)): # Only average numeric types
-                            nested_metric_sums[key][sub_key] += sub_value
-                            nested_metric_counts[key][sub_key] += 1
+                            regular_nested_metric_sums[key][sub_key] += sub_value
+                            regular_nested_metric_counts[key][sub_key] += 1
                 elif isinstance(value, (int, float)): # Handle top-level numeric keys
                      metric_sums[key] += value
                      metric_counts[key] += 1
+            
                  
             # Store results for this sample (original metrics)
             sample_data = {
@@ -305,18 +434,35 @@ def process_parquet_file(input_file: str, output_dir: Optional[str] = None,
         average_metrics[key] = total_sum / count if count > 0 else None
         
     # Average nested keys
-    for key, sub_dict in nested_metric_sums.items():
+    for key, sub_dict in regular_nested_metric_sums.items():
         if key not in average_metrics: # Create nested dict if not already from top-level
-             average_metrics[key] = {}
+            average_metrics[key] = {}
+        
+        # Regular handling for doubly-nested structure
         for sub_key, total_sum in sub_dict.items():
-            count = nested_metric_counts[key][sub_key]
+            count = regular_nested_metric_counts[key][sub_key]
             average_metrics[key][sub_key] = total_sum / count if count > 0 else None
+    
+    # Handle dependency separately with its triple-nested structure
+    if "dependency" in dependency_metric_sums:
+        key = "dependency"
+        if key not in average_metrics:
+            average_metrics[key] = {}
             
+        for node_type, followers in dependency_metric_sums[key].items():
+            if node_type not in average_metrics[key]:
+                average_metrics[key][node_type] = {}
+            
+            for follower_type, total_sum in followers.items():
+                count = dependency_metric_counts[key][node_type][follower_type]
+                average_metrics[key][node_type][follower_type] = total_sum / count if count > 0 else None
+
     # Update the total processed count and add averages to metadata
     llm_analysis_data["metadata"]["processed_samples"] = processed_samples
     llm_analysis_data["metadata"]["average_summary_metrics"] = average_metrics
     llm_analysis_data["metadata"]["samples_used_for_averages"] = valid_samples_for_avg
     llm_analysis_data["metadata"]["visualizations_created"] = visualization_count
+    llm_analysis_data["metadata"]["all_confidence_transitions"] = all_confidence_transitions
 
     # Determine output file path
     if output_dir:
