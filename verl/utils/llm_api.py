@@ -80,7 +80,8 @@ class LLMAPI:
         if model_name.startswith("deepseek-ai/"):
             self.client = OpenAI(
                 api_key=api_key,
-                base_url="https://api.deepseek.com/v1"
+                # base_url="https://api.deepseek.com/v1"
+                base_url = "https://api.deepseek.com/beta"
             )
             self.model = model_name.replace("deepseek-ai/", "")  # Remove the prefix to get the actual model name
             self.client_type = "deepseek"
@@ -127,7 +128,8 @@ class LLMAPI:
         elif model_name.startswith("alibaba/"):
             self.client = OpenAI(
                 api_key=api_key,
-                base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+                # base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+                base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
             )
             self.model = model_name.replace("alibaba/", "")
             self.client_type = "alibaba"
@@ -174,7 +176,7 @@ class LLMAPI:
     ) -> str:
         max_retries = 1000  # Increased retry count
         if max_retries <= 0: raise ValueError("max_retries must be greater than 0")
-        timeout = 120  # Increased timeout to 120 seconds
+        timeout = 1  # Increased timeout to 120 seconds
         
         # Ensure messages is a list
         if not isinstance(messages, list):
@@ -236,7 +238,7 @@ class LLMAPI:
                             #token_info contains token,logprob,bytes,top_logprobs...
                             token_logprob_dict['tokens'].append(token_info.token)
                             token_logprob_dict['logprobs'].append(token_info.logprob)# Storing chosen token's logprob as an example
-
+                    # import pdb; pdb.set_trace()
                     output = response.choices[0].message.content
                     reasoning = getattr(response.choices[0].message, 'reasoning_content', None)
                     if reasoning is None:
@@ -258,6 +260,7 @@ class LLMAPI:
                         temperature=temperature,
                         extra_body=extra_body,
                         stream=stream,
+                        logprobs=True,
                     )
                     
                     if self.thinking == "enabled":
@@ -276,6 +279,7 @@ class LLMAPI:
                                 if not is_answering:
                                     is_answering = True
                                 answer_content += delta.content
+                            # import pdb; pdb.set_trace()
                         
                         reasoning = reasoning_content
                         output = answer_content

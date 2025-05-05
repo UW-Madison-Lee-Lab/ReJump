@@ -186,6 +186,32 @@ def get_mixed_configs(
     return configs
     
 supported_llms = {
+    #phi-4
+    "microsoft/phi-4": {
+        "template_type": "qwen-instruct",
+        "model_size": 0,
+        "type": "huggingface",
+    },
+    "microsoft/Phi-4-reasoning-plus": {
+        "template_type": "qwen-instruct",
+        "model_size": 0,
+        "type": "huggingface",
+    },
+    "microsoft/Phi-4-reasoning": {
+        "template_type": "qwen-instruct",
+        "model_size": 0,
+        "type": "huggingface",
+    },
+    "microsoft/Phi-4-mini-instruct": {
+        "template_type": "qwen-instruct",
+        "model_size": 0,
+        "type": "huggingface",
+    },
+    "microsoft/Phi-4-mini-reasoning": {
+        "template_type": "qwen-instruct",
+        "model_size": 0,
+        "type": "huggingface",
+    },
     # Qwen
     "Qwen/Qwen2.5-0.5B": {
         "template_type": "qwen-instruct",
@@ -284,6 +310,21 @@ supported_llms = {
         "type": "api",
         "api_key": OPENROUTER_API_KEY,
     },
+    "openrouter-microsoft/phi-4-reasoning-plus:free": {
+        "template_type": "reasoning_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": OPENROUTER_API_KEY,
+    },
+    "openrouter-qwen/qwq-32b:free": {
+        "template_type": "reasoning_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": OPENROUTER_API_KEY,
+    },
+    
+
+    # Anthropic api
     "claude/claude-3-7-sonnet-20250219": {
         "template_type": "standard_api",
         "model_size": 0,
