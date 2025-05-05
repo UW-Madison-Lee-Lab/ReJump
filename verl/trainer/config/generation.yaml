@@ -23,7 +23,7 @@ actor:
   use_dynamic_bsz: True    # Whether to use dynamic batch size; True enables dynamic batch size.
 
 rollout:
-  name: huggingface                 # Generation engine type; vLLM for efficient inference.
+  name: hf                 # Generation engine type; vLLM for efficient inference.
   temperature: 0.3           # Sampling temperature; 1.0 controls text randomness (higher = more random).
   top_k: 50                  # Top-K sampling; 50 means sample from top 50 probable tokens.
   top_p: 0.7                 # Top-P (nucleus) sampling; 0.7 means sample from tokens with 70% cumulative probability.
