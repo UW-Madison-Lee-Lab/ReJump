@@ -141,6 +141,7 @@ Generate a JSON list of dictionaries, where each dictionary represents a single 
     * Re-checking results (maps to `verification`). **When mapping `verification`:** First, check if the text describes actions that precisely match the **problem description** of an intermediate node (Node X), essentially re-doing the work defined in that node. If yes, trace the walk through the node being re-worked (e.g., Z -> X -> Z). If the text indicates verification but ***does not*** show such a specific re-work of a prior node's problem, assume it implies checking against the initial problem conditions (node 1) and represent the path as Z -> 1 -> Z. Remember: Simply *using* a result or formula from node X does not qualify as re-doing the problem of node X according to this definition.
 6.  The walk should reflect the *actual* path taken in the `Reasoning Text`, including explorations of dead ends (like `node2` in the example) and subsequent backtracking.
 7.  Ensure the output is strictly the JSON list as specified, with no additional explanatory text.
+8. The output MUST be perfectly valid JSON, parseable by standard libraries.
 
 **Example Analysis (Based on Provided Inputs with Stricter Verification Logic):**
 
@@ -163,6 +164,7 @@ Generate a JSON list of dictionaries, where each dictionary represents a single 
 Now, analyze the provided inputs (`{{problem_description}}`, `{{reasoning_text}}`, `{{reasoning_tree_json}}`) using **this strict interpretation of verification** (visiting a node requires re-doing its specific "Problem") and generate the reasoning walk as a JSON list. Output *only* the JSON list.
     """
 
+
 def parse_json(json_prompt):
     """Parse JSON content from a prompt string.
     
@@ -172,17 +174,22 @@ def parse_json(json_prompt):
     Returns:
         The parsed JSON data as a Python dictionary
     """
-    
     # Find content between ```json and ``` markers
     json_match = re.search(r'```json\s*(.*?)\s*```', json_prompt, re.DOTALL)
     
     if not json_match:
         return {}
     
-    json_content = json_match.group(1)
+    json_content = json_match.group(1) 
+    json_content = re.sub(r'\\(?![\\\"/bfnrtu])', r'\\\\', json_content)
     
     # Parse the JSON content
-    data = json.loads(json_content)
+    try: 
+        data = json.loads(json_content)
+    except json.decoder.JSONDecodeError as e:
+        pdb.set_trace()
+        print(f"Error parsing JSON: {e}")
+        return {}
     
     return data 
 
@@ -602,7 +609,7 @@ if __name__ == "__main__":
             "model_name": args.model_name,
             "num_samples": args.num_samples,
         }
-        project_name = f"{WANDB_INFO['project']}-tree-vis"
+        project_name = f"{WANDB_INFO['project']}-tree-vis-v3"
         
         if not wandb_init(project_name, WANDB_INFO["entity"], wandb_config):
             exit()
