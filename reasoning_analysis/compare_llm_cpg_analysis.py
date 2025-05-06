@@ -94,15 +94,15 @@ def create_vectors_and_matrices(ordered_node_types: OrderedDict, metrics: Dict[s
                 for to_type, value in to_types.items():
                     if to_type in ordered_node_types:
                         # Value could be a number or a dict with "num" key
-                        if isinstance(value, dict) and "num" in value:
-                            dep_matrix[ordered_node_types[from_type], ordered_node_types[to_type]] = value["num"]
-                        else:
-                            dep_matrix[ordered_node_types[from_type], ordered_node_types[to_type]] = value
+                        # if isinstance(value, dict) and "num" in value:
+                        #     dep_matrix[ordered_node_types[from_type], ordered_node_types[to_type]] = value["num"]
+                        # else:
+                        dep_matrix[ordered_node_types[from_type], ordered_node_types[to_type]] = value
         result["dependency"] = dep_matrix
     
     # Create confidence transition matrix
     # 首先检查node_confidence_transitions是否存在，并记录其结构
-    if "all_confidence_transitions" in metrics or "node_confidence_transitions" in metrics:
+    if "all_confidence_transitions" in metrics:
         # 确定哪个键包含信息
 #         import pdb; pdb.set_trace()
         transitions_key = "all_confidence_transitions"
@@ -137,6 +137,7 @@ def create_vectors_and_matrices(ordered_node_types: OrderedDict, metrics: Dict[s
         
         # Calculate averages only for cells with counts > 0
         nonzero_mask = transition_counts > 0
+        result['transition_counts'] = transition_counts
         if np.any(nonzero_mask):  # 确保至少有一个非零元素
             source_prob_matrix[nonzero_mask] /= transition_counts[nonzero_mask]
             target_prob_matrix[nonzero_mask] /= transition_counts[nonzero_mask]
