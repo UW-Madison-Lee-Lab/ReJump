@@ -81,6 +81,9 @@ def run_logical_graph_analysis(base_dir):
         "results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Llama-8B",
 
         "results_temperature_0/Qwen-Qwen2.5-3B-Instruct",
+
+        'results_temperature_0/openrouter-qwen-qwq-32b',
+        'results_temperature_0/openrouter-microsoft-phi-4'
         
     ]
     
@@ -112,7 +115,7 @@ def run_logical_graph_analysis(base_dir):
                     # "--debug"
                 ]
                 try:
-                    # subprocess.run(cmd, check=True)
+                    subprocess.run(cmd, check=True)
                     print(f"Successfully processed {input_file}")
                 except subprocess.CalledProcessError as e:
                     print(f"Error processing {input_file}: {e}")

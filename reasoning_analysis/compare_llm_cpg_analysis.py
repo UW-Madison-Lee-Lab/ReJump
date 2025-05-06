@@ -360,19 +360,7 @@ def extract_and_process_metadata(data: Dict[str, Any]) -> Dict[str, Any]:
         return {}
         
     metadata = data["metadata"]
-    
-    # Process confidence transitions data
-    if "all_confidence_transitions" in metadata:
-        # If we have transitions data at the metadata level rather than in average_summary_metrics
-        if "average_summary_metrics" not in metadata:
-            metadata["average_summary_metrics"] = {}
-            
-        # Add the transitions to average_summary_metrics for easier processing
-        metadata["average_summary_metrics"]["all_confidence_transitions"] = metadata["all_confidence_transitions"]
-        
-        print(f"Found {len(metadata['all_confidence_transitions'])} transitions at metadata level")
-        if len(metadata["all_confidence_transitions"]) > 0:
-            print(f"Sample transition: {metadata['all_confidence_transitions'][0]}")
+    metadata["average_summary_metrics"]["all_confidence_transitions"] = metadata["all_confidence_transitions"]
     
     return metadata
 
@@ -437,7 +425,6 @@ def compare_analysis_files(file_paths: List[str]):
     for data in analysis_data:
         metadata = data.get("metadata", {})
         metrics = metadata.get("average_summary_metrics", {})
-        metrics["all_confidence_transitions"] = metadata.get("all_confidence_transitions", [])
         vectors_matrices = create_vectors_and_matrices(all_ordered_node_types, metrics)
         all_vectors_matrices.append(vectors_matrices)
     

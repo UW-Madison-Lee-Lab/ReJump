@@ -256,7 +256,7 @@ def process_reasoning_with_probs(probs_dict: Dict[str, Any], processed_input_fil
             split_token_list = ['.\n', ".\n\n", "\n\n", " \n\n",'!', '?', ").\n\n","]\n\n", ]
         elif "llama" in processed_input_file_path.lower():
             split_token_list = ["!\n\n", "?\n\n", ".\n\n", "!\n", "?\n", ".\n"," \n",]
-        elif "qwen" in processed_input_file_path.lower():
+        elif "qwen" in processed_input_file_path.lower() or "qwq" in processed_input_file_path.lower():
             split_token_list = [".\n", ".\n\n", "!\n", "\n\n", "\n", 
                                 "<|im_end|>", 
                                 ").\n\n", ").\n",
@@ -324,6 +324,9 @@ def process_row(args, input_file_path: str):
         Tuple of (row_idx, raw_output, extracted_json, total_input, reasoning_dict, error)
     """
     row_idx, row, instruction, analyzer, column_prefix, continue_on_error, field_of_interests = args
+    #sometimes row['probs'][0]['logprobs'] is empty, so we need to handle this, so does row['probs'][0]['tokens']
+    if row['probs'][0]['logprobs'] is None or row['probs'][0]['tokens'] is None:
+        return row_idx, None, None, None, None, "Error: logprobs or tokens is None"
     
     try:
         # Handle responses based on its type (could be string or list)
