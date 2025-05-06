@@ -82,7 +82,7 @@ def run_logical_graph_analysis(base_dir):
 
         # "results_temperature_0/Qwen-Qwen2.5-3B-Instruct",
 
-        'results_temperature_0/openrouter-qwen-qwq-32b',
+        # 'results_temperature_0/openrouter-qwen-qwq-32b',
         'results_temperature_0/openrouter-microsoft-phi-4'
         
     ]

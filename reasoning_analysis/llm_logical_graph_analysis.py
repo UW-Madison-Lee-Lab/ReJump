@@ -286,7 +286,7 @@ def process_parquet_file(input_file: str, output_dir: Optional[str] = None,
     # Counter for visualizations
     visualization_count = 0
     # Maximum number of visualizations
-    max_visualizations = 10
+    max_visualizations = 5
 
     # Limit rows if max_samples is set
     if max_samples > 0:
@@ -410,6 +410,8 @@ def process_parquet_file(input_file: str, output_dir: Optional[str] = None,
                 elif isinstance(value, (int, float)): # Handle top-level numeric keys
                      metric_sums[key] += value
                      metric_counts[key] += 1
+                else:
+                    raise ValueError(f"Unknown key: {key}")
             
                  
             # Store results for this sample (original metrics)

@@ -24,6 +24,48 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def filter_invalid_rows(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Filters out rows where 'logprobs' or 'tokens' lists are empty within the 'probs' column.
+
+    Args:
+        df: Input DataFrame.
+
+    Returns:
+        Filtered DataFrame with invalid rows removed.
+    """
+    initial_rows = len(df)
+    logger.info(f"Initial number of rows: {initial_rows}")
+
+    # Define a function to check the validity of a row's 'probs' entry
+    def is_valid(probs_list):
+        # if not probs_list:
+        #     return False # Treat malformed entries as invalid
+        # Assuming the structure is always a list containing one dictionary
+        probs_dict = probs_list[0]
+        # if not isinstance(probs_dict, dict):
+        #      logger.warning("Invalid 'probs' format: first element is not a dictionary.")
+        #      return False # Treat malformed entries as invalid
+        logprobs = probs_dict.get('logprobs')
+        tokens = probs_dict.get('tokens')
+        # Check if both logprobs and tokens are lists and are not empty
+        is_logprobs_valid = len(logprobs) > 0
+        is_tokens_valid = len(tokens) > 0
+        return is_logprobs_valid and is_tokens_valid
+
+    # Apply the validation function and filter the DataFrame
+    valid_mask = df['probs'].apply(is_valid)
+    filtered_df = df[valid_mask].copy() # Use .copy() to avoid SettingWithCopyWarning
+
+    removed_rows = initial_rows - len(filtered_df)
+    if removed_rows > 0:
+        logger.info(f"Removed {removed_rows} rows due to empty 'logprobs' or 'tokens'.")
+    else:
+        logger.info("No rows removed.")
+    
+    return filtered_df
+
+
 def extract_json(text: str) -> Any:
     """
     Extract JSON from text response, handling various formats:
@@ -262,6 +304,12 @@ def process_reasoning_with_probs(probs_dict: Dict[str, Any], processed_input_fil
                                 ").\n\n", ").\n",
                                 "]\n\n","]\n",
                                 ]
+        elif "phi-4" in processed_input_file_path.lower():
+            split_token_list = [".\n", ".\n\n", "!\n", "\n\n", "\n", 
+                                "<|im_end|>", 
+                                ").\n\n", ").\n",
+                                "]\n\n","]\n",
+                                ]
         else:
             raise NotImplementedError(f"Model {processed_input_file_path} not supported")
         if token in split_token_list:
@@ -325,8 +373,9 @@ def process_row(args, input_file_path: str):
     """
     row_idx, row, instruction, analyzer, column_prefix, continue_on_error, field_of_interests = args
     #sometimes row['probs'][0]['logprobs'] is empty, so we need to handle this, so does row['probs'][0]['tokens']
-    if len(row['probs'][0]['logprobs']) == 0 or len(row['probs'][0]['tokens']) == 0:
-        return row_idx, None, None, None, None, "Error: logprobs or tokens is None"
+    # This check is now done upfront in process_file by filter_invalid_rows
+    # if len(row['probs'][0]['logprobs']) == 0 or len(row['probs'][0]['tokens']) == 0:
+    #     return row_idx, None, None, None, None, "Error: logprobs or tokens is None"
     
     try:
         # Handle responses based on its type (could be string or list)
@@ -406,6 +455,17 @@ def process_file(
         logger.info("Running in debug mode - using only first 5 rows")
         df = df.head(5)
         batch_size = min(batch_size, 5)
+    
+    # Filter out rows with empty logprobs or tokens before processing
+    df = filter_invalid_rows(df)
+
+    # If DataFrame becomes empty after filtering, exit early
+    if df.empty:
+        logger.warning("DataFrame is empty after filtering invalid rows. No processing needed.")
+        # Ensure the output file reflects the empty state if it doesn't exist
+        # or contains data from a previous unfiltered run.
+        df.to_parquet(output_file) # Save the empty dataframe
+        return
     
     # Read the instruction file
     logger.info(f"Reading instruction file: {instruction_file}")

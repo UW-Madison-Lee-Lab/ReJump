@@ -15,6 +15,9 @@ import itertools
 from collections import OrderedDict
 import pandas as pd
 import os
+import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend
 
 
 def load_analysis_file(file_path: str) -> Dict[str, Any]:
@@ -192,6 +195,195 @@ def compute_matrix_similarity(m1: np.ndarray, m2: np.ndarray) -> float:
     return compute_cosine_similarity(v1, v2)
 
 
+model_name_list = [
+        "results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Qwen-7B",
+        "results_temperature_0/Qwen-Qwen2.5-7B-Instruct",
+        "results_temperature_0/meta-llama-Llama-3.1-8B-Instruct",
+        "results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Llama-8B",
+
+        "results_temperature_0/Qwen-Qwen2.5-3B-Instruct",
+
+        'results_temperature_0/openrouter-qwen-qwq-32b',
+        'results_temperature_0/openrouter-microsoft-phi-4'
+        
+    ]
+def get_model_name(file_path: str) -> str:
+    if "openrouter-qwen-qwq-32b" in file_path:
+        return "openrouter-qwen-qwq-32b"
+    elif "openrouter-microsoft-phi-4" in file_path:
+        return "openrouter-microsoft-phi-4"
+    elif "Qwen-Qwen2.5-3B-Instruct" in file_path:
+        return "Qwen-Qwen2.5-3B-Instruct"
+    elif "deepseek-ai-DeepSeek-R1-Distill-Llama-8B" in file_path:
+        return "deepseek-ai-DeepSeek-R1-Distill-Llama-8B"
+    elif "meta-llama-Llama-3.1-8B-Instruct" in file_path:
+        return "meta-llama-Llama-3.1-8B-Instruct"
+    elif "Qwen-Qwen2.5-7B-Instruct" in file_path:
+        return "Qwen-Qwen2.5-7B-Instruct"
+    elif "deepseek-ai-DeepSeek-R1-Distill-Qwen-7B" in file_path:
+        return "deepseek-ai-DeepSeek-R1-Distill-Qwen-7B"
+    else:
+        return file_path
+    
+def create_node_type_counts_chart(file_paths: List[str], all_vectors_matrices: List[Dict[str, np.ndarray]], 
+                                 ordered_node_types: OrderedDict, output_dir: Path, normalize: bool = False,
+                                 data_key: str = "node_type_counts") -> str:
+    """
+    Create a bar chart comparing node metrics across all models.
+    
+    Args:
+        file_paths: List of analysis file paths
+        all_vectors_matrices: List of vectors and matrices for each file
+        ordered_node_types: OrderedDict of node types
+        output_dir: Directory to save the chart
+        normalize: Whether to normalize counts as proportions
+        data_key: The key for the data to plot (node_type_counts or node_avg_prob_sum)
+        
+    Returns:
+        Path to the saved chart file
+    """
+    # Extract file names for legend
+    file_names = [get_model_name(path) for path in file_paths]
+    
+    # Collect data for each file
+    data = {}
+    for i, (file_name, vectors_matrices) in enumerate(zip(file_names, all_vectors_matrices)):
+        if data_key in vectors_matrices:
+            values = vectors_matrices[data_key]
+            if normalize and data_key == "node_type_counts":
+                # Normalize to sum to 1 (only for counts, not for probabilities)
+                total = np.sum(values)
+                if total > 0:
+                    values = values / total
+            data[file_name] = values
+    
+    if not data:
+        print(f"No {data_key} data available for plotting")
+        return ""
+    
+    # Create DataFrame for plotting
+    df_data = {}
+    node_types = list(ordered_node_types.keys())
+    
+    for file_name, values in data.items():
+        for node_type, idx in ordered_node_types.items():
+            if node_type not in df_data:
+                df_data[node_type] = []
+            df_data[node_type].append(values[idx])
+    
+    # Create plot
+    fig = plt.figure(figsize=(12, 8))
+    ax = fig.add_subplot(111)
+    
+    # Set up bar positions
+    num_files = len(data)
+    num_types = len(node_types)
+    bar_width = 0.8 / num_files
+    
+    # Plot bars for each file
+    for i, file_name in enumerate(file_names):
+        if file_name in data:
+            x_positions = np.arange(num_types) + (i - num_files/2 + 0.5) * bar_width
+            values = [data[file_name][ordered_node_types[node_type]] for node_type in node_types]
+            ax.bar(x_positions, values, width=bar_width, label=file_name)
+    
+    # Set labels and title
+    ax.set_xlabel('Node Type')
+    
+    if data_key == "node_type_counts":
+        if normalize:
+            ax.set_ylabel('Proportion')
+            ax.set_title('Node Type Proportions Comparison Across Models')
+            output_file = output_dir / "node_type_proportions_comparison.png"
+        else:
+            ax.set_ylabel('Count')
+            ax.set_title('Node Type Counts Comparison Across Models')
+            output_file = output_dir / "node_type_counts_comparison.png"
+    elif data_key == "node_avg_prob_sum":
+        ax.set_ylabel('Average Probability')
+        ax.set_title('Node Average Probabilities Comparison Across Models')
+        output_file = output_dir / "node_avg_prob_comparison.png"
+    else:
+        ax.set_ylabel('Value')
+        ax.set_title(f'{data_key} Comparison Across Models')
+        output_file = output_dir / f"{data_key}_comparison.png"
+        
+    ax.set_xticks(np.arange(num_types))
+    ax.set_xticklabels(node_types, rotation=45, ha='right')
+    ax.legend()
+    plt.tight_layout()
+    
+    # Save figure
+    plt.savefig(output_file, dpi=300)
+    plt.close()
+    
+    return str(output_file)
+
+
+def create_node_prob_by_model_chart(file_paths: List[str], all_vectors_matrices: List[Dict[str, np.ndarray]], 
+                                ordered_node_types: OrderedDict, output_dir: Path) -> str:
+    """
+    Create a bar chart comparing node average probabilities across all models,
+    with models on x-axis and node types as different bars for each model.
+    
+    Args:
+        file_paths: List of analysis file paths
+        all_vectors_matrices: List of vectors and matrices for each file
+        ordered_node_types: OrderedDict of node types
+        output_dir: Directory to save the chart
+        
+    Returns:
+        Path to the saved chart file
+    """
+    # Extract file names for x-axis
+    file_names = [get_model_name(path) for path in file_paths]
+    
+    # Collect data for each file and node type
+    data = {}
+    for node_type in ordered_node_types.keys():
+        data[node_type] = []
+    
+    # For each file, collect probability for each node type
+    for i, (file_name, vectors_matrices) in enumerate(zip(file_names, all_vectors_matrices)):
+        if "node_avg_prob_sum" in vectors_matrices:
+            for node_type, idx in ordered_node_types.items():
+                data[node_type].append(vectors_matrices["node_avg_prob_sum"][idx])
+        else:
+            # If data is missing, add zeros
+            for node_type in ordered_node_types.keys():
+                data[node_type].append(0)
+    
+    # Create plot
+    fig = plt.figure(figsize=(14, 8))
+    ax = fig.add_subplot(111)
+    
+    # Set up bar positions
+    num_models = len(file_names)
+    num_types = len(ordered_node_types)
+    bar_width = 0.8 / num_types
+    
+    # Plot bars for each node type
+    for i, (node_type, values) in enumerate(data.items()):
+        x_positions = np.arange(num_models) + (i - num_types/2 + 0.5) * bar_width
+        ax.bar(x_positions, values, width=bar_width, label=node_type)
+    
+    # Set labels and title
+    ax.set_xlabel('Model')
+    ax.set_ylabel('Average Probability')
+    ax.set_title('Node Average Probabilities by Model')
+    ax.set_xticks(np.arange(num_models))
+    ax.set_xticklabels(file_names, rotation=45, ha='right')
+    ax.legend(title='Node Type')
+    plt.tight_layout()
+    
+    # Save figure
+    output_file = output_dir / "node_avg_prob_by_model_comparison.png"
+    plt.savefig(output_file, dpi=300)
+    plt.close()
+    
+    return str(output_file)
+
+
 def save_detailed_analysis(file_paths: List[str], all_vectors_matrices: List[Dict[str, np.ndarray]], similarities: Dict[str, Dict[Tuple[str, str], float]], ordered_node_types: OrderedDict) -> str:
     """
     保存详细分析结果到文本文件
@@ -213,6 +405,21 @@ def save_detailed_analysis(file_paths: List[str], all_vectors_matrices: List[Dic
     # 创建输出文件
     output_file = output_dir / f"cpg_analysis.txt"
     
+    # 创建节点类型计数比较图
+    chart_file = create_node_type_counts_chart(file_paths, all_vectors_matrices, ordered_node_types, output_dir, 
+                                              normalize=False, data_key="node_type_counts")
+    
+    # 创建节点类型比例比较图
+    prop_chart_file = create_node_type_counts_chart(file_paths, all_vectors_matrices, ordered_node_types, output_dir, 
+                                                  normalize=True, data_key="node_type_counts")
+    
+    # 创建节点平均概率比较图 (按节点类型分组)
+    prob_chart_file = create_node_type_counts_chart(file_paths, all_vectors_matrices, ordered_node_types, output_dir,
+                                                  normalize=False, data_key="node_avg_prob_sum")
+    
+    # 创建节点平均概率比较图 (按模型分组)
+    prob_by_model_chart_file = create_node_prob_by_model_chart(file_paths, all_vectors_matrices, ordered_node_types, output_dir)
+    
     # 打印调试信息
     print("\nAvailable data for analysis:")
     if all_vectors_matrices and len(all_vectors_matrices) > 0:
@@ -233,6 +440,19 @@ def save_detailed_analysis(file_paths: List[str], all_vectors_matrices: List[Dic
         f.write("-" * 80 + "\n")
         for i, filepath in enumerate(file_paths):
             f.write(f"{i+1}. {filepath}\n")
+        f.write("\n\n")
+        
+        # 添加图表信息
+        f.write("Visualization:\n")
+        f.write("-" * 80 + "\n")
+        if chart_file:
+            f.write(f"Node Type Counts Comparison Chart: {Path(chart_file).name}\n")
+        if prop_chart_file:
+            f.write(f"Node Type Proportions Comparison Chart: {Path(prop_chart_file).name}\n")
+        if prob_chart_file:
+            f.write(f"Node Average Probabilities Comparison Chart: {Path(prob_chart_file).name}\n")
+        if prob_by_model_chart_file:
+            f.write(f"Node Average Probabilities by Model Chart: {Path(prob_by_model_chart_file).name}\n")
         f.write("\n\n")
         
         # 写入节点类型
@@ -314,6 +534,18 @@ def save_detailed_analysis(file_paths: List[str], all_vectors_matrices: List[Dic
                 f.write("\n")
             else:
                 f.write("Confidence Difference Matrix: Not available in this data\n\n")
+            
+            # 转换计数矩阵
+            if "transition_counts" in vectors_matrices:
+                f.write("Transition Counts Matrix:\n")
+                f.write("  " + " ".join(f"{node_type[:10]:>10}" for node_type in ordered_node_types.keys()) + "\n")
+                
+                for from_type, from_idx in ordered_node_types.items():
+                    row_values = [f"{vectors_matrices['transition_counts'][from_idx, to_idx]:.0f}" for to_idx in range(len(ordered_node_types))]
+                    f.write(f"{from_type[:10]:>10} " + " ".join(f"{val:>10}" for val in row_values) + "\n")
+                f.write("\n")
+            else:
+                f.write("Transition Counts Matrix: Not available in this data\n\n")
             
             f.write("\n" + "=" * 100 + "\n\n")
         
@@ -436,7 +668,8 @@ def compare_analysis_files(file_paths: List[str]):
         "dependency": {},
         "source_confidence": {},
         "target_confidence": {},
-        "confidence_difference": {}
+        "confidence_difference": {},
+        "transition_counts": {}
     }
     
     for i, j in itertools.combinations(range(len(file_paths_valid)), 2):
@@ -478,6 +711,12 @@ def compare_analysis_files(file_paths: List[str]):
         if "confidence_difference" in vm_i and "confidence_difference" in vm_j:
             similarities["confidence_difference"][file_pair] = compute_matrix_similarity(
                 vm_i["confidence_difference"], vm_j["confidence_difference"]
+            )
+            
+        # Compare transition_counts matrices
+        if "transition_counts" in vm_i and "transition_counts" in vm_j:
+            similarities["transition_counts"][file_pair] = compute_matrix_similarity(
+                vm_i["transition_counts"], vm_j["transition_counts"]
             )
     
     return similarities, file_paths_valid, all_vectors_matrices, all_ordered_node_types
