@@ -321,9 +321,10 @@ def create_node_type_counts_chart(file_paths: List[str], all_vectors_matrices: L
 
 
 def create_node_prob_by_model_chart(file_paths: List[str], all_vectors_matrices: List[Dict[str, np.ndarray]], 
-                                ordered_node_types: OrderedDict, output_dir: Path) -> str:
+                                ordered_node_types: OrderedDict, output_dir: Path, 
+                                normalize: bool = False, data_key: str = "node_avg_prob_sum") -> str:
     """
-    Create a bar chart comparing node average probabilities across all models,
+    Create a bar chart comparing node metrics across all models,
     with models on x-axis and node types as different bars for each model.
     
     Args:
@@ -331,6 +332,8 @@ def create_node_prob_by_model_chart(file_paths: List[str], all_vectors_matrices:
         all_vectors_matrices: List of vectors and matrices for each file
         ordered_node_types: OrderedDict of node types
         output_dir: Directory to save the chart
+        normalize: Whether to normalize counts as proportions
+        data_key: The key for the data to plot (node_type_counts or node_avg_prob_sum)
         
     Returns:
         Path to the saved chart file
@@ -343,11 +346,20 @@ def create_node_prob_by_model_chart(file_paths: List[str], all_vectors_matrices:
     for node_type in ordered_node_types.keys():
         data[node_type] = []
     
-    # For each file, collect probability for each node type
+    # For each file, collect values for each node type
     for i, (file_name, vectors_matrices) in enumerate(zip(file_names, all_vectors_matrices)):
-        if "node_avg_prob_sum" in vectors_matrices:
+        if data_key in vectors_matrices:
+            values = vectors_matrices[data_key].copy()  # Make a copy to avoid modifying original data
+            
+            # Normalize if requested (only for counts, not for probabilities)
+            if normalize and data_key == "node_type_counts":
+                total = np.sum(values)
+                if total > 0:
+                    values = values / total
+            
+            # Add values to respective node type lists
             for node_type, idx in ordered_node_types.items():
-                data[node_type].append(vectors_matrices["node_avg_prob_sum"][idx])
+                data[node_type].append(values[idx])
         else:
             # If data is missing, add zeros
             for node_type in ordered_node_types.keys():
@@ -369,15 +381,31 @@ def create_node_prob_by_model_chart(file_paths: List[str], all_vectors_matrices:
     
     # Set labels and title
     ax.set_xlabel('Model')
-    ax.set_ylabel('Average Probability')
-    ax.set_title('Node Average Probabilities by Model')
+    
+    if data_key == "node_type_counts":
+        if normalize:
+            ax.set_ylabel('Proportion')
+            ax.set_title('Node Type Proportions by Model')
+            output_file = output_dir / "node_type_proportions_by_model_comparison.png"
+        else:
+            ax.set_ylabel('Count')
+            ax.set_title('Node Type Counts by Model')
+            output_file = output_dir / "node_type_counts_by_model_comparison.png"
+    elif data_key == "node_avg_prob_sum":
+        ax.set_ylabel('Average Probability')
+        ax.set_title('Node Average Probabilities by Model')
+        output_file = output_dir / "node_avg_prob_by_model_comparison.png"
+    else:
+        ax.set_ylabel('Value')
+        ax.set_title(f'{data_key} by Model')
+        output_file = output_dir / f"{data_key}_by_model_comparison.png"
+    
     ax.set_xticks(np.arange(num_models))
     ax.set_xticklabels(file_names, rotation=45, ha='right')
     ax.legend(title='Node Type')
     plt.tight_layout()
     
     # Save figure
-    output_file = output_dir / "node_avg_prob_by_model_comparison.png"
     plt.savefig(output_file, dpi=300)
     plt.close()
     
@@ -406,11 +434,11 @@ def save_detailed_analysis(file_paths: List[str], all_vectors_matrices: List[Dic
     # 创建输出文件
     output_file = output_dir / f"cpg_analysis.txt"
     
-    # 创建节点类型计数比较图
+    # 创建节点类型计数比较图 (按节点类型分组)
     chart_file = create_node_type_counts_chart(file_paths, all_vectors_matrices, ordered_node_types, output_dir, 
                                               normalize=False, data_key="node_type_counts")
     
-    # 创建节点类型比例比较图
+    # 创建节点类型比例比较图 (按节点类型分组)
     prop_chart_file = create_node_type_counts_chart(file_paths, all_vectors_matrices, ordered_node_types, output_dir, 
                                                   normalize=True, data_key="node_type_counts")
     
@@ -419,7 +447,16 @@ def save_detailed_analysis(file_paths: List[str], all_vectors_matrices: List[Dic
                                                   normalize=False, data_key="node_avg_prob_sum")
     
     # 创建节点平均概率比较图 (按模型分组)
-    prob_by_model_chart_file = create_node_prob_by_model_chart(file_paths, all_vectors_matrices, ordered_node_types, output_dir)
+    prob_by_model_chart_file = create_node_prob_by_model_chart(file_paths, all_vectors_matrices, ordered_node_types, output_dir,
+                                                             normalize=False, data_key="node_avg_prob_sum")
+    
+    # 创建节点类型计数比较图 (按模型分组)
+    counts_by_model_chart_file = create_node_prob_by_model_chart(file_paths, all_vectors_matrices, ordered_node_types, output_dir,
+                                                               normalize=False, data_key="node_type_counts")
+    
+    # 创建节点类型比例比较图 (按模型分组)
+    prop_by_model_chart_file = create_node_prob_by_model_chart(file_paths, all_vectors_matrices, ordered_node_types, output_dir,
+                                                             normalize=True, data_key="node_type_counts")
     
     # 打印调试信息
     print("\nAvailable data for analysis:")
@@ -446,14 +483,21 @@ def save_detailed_analysis(file_paths: List[str], all_vectors_matrices: List[Dic
         # 添加图表信息
         f.write("Visualization:\n")
         f.write("-" * 80 + "\n")
+        f.write("按节点类型分组的图表:\n")
         if chart_file:
-            f.write(f"Node Type Counts Comparison Chart: {Path(chart_file).name}\n")
+            f.write(f"  Node Type Counts Comparison Chart: {Path(chart_file).name}\n")
         if prop_chart_file:
-            f.write(f"Node Type Proportions Comparison Chart: {Path(prop_chart_file).name}\n")
+            f.write(f"  Node Type Proportions Comparison Chart: {Path(prop_chart_file).name}\n")
         if prob_chart_file:
-            f.write(f"Node Average Probabilities Comparison Chart: {Path(prob_chart_file).name}\n")
+            f.write(f"  Node Average Probabilities Comparison Chart: {Path(prob_chart_file).name}\n")
+            
+        f.write("\n按模型分组的图表:\n")
+        if counts_by_model_chart_file:
+            f.write(f"  Node Type Counts by Model Chart: {Path(counts_by_model_chart_file).name}\n")
+        if prop_by_model_chart_file:
+            f.write(f"  Node Type Proportions by Model Chart: {Path(prop_by_model_chart_file).name}\n")
         if prob_by_model_chart_file:
-            f.write(f"Node Average Probabilities by Model Chart: {Path(prob_by_model_chart_file).name}\n")
+            f.write(f"  Node Average Probabilities by Model Chart: {Path(prob_by_model_chart_file).name}\n")
         f.write("\n\n")
         
         # 写入节点类型
