@@ -384,7 +384,7 @@ def create_node_prob_by_model_chart(file_paths: List[str], all_vectors_matrices:
     return str(output_file)
 
 
-def save_detailed_analysis(file_paths: List[str], all_vectors_matrices: List[Dict[str, np.ndarray]], similarities: Dict[str, Dict[Tuple[str, str], float]], ordered_node_types: OrderedDict) -> str:
+def save_detailed_analysis(file_paths: List[str], all_vectors_matrices: List[Dict[str, np.ndarray]], similarities: Dict[str, Dict[Tuple[str, str], float]], ordered_node_types: OrderedDict, compare_similarity: bool = True) -> str:
     """
     保存详细分析结果到文本文件
     
