@@ -325,7 +325,7 @@ def process_row(args, input_file_path: str):
     """
     row_idx, row, instruction, analyzer, column_prefix, continue_on_error, field_of_interests = args
     #sometimes row['probs'][0]['logprobs'] is empty, so we need to handle this, so does row['probs'][0]['tokens']
-    if row['probs'][0]['logprobs'] is None or row['probs'][0]['tokens'] is None:
+    if len(row['probs'][0]['logprobs']) == 0 or len(row['probs'][0]['tokens']) == 0:
         return row_idx, None, None, None, None, "Error: logprobs or tokens is None"
     
     try:
