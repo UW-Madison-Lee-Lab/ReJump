@@ -393,6 +393,7 @@ def save_detailed_analysis(file_paths: List[str], all_vectors_matrices: List[Dic
         all_vectors_matrices: 所有文件的向量和矩阵数据
         similarities: 相似度计算结果
         ordered_node_types: 有序的节点类型字典
+        compare_similarity: 是否保存相似度比较信息
         
     Returns:
         保存的文件路径
@@ -549,29 +550,30 @@ def save_detailed_analysis(file_paths: List[str], all_vectors_matrices: List[Dic
             
             f.write("\n" + "=" * 100 + "\n\n")
         
-        # 写入相似度比较
-        f.write("Similarity Analysis:\n")
-        f.write("=" * 100 + "\n\n")
-        
-        for metric, pairs in similarities.items():
-            if not pairs:
-                continue
+        # 写入相似度比较，只在compare_similarity为True时执行
+        if compare_similarity:
+            f.write("Similarity Analysis:\n")
+            f.write("=" * 100 + "\n\n")
+            
+            for metric, pairs in similarities.items():
+                if not pairs:
+                    continue
+                    
+                f.write(f"{metric} Similarities:\n")
+                f.write("-" * 80 + "\n")
                 
-            f.write(f"{metric} Similarities:\n")
-            f.write("-" * 80 + "\n")
-            
-            for (file1, file2), similarity in pairs.items():
-                # 提取文件名部分，避免路径太长导致输出难以阅读
-                file1_name = Path(file1).name
-                file2_name = Path(file2).name
-                f.write(f"  {file1_name} vs {file2_name}: {similarity:.4f}\n")
-                f.write(f"    Full paths:\n")
-                f.write(f"    - {file1}\n")
-                f.write(f"    - {file2}\n\n")
-            
-            # 计算平均相似度
-            avg_similarity = sum(pairs.values()) / len(pairs)
-            f.write(f"\n  Average {metric} similarity: {avg_similarity:.4f}\n\n")
+                for (file1, file2), similarity in pairs.items():
+                    # 提取文件名部分，避免路径太长导致输出难以阅读
+                    file1_name = Path(file1).name
+                    file2_name = Path(file2).name
+                    f.write(f"  {file1_name} vs {file2_name}: {similarity:.4f}\n")
+                    f.write(f"    Full paths:\n")
+                    f.write(f"    - {file1}\n")
+                    f.write(f"    - {file2}\n\n")
+                
+                # 计算平均相似度
+                avg_similarity = sum(pairs.values()) / len(pairs)
+                f.write(f"\n  Average {metric} similarity: {avg_similarity:.4f}\n\n")
         
         f.write("\n" + "=" * 100 + "\n")
         f.write("End of Report\n")
@@ -745,6 +747,8 @@ def main():
                         help='Paths to LLM analysis JSON files (default: all *_logical_graph_llm_analysis.json files in current directory)')
     parser.add_argument('--output-txt', action='store_true',
                         help='Generate detailed analysis text file')
+    parser.add_argument('--compare-similarity', action='store_true', default=False,
+                        help='Include similarity comparison information in the output text file')
     
     args = parser.parse_args()
     
@@ -782,7 +786,7 @@ def main():
     # 保存详细分析到文本文件 (默认始终生成)
     if True:
         # 直接使用从compare_analysis_files返回的数据
-        output_file = save_detailed_analysis(file_paths_valid, all_vectors_matrices, similarities, all_ordered_node_types)
+        output_file = save_detailed_analysis(file_paths_valid, all_vectors_matrices, similarities, all_ordered_node_types, args.compare_similarity)
         print(f"\nDetailed analysis saved to: {output_file}")
 
 
