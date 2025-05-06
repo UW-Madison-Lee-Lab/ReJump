@@ -322,6 +322,28 @@ supported_llms = {
         "type": "api",
         "api_key": OPENROUTER_API_KEY,
     },
+
+    'openrouter-microsoft/phi-4': {
+        "template_type": "standard_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": OPENROUTER_API_KEY,
+    },
+    'openrouter-microsoft/phi-4-reasoning-plus': {
+        "template_type": "reasoning_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": OPENROUTER_API_KEY,
+    },
+    'openrouter-microsoft/phi-4-reasoning:free': {
+        "template_type": "reasoning_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": OPENROUTER_API_KEY,
+    },
+    
+
+    
     
 
     # Anthropic api

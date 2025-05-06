@@ -393,7 +393,7 @@ def compute_score(solution_str, ground_truth, answer_format) -> float:
         # print(string_in_last_boxed)
         # print("ground_truth:")
         # print(ground_truth["label"][0])
-        pdb.set_trace()
+        # pdb.set_trace()
 
     return retval
 
