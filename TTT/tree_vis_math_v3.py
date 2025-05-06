@@ -39,6 +39,10 @@ Represent this structure as a **single JSON object** where keys are unique node 
 **Core Principles for Tree Generation:**
 
 * **Chronological Flow & Dependency:** The tree follows the order of substantive steps/attempts in the reasoning. Parent links indicate the preceding step whose `Result` provides necessary mathematical input.
+  **BRANCHING AND SUBSTEP RULE:** 
+    - Create a new branch **if and only if** the reasoning process explicitly abandons or gives up on a previous approach and then starts a new, distinct solution plan. In other words, a new branch is created always and only when the previous line of reasoning is abandoned and a fundamentally different method is attempted. The new branch should start from the most recent shared node.
+    - For all subproblems or calculations within a single uninterrupted attempt, even if subcalculations are mathematically independent, represent these steps sequentially in the order they are performed in the reasoning: each node’s parent must be the immediately preceding node within that attempt.  
+    That is, substeps within any one attempt always form a single chain.
 * **Substantive, Well-Posed Steps Only:** Nodes must represent **major** intermediate calculations or logical deductions constituting a clear, self-contained mathematical task (like a homework sub-problem). **Aggressively filter out** setup actions, strategy descriptions, narrative, verification, and trivial calculations/manipulations. Minor algebraic steps within a larger logical step must be grouped.
 * **Include Failed Attempts:** Represent distinct, substantive calculation or derivation attempts that were **explicitly abandoned** in the reasoning as separate nodes in the chronological flow. **Do not filter these out.**
 * **Focus on Mathematical Task:** Intermediate `Problem` fields must state a clear mathematical objective based on **all necessary given mathematical conditions and inputs**, avoiding descriptions of the reasoner's process or assumptions *within the Problem text*.
@@ -140,6 +144,10 @@ Generate a JSON list of dictionaries, where each dictionary represents a single 
     * Realizing an error or deciding a path is not fruitful and returning to an earlier idea (maps to `backtracking`).
     * Re-checking results (maps to `verification`). **When mapping `verification`:** First, check if the text describes actions that precisely match the **problem description** of an intermediate node (Node X), essentially re-doing the work defined in that node. If yes, trace the walk through the node being re-worked (e.g., Z -> X -> Z). If the text indicates verification but ***does not*** show such a specific re-work of a prior node's problem, assume it implies checking against the initial problem conditions (node 1) and represent the path as Z -> 1 -> Z. Remember: Simply *using* a result or formula from node X does not qualify as re-doing the problem of node X according to this definition.
 6.  The walk should reflect the *actual* path taken in the `Reasoning Text`, including explorations of dead ends (like `node2` in the example) and subsequent backtracking.
+
+    **Mandatory Backtracking Rule:**  
+    Only when the reasoning process explicitly abandons or gives up on the current approach at node A and then starts a new, distinct attempt at node B must you include a backtracking transition from A to the parent of B, followed by a calculation/derivation transition from the parent of B to B. Never allow a direct calculation/derivation transition from A to B in these cases. Do not include backtracking transitions except in such abandonment cases.
+
 7.  Ensure the output is strictly the JSON list as specified, with no additional explanatory text.
 8. The output MUST be perfectly valid JSON, parseable by standard libraries.
 
@@ -591,6 +599,7 @@ def get_analysis(idx, results, results_dir, overwrite=False):
     
     vis_path = visualize_tree_walk(json_data["tree"], json_data["walk"], filename=f"{results_dir}/tree_vis_v3/{idx}", format="pdf")
     filtered_ajd = compute_filtered_average_jump_distance(json_data["tree"], json_data["walk"])
+    print(f"Index {idx}: Filtered AJD = {filtered_ajd}")
     return {
         "graph": vis_path,
         "filtered_ajd": filtered_ajd,
