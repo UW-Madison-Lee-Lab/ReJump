@@ -140,3 +140,9 @@ gsm8k/*
 test_sample_graph/*
 test_sample_graph_blobs/*
 logical_graph_analysis_results/*
+reasoning_analysis/cpg_detailed_analysis/*txt
+reasoning_analysis/cpg_detailed_analysis/*json
+reasoning_analysis/cpg_detailed_analysis/*png
+reasoning_analysis/cpg_detailed_analysis/*pdf
+reasoning_analysis/cpg_detailed_analysis/*jpg
+reasoning_analysis/cpg_detailed_analysis/*jpeg
