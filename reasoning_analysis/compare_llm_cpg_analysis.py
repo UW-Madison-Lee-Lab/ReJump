@@ -210,19 +210,19 @@ model_name_list = [
     ]
 def get_model_name(file_path: str) -> str:
     if "openrouter-qwen-qwq-32b" in file_path:
-        return "openrouter-qwen-qwq-32b"
+        return "qwq-32b"
     elif "openrouter-microsoft-phi-4" in file_path:
-        return "openrouter-microsoft-phi-4"
+        return "phi-4"
     elif "Qwen-Qwen2.5-3B-Instruct" in file_path:
-        return "Qwen-Qwen2.5-3B-Instruct"
+        return "Qwen2.5-3B-Instruct"
     elif "deepseek-ai-DeepSeek-R1-Distill-Llama-8B" in file_path:
-        return "deepseek-ai-DeepSeek-R1-Distill-Llama-8B"
+        return "R1-Distill-Llama-8B"
     elif "meta-llama-Llama-3.1-8B-Instruct" in file_path:
-        return "meta-llama-Llama-3.1-8B-Instruct"
+        return "Llama-3.1-8B-Instruct"
     elif "Qwen-Qwen2.5-7B-Instruct" in file_path:
-        return "Qwen-Qwen2.5-7B-Instruct"
+        return "Qwen2.5-7B-Instruct"
     elif "deepseek-ai-DeepSeek-R1-Distill-Qwen-7B" in file_path:
-        return "deepseek-ai-DeepSeek-R1-Distill-Qwen-7B"
+        return "R1-Distill-Qwen-7B"
     else:
         return file_path
     
