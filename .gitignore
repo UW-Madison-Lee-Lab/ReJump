@@ -146,3 +146,5 @@ reasoning_analysis/cpg_detailed_analysis/*png
 reasoning_analysis/cpg_detailed_analysis/*pdf
 reasoning_analysis/cpg_detailed_analysis/*jpg
 reasoning_analysis/cpg_detailed_analysis/*jpeg
+reasoning_analysis/cpg_detailed_analysis/*csv
+reasoning_analysis/cpg_detailed_analysis/*xlsx
