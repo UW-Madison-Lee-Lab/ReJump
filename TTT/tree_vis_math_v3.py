@@ -41,7 +41,9 @@ Represent this structure as a **single JSON object** where keys are unique node 
 * **Chronological Flow & Dependency:** The tree follows the order of substantive steps/attempts in the reasoning. Parent links indicate the preceding step whose `Result` provides necessary mathematical input.
   **BRANCHING AND SUBSTEP RULE:** 
     - Create a new branch **if and only if** the reasoning process explicitly abandons or gives up on a previous approach and then starts a new, distinct solution plan. In other words, a new branch is created always and only when the previous line of reasoning is abandoned and a fundamentally different method is attempted. The new branch should start from the most recent shared node. Even if the solver does not immediately abandon the previous approach, we still consider it an Abandoned Attempt Node and mark it with [Path abandoned] if a different method is initiated that departs from the original direction.
-    - For all subproblems or calculations within a single uninterrupted attempt, even if subcalculations are mathematically independent, represent these steps sequentially in the order they are performed in the reasoning: each node’s parent must be the immediately preceding node within that attempt.  
+    - Importantly, whenever a new branch is created, the leaf node where the previous method ended must be explicitly marked with [Path abandoned].
+    - Conversely, if the current node is marked with [Path abandoned], a new branch must always be created.
+    - Importantly, for all subproblems or calculations within a single uninterrupted attempt, even if subcalculations are mathematically independent, represent these steps sequentially in the order they are performed in the reasoning: each node's parent must be the immediately preceding node within that attempt.  
     That is, substeps within any one attempt always form a single chain.
 * **Substantive, Well-Posed Steps Only:** Nodes must represent **major** intermediate calculations or logical deductions constituting a clear, self-contained mathematical task (like a homework sub-problem). **Aggressively filter out** setup actions, strategy descriptions, narrative, verification, and trivial calculations/manipulations. Minor algebraic steps within a larger logical step must be grouped.
 * **Include Failed Attempts:** Represent distinct, substantive calculation or derivation attempts that were **explicitly abandoned** in the reasoning as separate nodes in the chronological flow. **Do not filter these out.**
@@ -150,6 +152,7 @@ Generate a JSON list of dictionaries, where each dictionary represents a single 
 
 7.  Ensure the output is strictly the JSON list as specified, with no additional explanatory text.
 8. The output MUST be perfectly valid JSON, parseable by standard libraries.
+9. The walk must always start at node1: The first transition in your output should always be `"from": "node1"`, `"to": ...`. Never use `"from": "none"`, `"from": null`, or any other alternative. Assume reasoning always conceptually begins at node1.
 
 **Example Analysis (Based on Provided Inputs with Stricter Verification Logic):**
 
@@ -495,6 +498,33 @@ def _filter_leaf_visits(full_walk_sequence, walk_steps_list, leaves, depths):
     return final_leaf_sequence
 
 
+# **** NEW Function to compute average solution count ****
+def compute_average_solution_count(tree_data, walk_steps_list):
+    """
+    Computes the number of leaf nodes in the tree.
+
+    Args:
+        tree_data (dict): Dict representing tree {node_id: {"parent": parent_id,...}}
+        walk_steps_list (list): List of dicts representing steps (unused in this function but kept for consistency).
+
+    Returns:
+        int or None: The number of leaf nodes, or None if tree data is invalid.
+    """
+    parents, depths, leaves, children, root_id = _build_tree_info_from_parent_links(tree_data)
+
+    if parents is None:
+        print("Error: Could not process tree data for solution count.")
+        return None
+
+    if not leaves:
+        # This could mean no reachable leaf nodes or an empty tree.
+        # Depending on definition, 0 might be more appropriate than None if tree is valid but has no leaves.
+        print("Info: No leaf nodes found or tree is empty. Returning 0 solutions.")
+        return 0
+
+    return len(leaves)
+
+
 # **** Main function updated to use the filtering ****
 def compute_filtered_average_jump_distance(tree_data, walk_steps_list):
     """
@@ -599,9 +629,59 @@ def get_analysis(idx, results, results_dir, overwrite=False):
     vis_path = visualize_tree_walk(json_data["tree"], json_data["walk"], filename=f"{results_dir}/tree_vis_v3/{idx}", format="pdf")
     filtered_ajd = compute_filtered_average_jump_distance(json_data["tree"], json_data["walk"])
     print(f"Index {idx}: Filtered AJD = {filtered_ajd}")
+    
+    average_solution_count = compute_average_solution_count(json_data["tree"], json_data["walk"])
+    print(f"Index {idx}: Solution Count = {average_solution_count}")
+    
+    # Count arrow types
+    calculation_count = 0
+    verification_count = 0
+    backtracking_count = 0
+    walk_steps = json_data.get("walk", [])
+    if isinstance(walk_steps, list):
+        for step in walk_steps:
+            if isinstance(step, dict) and "category" in step:
+                category = step.get("category")
+                if category == "calculation/derivation":
+                    calculation_count += 1
+                elif category == "verification":
+                    verification_count += 1
+                elif category == "backtracking":
+                    backtracking_count += 1
+    
+    print(f"Index {idx}: Calculation Arrows = {calculation_count}")
+    print(f"Index {idx}: Verification Arrows = {verification_count}")
+    print(f"Index {idx}: Backtracking Arrows = {backtracking_count}")
+
+    # Count total nodes
+    total_node_count = len(json_data.get("tree", {}))
+    print(f"Index {idx}: Total Node Count = {total_node_count}")
+
+    # Calculate Forgetting Rate
+    if calculation_count < total_node_count:
+        forgetting_rate = 0
+    else:
+        forgetting_rate = 1
+    print(f"Index {idx}: Forgetting Rate = {forgetting_rate}")
+
+    # Calculate Average Verification Rate
+    total_arrows = calculation_count + verification_count + backtracking_count
+    if total_arrows > 0:
+        average_verification_rate = verification_count / total_arrows
+    else:
+        average_verification_rate = 0 # Or None, depending on desired behavior for no arrows
+    print(f"Index {idx}: Verification Rate = {average_verification_rate:.4f}")
+
     return {
         "graph": vis_path,
         "filtered_ajd": filtered_ajd,
+        "average_solution_count": average_solution_count,
+        "calculation_count": calculation_count,
+        "verification_count": verification_count,
+        "backtracking_count": backtracking_count,
+        "total_node_count": total_node_count,
+        "forgetting_rate": forgetting_rate,
+        "average_verification_rate": average_verification_rate,
     }
 
 if __name__ == "__main__":
@@ -645,6 +725,14 @@ if __name__ == "__main__":
         idxs = args.idx
     
     filtered_ajds = []
+    average_solution_counts = [] # Initialize list for average solution counts
+    calculation_arrow_counts = []
+    verification_arrow_counts = []
+    backtracking_arrow_counts = []
+    total_node_counts = [] # Initialize list for total node counts
+    forgetting_rates = [] # Initialize list for forgetting rates
+    average_verification_rates_list = [] # Initialize list for average_verification_rate
+
     for idx in tqdm(idxs):
         attempts, success, overwrite = 0, False, args.overwrite
         while attempts < 5 and not success:
@@ -663,58 +751,46 @@ if __name__ == "__main__":
                 continue
         
         filtered_ajds.append(graph_metric["filtered_ajd"])
+        average_solution_counts.append(graph_metric["average_solution_count"]) # Append average solution count
+        calculation_arrow_counts.append(graph_metric["calculation_count"])
+        verification_arrow_counts.append(graph_metric["verification_count"])
+        backtracking_arrow_counts.append(graph_metric["backtracking_count"])
+        total_node_counts.append(graph_metric["total_node_count"]) # Append total node count
+        forgetting_rates.append(graph_metric["forgetting_rate"]) # Append forgetting rate
+        average_verification_rates_list.append(graph_metric["average_verification_rate"]) # Append average_verification_rate
         
-    filtered_ajd = sum(filtered_ajds) / len(filtered_ajds)
+    filtered_ajd = sum(filtered_ajds) / len(filtered_ajds) if filtered_ajds and len(filtered_ajds) > 0 else None
     print(f"Filtered AJD: {filtered_ajd}")
-        
-
-
-    # print("\n--- XGBoost Analysis ---")
-    # # Prepare data for XGBoost
-    # # Ensure all lists have the same length and are not empty
-    # if len(max_depths) > 0 and len(max_depths) == len(breadths) == len(avg_depths) == len(b2d_ratios) == len(validation_rates) == len(corrs):
-    #     X = np.array([max_depths, breadths, avg_depths, b2d_ratios, validation_rates]).T
-    #     y = np.array(corrs) # Assuming corrs contains binary correctness labels (e.g., 0 or 1)
-
-    #     # Check if there are at least two classes in the target variable
-    #     unique_classes = np.unique(y)
-    #     if len(unique_classes) >= 2:
-    #         # Check if there are enough samples relative to features
-    #         if X.shape[0] > X.shape[1]:
-    #             # Import XGBoost
-    #             from xgboost import XGBClassifier
-                
-    #             # Instantiate the XGBoost model
-    #             xgb_model = XGBClassifier(
-    #                 random_state=42,
-    #                 scale_pos_weight=len(y) / sum(y) - 1 if sum(y) > 0 else 1  # For imbalanced classes
-    #             )
-
-    #             # Train the model
-    #             xgb_model.fit(X, y)
-
-    #             y_pred = xgb_model.predict(X)
-    #             accuracy = accuracy_score(y, y_pred)
-    #             print(f"\nModel Training Accuracy: {accuracy:.4f}")
-    #             print(f"Baseline Accuracy (predicting majority class): {max(np.mean(y), 1 - np.mean(y)):.4f}")
-                
-    #             # Feature importance
-    #             importance = xgb_model.feature_importances_
-    #             features = ['max_depth', 'breadth', 'avg_depth', 'b2d_ratio', 'validation_rate']
-    #             print("\nFeature Importance:")
-    #             for i, feat in enumerate(features):
-    #                 print(f"{feat}: {importance[i]:.4f}")
-
-    #         else:
-    #             print("Skipping XGBoost: Not enough samples relative to the number of features.")
-    #     else:
-    #         print(f"Skipping XGBoost: Only one class ({unique_classes[0]}) found in the target variable 'corrs'.")
-    # else:
-    #     print("Skipping XGBoost: Data lists are empty or have inconsistent lengths.")
-    # print("--- End XGBoost Analysis ---\n")
     
+    avg_sol_count = sum(average_solution_counts) / len(average_solution_counts) if average_solution_counts and len(average_solution_counts) > 0 else None
+    print(f"Average Solution Count: {avg_sol_count}") # Print average solution count
+    
+    avg_calc_arrows = sum(calculation_arrow_counts) / len(calculation_arrow_counts) if calculation_arrow_counts and len(calculation_arrow_counts) > 0 else None
+    avg_ver_arrows = sum(verification_arrow_counts) / len(verification_arrow_counts) if verification_arrow_counts and len(verification_arrow_counts) > 0 else None
+    avg_back_arrows = sum(backtracking_arrow_counts) / len(backtracking_arrow_counts) if backtracking_arrow_counts and len(backtracking_arrow_counts) > 0 else None
+
+    print(f"Average Calculation Arrows: {avg_calc_arrows}")
+    print(f"Average Verification Arrows: {avg_ver_arrows}")
+    print(f"Average Backtracking Arrows: {avg_back_arrows}")
+        
+    avg_total_nodes = sum(total_node_counts) / len(total_node_counts) if total_node_counts and len(total_node_counts) > 0 else None
+    print(f"Average Total Node Count: {avg_total_nodes}") # Print average total_node_count
+    
+    avg_forgetting_rate = sum(forgetting_rates) / len(forgetting_rates) if forgetting_rates and len(forgetting_rates) > 0 else None
+    print(f"Average Forgetting Rate: {avg_forgetting_rate}") # Print average forgetting_rate
+    
+    overall_avg_verification_rate = sum(average_verification_rates_list) / len(average_verification_rates_list) if average_verification_rates_list and len(average_verification_rates_list) > 0 else None
+    print(f"Average Verification Rate: {overall_avg_verification_rate:.4f}" if overall_avg_verification_rate is not None else "Average Verification Rate: None")
+        
     if args.wandb:
         wandb.log({
             "filtered_ajd": filtered_ajd,
+            "average_solution_count": avg_sol_count, # Log average solution count
+            "average_calculation_arrows": avg_calc_arrows,
+            "average_verification_arrows": avg_ver_arrows,
+            "average_backtracking_arrows": avg_back_arrows,
+            "average_total_node_count": avg_total_nodes, # Log average total_node_count
+            "average_forgetting_rate": avg_forgetting_rate, # Log average forgetting_rate
+            "overall_average_verification_rate": overall_avg_verification_rate, # Log overall_average_verification_rate
         })
         wandb.finish()
