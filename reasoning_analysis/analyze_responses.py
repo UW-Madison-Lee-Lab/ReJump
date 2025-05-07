@@ -295,20 +295,24 @@ def process_reasoning_with_probs(probs_dict: Dict[str, Any], processed_input_fil
         
         # Check if the token ends with punctuation (.!?)
         if "gpt-4o" in processed_input_file_path.lower():
-            split_token_list = ['.\n', ".\n\n", "\n\n", " \n\n",'!', '?', ").\n\n","]\n\n", ]
+            split_token_list = [ "!\n\n", "?\n\n", ".\n\n", ").\n\n","].\n\n","}\n\n", " \n\n","  \n\n","\n\n",
+                                 "!\n", "?\n", ".\n","]\n", ")\n","]\n"," \n","  \n","   \n","    \n","     \n",
+                                "].\n",").\n","}.\n"
+                                ]
         elif "llama" in processed_input_file_path.lower():
-            split_token_list = ["!\n\n", "?\n\n", ".\n\n", "!\n", "?\n", ".\n"," \n",]
+            split_token_list = [ "!\n\n", "?\n\n", ".\n\n", ").\n\n","].\n\n","}\n\n", " \n\n","  \n\n","\n\n",
+                                 "!\n", "?\n", ".\n","]\n", ")\n","]\n"," \n","  \n","   \n","    \n","     \n",
+                                "].\n",").\n","}.\n"
+                                ]
         elif "qwen" in processed_input_file_path.lower() or "qwq" in processed_input_file_path.lower():
-            split_token_list = [".\n", ".\n\n", "!\n", "\n\n", 
-                                "<|im_end|>", 
-                                ").\n\n", ").\n",
-                                "]\n\n","]\n",
+            split_token_list = [ "!\n\n", "?\n\n", ".\n\n", ").\n\n","].\n\n","}\n\n", " \n\n","  \n\n","\n\n",
+                                 "!\n", "?\n", ".\n","]\n", ")\n","]\n"," \n","  \n","   \n","    \n","     \n",
+                                "].\n",").\n","}.\n"
                                 ]
         elif "phi-4" in processed_input_file_path.lower():
-            split_token_list = [".\n", ".\n\n", "!\n", "\n\n",
-                                "<|im_end|>", 
-                                ").\n\n", ").\n",
-                                "]\n\n","]\n",
+            split_token_list = [ "!\n\n", "?\n\n", ".\n\n", ").\n\n","].\n\n","}\n\n", " \n\n","  \n\n","\n\n",
+                                 "!\n", "?\n", ".\n","]\n", ")\n","]\n"," \n","  \n","   \n","    \n","     \n",
+                                "].\n",").\n","}.\n"
                                 ]
         else:
             raise NotImplementedError(f"Model {processed_input_file_path} not supported")
@@ -611,7 +615,7 @@ def parse_arguments():
     parser.add_argument('--continue_on_error', '-c', action='store_true',
                         help='Continue processing after errors (default: False)')
     
-    parser.add_argument('--batch_size', '-b', type=int, default=50,
+    parser.add_argument('--batch_size', '-b', type=int, default=150,
                         help='Batch size for parallel processing and saving (default: 10)')
     
     parser.add_argument('--output_suffix', '-s', type=str, default='',

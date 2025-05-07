@@ -23,14 +23,15 @@ from pathlib import Path
 # ]
 #concvert the above info into a list with the name as comments
 gemini_api_key_list = [
-    "AIzaSyARTR4pSoM8hmIIMEg85OMHD1T9KgaGwV4",
-    "AIzaSyDa6IZiztMRZl_j2_em_MjruiCyZs9vEFs",
-    "AIzaSyA0vPcRshKiv5fftazBAbxdIHvtLyHCCiE",
     "AIzaSyBgM3S40tAiRJ5J1f-jx8xgecBmbelnPXg",
     "AIzaSyDIAq1UMSGx1-svNob46Rt616JF0UHW3VY",
     "AIzaSyCCnSBSjD1CgtighzPQyx03HZWvrVSWTHM",
     "AIzaSyBUhgp-FBViNj8VTxM3Tw8gXJsARgyx-dc",
     "AIzaSyD8PQnKv6AYN_oUVmlNKG8dviEr6mO_J_0",
+    "AIzaSyARTR4pSoM8hmIIMEg85OMHD1T9KgaGwV4",
+    "AIzaSyDa6IZiztMRZl_j2_em_MjruiCyZs9vEFs",
+    "AIzaSyA0vPcRshKiv5fftazBAbxdIHvtLyHCCiE",
+    
 ]#use these keys by turns
 # def get_data_type(file_path):
 #     data_type_dict = {
@@ -77,13 +78,15 @@ def run_logical_graph_analysis(base_dir):
     model_name_list = [
         "results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Qwen-7B",
         "results_temperature_0/Qwen-Qwen2.5-7B-Instruct",
-        # "results_temperature_0/meta-llama-Llama-3.1-8B-Instruct",
-        # "results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Llama-8B",
+
+        "results_temperature_0/meta-llama-Llama-3.1-8B-Instruct",
+        "results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Llama-8B",
+
+        'results_temperature_0/openrouter-qwen-qwq-32b',
 
         "results_temperature_0/Qwen-Qwen2.5-3B-Instruct",
 
-        # 'results_temperature_0/openrouter-qwen-qwq-32b',
-        'results_temperature_0/openrouter-microsoft-phi-4'
+        # 'results_temperature_0/openrouter-microsoft-phi-4'
         
     ]
     
