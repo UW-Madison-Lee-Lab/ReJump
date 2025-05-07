@@ -104,6 +104,10 @@ def create_vectors_and_matrices(ordered_node_types: OrderedDict, metrics: Dict[s
                         dep_matrix[ordered_node_types[from_type], ordered_node_types[to_type]] = value
         result["dependency"] = dep_matrix
     
+    # 直接添加all_confidence_transitions到结果中
+    if "all_confidence_transitions" in metrics:
+        result["all_confidence_transitions"] = metrics["all_confidence_transitions"]
+    
     # Create confidence transition matrix
     # 首先检查node_confidence_transitions是否存在，并记录其结构
     if "all_confidence_transitions" in metrics:
@@ -465,6 +469,96 @@ def save_metrics_to_excel(file_paths: list, all_vectors_matrices: list, ordered_
     return str(xlsx_path)
 
 
+def plot_confidence_node_type_transition(file_paths, all_vectors_matrices, ordered_node_types, output_dir):
+    """
+    对每个模型、每种source node type，画一张不同source_avg_prob区间下target node type分布的分组柱状图。
+    图片保存到 output_dir/confidence-node-type-transition/模型名/SourceType.png
+    """
+    import matplotlib.pyplot as plt
+    import numpy as np
+    node_types = list(ordered_node_types.keys())
+    bins = np.linspace(0.8, 1.0, 3)  # 10 bins: [0.8,0.82), [0.82,0.84), ..., [0.98,1.0]
+    bin_labels = [f"[{bins[i]:.2f},{bins[i+1]:.2f})" for i in range(len(bins)-2)] + [f"[{bins[-2]:.2f},{bins[-1]:.2f}]"]
+    # 创建总目录
+    base_dir = output_dir / "confidence-node-type-transition"
+    base_dir.mkdir(exist_ok=True)
+    for file_path, vectors_matrices in zip(file_paths, all_vectors_matrices):
+        model_name = get_model_name(file_path)
+        model_dir = base_dir / model_name
+        model_dir.mkdir(exist_ok=True)
+        transitions = None
+        # 兼容不同数据结构
+        if "all_confidence_transitions" in vectors_matrices:
+            transitions = vectors_matrices["all_confidence_transitions"]
+        else:
+            print(f"Warning: No confidence transitions data found in {file_path}, skipping this model")
+            continue
+        for source_type in node_types:
+            # 初始化统计
+            bin_target_counts = [dict.fromkeys(node_types, 0) for _ in range(len(bins)-1)]
+            bin_total = [0 for _ in range(len(bins)-1)]
+            for t in transitions:
+                if t.get("source_node") != source_type:
+                    continue
+                source_prob = t.get("source_avg_prob")
+                target_type = t.get("target_node")
+                if source_prob is None or target_type not in node_types:
+                    continue
+                if source_prob < 0.8 or source_prob > 1.0:
+                    continue
+                # 找到对应bin
+                for i in range(len(bins)-1):
+                    if (i < len(bins)-2 and bins[i] <= source_prob < bins[i+1]) or (i == len(bins)-2 and bins[i] <= source_prob <= bins[i+1]):
+                        bin_target_counts[i][target_type] += 1
+                        bin_total[i] += 1
+                        break
+            
+            # 只包含除当前source_type以外的节点类型
+            other_node_types = [nt for nt in node_types if nt != source_type]
+            
+            # 归一化，只考虑除当前source_type以外的节点类型
+            bin_target_props = []
+            for i in range(len(bin_target_counts)):
+                # 计算除source_type外的总数
+                other_total = sum(bin_target_counts[i][nt] for nt in other_node_types)
+                if other_total > 0:
+                    # 只归一化其他节点类型
+                    bin_target_props.append([bin_target_counts[i][nt]/other_total for nt in other_node_types])
+                else:
+                    bin_target_props.append([0 for _ in other_node_types])
+            
+            # 画图
+            fig, ax = plt.subplots(figsize=(10,6))
+            x = np.arange(len(bin_labels))
+            bar_width = 0.8 / len(other_node_types)
+            
+            for j, nt in enumerate(other_node_types):
+                # 绘制柱状图
+                values = [bin_target_props[i][j] for i in range(len(bin_labels))]
+                bars = ax.bar(x + (j - len(other_node_types)/2 + 0.5)*bar_width, 
+                       values, width=bar_width, label=nt)
+                
+                # 在柱子顶部添加数值标签
+                for i, bar in enumerate(bars):
+                    height = bar.get_height()
+                    if height > 0:  # 只为非零值添加标签
+                        ax.text(bar.get_x() + bar.get_width()/2., height + 0.01,
+                                f'{height:.2f}', ha='center', va='bottom', 
+                                fontsize=8, rotation=0)
+            
+            ax.set_xticks(x)
+            ax.set_xticklabels(bin_labels, rotation=30)
+            ax.set_xlabel('Source Node Confidence Bin')
+            ax.set_ylabel('Proportion')
+            ax.set_title(f'Target node distribution from {source_type} nodes by confidence ({model_name})')
+            ax.legend(title='Target Node Type')
+            plt.tight_layout()
+            source_type_filename = source_type.replace(" ", "_").replace("/", "_")
+            fig.savefig(model_dir / f"{source_type_filename}.png")
+            plt.close(fig)
+    print(f"Confidence node type transition plots saved to: {base_dir}")
+
+
 def save_detailed_analysis(file_paths: List[str], all_vectors_matrices: List[Dict[str, np.ndarray]], similarities: Dict[str, Dict[Tuple[str, str], float]], ordered_node_types: OrderedDict, compare_similarity: bool = True) -> str:
     """
     保存详细分析结果到文本文件
@@ -671,12 +765,15 @@ def save_detailed_analysis(file_paths: List[str], all_vectors_matrices: List[Dic
                 # 计算平均相似度
                 avg_similarity = sum(pairs.values()) / len(pairs)
                 f.write(f"\n  Average {metric} similarity: {avg_similarity:.4f}\n\n")
-        
-        f.write("\n" + "=" * 100 + "\n")
-        f.write("End of Report\n")
+            
+            f.write("\n" + "=" * 100 + "\n")
+            f.write("End of Report\n")
     
     # 保存所有metric到excel
     save_metrics_to_excel(file_paths, all_vectors_matrices, ordered_node_types, output_dir)
+    
+    # 画每个模型每种node type的confidence分布图
+    plot_confidence_node_type_transition(file_paths, all_vectors_matrices, ordered_node_types, output_dir)
     
     return str(output_file)
 
