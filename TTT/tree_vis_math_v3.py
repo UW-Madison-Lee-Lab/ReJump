@@ -198,7 +198,6 @@ def parse_json(json_prompt):
     try: 
         data = json.loads(json_content)
     except json.decoder.JSONDecodeError as e:
-        pdb.set_trace()
         print(f"Error parsing JSON: {e}")
         return {}
     

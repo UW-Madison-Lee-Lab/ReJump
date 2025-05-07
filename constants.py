@@ -380,6 +380,12 @@ supported_llms = {
         "type": "api",
         "api_key": ALIBABA_API_KEY,
     },
+    "alibaba/qwen2.5-14b-instruct": {
+        "template_type": "reasoning_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": ALIBABA_API_KEY,
+    },
     "xai/grok-3-mini-beta": {
         "template_type": "reasoning_api",
         "model_size": 0,
@@ -392,6 +398,13 @@ supported_llms = {
         "type": "api",
         "api_key": OPENROUTER_API_KEY,
     },
+    "openrouter-deepseek/deepseek-r1-distill-qwen-14b": {
+        "template_type": "reasoning_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": OPENROUTER_API_KEY,
+    },
+    
 }
 
 supported_datasets = {
