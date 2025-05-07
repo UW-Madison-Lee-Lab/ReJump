@@ -1,0 +1,372 @@
+====================================================================================================
+LLM Cognitive Process Graph Analysis - Detailed Report
+Generated on: 2025-05-06 22:26:45
+====================================================================================================
+
+Analyzed Files:
+--------------------------------------------------------------------------------
+1. /staging/szhang967/results_temperature_0/openrouter-qwen-qwq-32b/math500_0_shot_1_query_reasoning_api_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+2. /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-3B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+3. /staging/szhang967/results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+4. /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-7B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+5. /staging/szhang967/results_temperature_0/meta-llama-Llama-3.1-8B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+6. /staging/szhang967/results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Llama-8B/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+
+
+Visualization:
+--------------------------------------------------------------------------------
+按节点类型分组的图表:
+  Node Type Counts Comparison Chart: node_type_counts_comparison.png
+  Node Type Proportions Comparison Chart: node_type_proportions_comparison.png
+  Node Average Probabilities Comparison Chart: node_avg_prob_comparison.png
+
+按模型分组的图表:
+  Node Type Counts by Model Chart: node_type_counts_by_model_comparison.png
+  Node Type Proportions by Model Chart: node_type_proportions_by_model_comparison.png
+  Node Average Probabilities by Model Chart: node_avg_prob_by_model_comparison.png
+
+
+Node Types (in alphabetical order):
+--------------------------------------------------
+1. Calculation/Process Step
+2. Conclusion/Assertion
+3. Meta-Cognition/Plan
+4. Observation/Given
+
+
+Individual File Analysis:
+====================================================================================================
+
+File 1: /staging/szhang967/results_temperature_0/openrouter-qwen-qwq-32b/math500_0_shot_1_query_reasoning_api_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+--------------------------------------------------------------------------------
+
+Available data keys: ['node_type_counts', 'node_avg_prob_sum', 'dependency', 'transition_counts', 'source_confidence', 'target_confidence', 'confidence_difference']
+
+Node Type Counts:
+  Calculation/Process Step: 27.8025
+  Conclusion/Assertion: 14.6420
+  Meta-Cognition/Plan: 16.6296
+  Observation/Given: 10.4265
+
+Node Average Probabilities:
+  Calculation/Process Step: 0.9268
+  Conclusion/Assertion: 0.8721
+  Meta-Cognition/Plan: 0.8339
+  Observation/Given: 0.9102
+
+Dependency Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio      25.60      14.80       5.52       5.39
+Conclusion       6.46      13.74       7.55       4.37
+Meta-Cogni       9.50       4.38      14.25       6.57
+Observatio      12.89       5.52       8.98      12.43
+
+Source Confidence Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio     0.9205     0.9201     0.9086     0.9177
+Conclusion     0.8845     0.8406     0.8421     0.8746
+Meta-Cogni     0.8413     0.8247     0.7914     0.8212
+Observatio     0.9098     0.8994     0.8811     0.8777
+
+Target Confidence Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio     0.9141     0.8413     0.7945     0.8932
+Conclusion     0.8812     0.8302     0.7643     0.8774
+Meta-Cogni     0.9181     0.8452     0.7710     0.8604
+Observatio     0.9164     0.8402     0.7943     0.8733
+
+Source-Target Confidence Difference Matrix (Source - Target):
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio     0.0065     0.0788     0.1141     0.0245
+Conclusion     0.0032     0.0103     0.0778    -0.0028
+Meta-Cogni    -0.0768    -0.0205     0.0204    -0.0392
+Observatio    -0.0066     0.0592     0.0868     0.0044
+
+Transition Counts Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio       1971       1184        381        194
+Conclusion        439       1044        574        166
+Meta-Cogni        722        280        955        335
+Observatio        838        320        476        547
+
+
+====================================================================================================
+
+File 2: /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-3B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+--------------------------------------------------------------------------------
+
+Available data keys: ['node_type_counts', 'node_avg_prob_sum', 'dependency', 'transition_counts', 'source_confidence', 'target_confidence', 'confidence_difference']
+
+Node Type Counts:
+  Calculation/Process Step: 6.8385
+  Conclusion/Assertion: 2.1638
+  Meta-Cognition/Plan: 2.3411
+  Observation/Given: 2.6831
+
+Node Average Probabilities:
+  Calculation/Process Step: 0.9177
+  Conclusion/Assertion: 0.8874
+  Meta-Cognition/Plan: 0.8546
+  Observation/Given: 0.8714
+
+Dependency Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio       5.75       2.33       1.96       1.33
+Conclusion       1.99       1.67       1.21       1.27
+Meta-Cogni       4.18       1.39       1.87       1.47
+Observatio       4.47       1.89       1.79       3.71
+
+Source Confidence Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio     0.9403     0.9307     0.9305     0.9053
+Conclusion     0.8804     0.8664     0.8755     0.8833
+Meta-Cogni     0.8059     0.8163     0.8201     0.8214
+Observatio     0.8888     0.8440     0.8664     0.9200
+
+Target Confidence Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio     0.9524     0.8863     0.8689     0.9027
+Conclusion     0.9305     0.8880     0.9066     0.8894
+Meta-Cogni     0.9557     0.8696     0.8385     0.8746
+Observatio     0.9502     0.8321     0.7832     0.9309
+
+Source-Target Confidence Difference Matrix (Source - Target):
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio    -0.0121     0.0444     0.0616     0.0025
+Conclusion    -0.0501    -0.0216    -0.0311    -0.0062
+Meta-Cogni    -0.1498    -0.0532    -0.0184    -0.0532
+Observatio    -0.0613     0.0119     0.0832    -0.0109
+
+Transition Counts Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio       1777        805        328         56
+Conclusion        287        291        201         28
+Meta-Cogni       1117        184        258        140
+Observatio       1001        193        183        338
+
+
+====================================================================================================
+
+File 3: /staging/szhang967/results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Qwen-7B/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+--------------------------------------------------------------------------------
+
+Available data keys: ['node_type_counts', 'node_avg_prob_sum', 'dependency', 'transition_counts', 'source_confidence', 'target_confidence', 'confidence_difference']
+
+Node Type Counts:
+  Calculation/Process Step: 27.5087
+  Conclusion/Assertion: 16.5890
+  Meta-Cognition/Plan: 23.4177
+  Observation/Given: 13.8159
+
+Node Average Probabilities:
+  Calculation/Process Step: 0.9503
+  Conclusion/Assertion: 0.9277
+  Meta-Cognition/Plan: 0.8872
+  Observation/Given: 0.9132
+
+Dependency Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio      24.14      13.28       9.08       7.45
+Conclusion       7.39      15.31      10.15       4.63
+Meta-Cogni      10.97       7.77      18.39       6.98
+Observatio      14.07       7.47       9.31      11.63
+
+Source Confidence Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio     0.9748     0.9769     0.9687     0.9577
+Conclusion     0.9555     0.9308     0.9624     0.9245
+Meta-Cogni     0.9343     0.9408     0.9198     0.8986
+Observatio     0.9539     0.9209     0.9328     0.9287
+
+Target Confidence Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio     0.9791     0.9631     0.9151     0.9324
+Conclusion     0.9679     0.9571     0.9401     0.9118
+Meta-Cogni     0.9742     0.9557     0.9314     0.9440
+Observatio     0.9739     0.9390     0.9144     0.9431
+
+Source-Target Confidence Difference Matrix (Source - Target):
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio    -0.0044     0.0138     0.0536     0.0253
+Conclusion    -0.0124    -0.0264     0.0222     0.0127
+Meta-Cogni    -0.0399    -0.0149    -0.0115    -0.0454
+Observatio    -0.0200    -0.0180     0.0184    -0.0144
+
+Transition Counts Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio       9075       5778       1734        812
+Conclusion       1538       3766       3634        398
+Meta-Cogni       3665       1205       4102       1130
+Observatio       4812       1412       2011       2198
+
+
+====================================================================================================
+
+File 4: /staging/szhang967/results_temperature_0/Qwen-Qwen2.5-7B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+--------------------------------------------------------------------------------
+
+Available data keys: ['node_type_counts', 'node_avg_prob_sum', 'dependency', 'transition_counts', 'source_confidence', 'target_confidence', 'confidence_difference']
+
+Node Type Counts:
+  Calculation/Process Step: 6.4923
+  Conclusion/Assertion: 2.4769
+  Meta-Cognition/Plan: 2.7405
+  Observation/Given: 2.4956
+
+Node Average Probabilities:
+  Calculation/Process Step: 0.9355
+  Conclusion/Assertion: 0.9021
+  Meta-Cognition/Plan: 0.8632
+  Observation/Given: 0.8795
+
+Dependency Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio       6.62       2.30       1.66       2.53
+Conclusion       1.81       2.31       1.44       1.32
+Meta-Cogni       3.89       1.57       1.91       2.07
+Observatio       2.85       2.17       3.13       2.00
+
+Source Confidence Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio     0.9571     0.9435     0.9423     0.9516
+Conclusion     0.9102     0.9205     0.9079     0.9166
+Meta-Cogni     0.8698     0.8191     0.8331     0.8491
+Observatio     0.8947     0.8704     0.8047     0.8614
+
+Target Confidence Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio     0.9669     0.9057     0.8954     0.9466
+Conclusion     0.9402     0.9265     0.8798     0.9131
+Meta-Cogni     0.9567     0.9004     0.8489     0.9129
+Observatio     0.9391     0.8833     0.8916     0.8739
+
+Source-Target Confidence Difference Matrix (Source - Target):
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio    -0.0098     0.0378     0.0470     0.0050
+Conclusion    -0.0300    -0.0060     0.0281     0.0035
+Meta-Cogni    -0.0869    -0.0813    -0.0158    -0.0637
+Observatio    -0.0444    -0.0129    -0.0869    -0.0124
+
+Transition Counts Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio       2371        820        361        109
+Conclusion        306        368        229         37
+Meta-Cogni       1120        166        222        157
+Observatio        785        284        391        244
+
+
+====================================================================================================
+
+File 5: /staging/szhang967/results_temperature_0/meta-llama-Llama-3.1-8B-Instruct/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+--------------------------------------------------------------------------------
+
+Available data keys: ['node_type_counts', 'node_avg_prob_sum', 'dependency', 'transition_counts', 'source_confidence', 'target_confidence', 'confidence_difference']
+
+Node Type Counts:
+  Calculation/Process Step: 12.9644
+  Conclusion/Assertion: 12.0000
+  Meta-Cognition/Plan: 28.2399
+  Observation/Given: 11.3855
+
+Node Average Probabilities:
+  Calculation/Process Step: 0.9052
+  Conclusion/Assertion: 0.8799
+  Meta-Cognition/Plan: 0.8317
+  Observation/Given: 0.8384
+
+Dependency Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio      18.82       6.53       6.64       8.74
+Conclusion       8.51      11.40      11.72      10.42
+Meta-Cogni       9.92      11.48      45.10       6.61
+Observatio      12.60       8.54      13.26      25.07
+
+Source Confidence Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio     0.9656     0.9649     0.9566     0.9395
+Conclusion     0.9269     0.9753     0.9242     0.9087
+Meta-Cogni     0.9352     0.8861     0.9699     0.9373
+Observatio     0.8775     0.9367     0.8975     0.9482
+
+Target Confidence Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio     0.9778     0.9632     0.9468     0.9794
+Conclusion     0.9807     0.9754     0.9678     0.9734
+Meta-Cogni     0.9737     0.9772     0.9844     0.9579
+Observatio     0.9775     0.9686     0.9720     0.9756
+
+Source-Target Confidence Difference Matrix (Source - Target):
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio    -0.0122     0.0017     0.0098    -0.0399
+Conclusion    -0.0538    -0.0002    -0.0437    -0.0647
+Meta-Cogni    -0.0385    -0.0911    -0.0145    -0.0206
+Observatio    -0.1000    -0.0320    -0.0745    -0.0274
+
+Transition Counts Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio       4800       2006        930        271
+Conclusion        715       1904       2157        198
+Meta-Cogni       2033        976       5863        337
+Observatio       2419        692       1618       1755
+
+
+====================================================================================================
+
+File 6: /staging/szhang967/results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Llama-8B/math500_0_shot_1_query_qwen-instruct_reslen_8092_nsamples_500_noise_None_flip_rate_0.0_mode_default/global_step_0/test_default_gemini_analysis_cognitive_process_graph_logical_graph_llm_analysis.json
+--------------------------------------------------------------------------------
+
+Available data keys: ['node_type_counts', 'node_avg_prob_sum', 'dependency', 'transition_counts', 'source_confidence', 'target_confidence', 'confidence_difference']
+
+Node Type Counts:
+  Calculation/Process Step: 57.9536
+  Conclusion/Assertion: 32.4149
+  Meta-Cognition/Plan: 39.6335
+  Observation/Given: 18.9072
+
+Node Average Probabilities:
+  Calculation/Process Step: 0.9597
+  Conclusion/Assertion: 0.9455
+  Meta-Cognition/Plan: 0.9138
+  Observation/Given: 0.9202
+
+Dependency Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio      44.37      27.58      14.32       8.49
+Conclusion      13.85      22.07      16.14       7.11
+Meta-Cogni      17.35       8.11      22.15       7.35
+Observatio      24.79      11.38       9.95      13.37
+
+Source Confidence Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio     0.9670     0.9714     0.9582     0.9502
+Conclusion     0.9550     0.9520     0.9464     0.9295
+Meta-Cogni     0.9262     0.9203     0.9260     0.8892
+Observatio     0.9375     0.9168     0.9111     0.9139
+
+Target Confidence Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio     0.9727     0.9566     0.9283     0.9513
+Conclusion     0.9663     0.9530     0.9283     0.9429
+Meta-Cogni     0.9670     0.9428     0.9325     0.9377
+Observatio     0.9682     0.9419     0.9092     0.9414
+
+Source-Target Confidence Difference Matrix (Source - Target):
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio    -0.0057     0.0148     0.0299    -0.0011
+Conclusion    -0.0112    -0.0010     0.0181    -0.0134
+Meta-Cogni    -0.0408    -0.0225    -0.0065    -0.0485
+Observatio    -0.0307    -0.0251     0.0019    -0.0275
+
+Transition Counts Matrix:
+  Calculatio Conclusion Meta-Cogni Observatio
+Calculatio      19067      12794       5270       1545
+Conclusion       4235       7569       6429        889
+Meta-Cogni       6995       1994       7417       1479
+Observatio      10263       2948       3474       3449
+
+
+====================================================================================================
+
+
+====================================================================================================
+End of Report

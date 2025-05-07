@@ -341,6 +341,13 @@ supported_llms = {
         "type": "api",
         "api_key": OPENROUTER_API_KEY,
     },
+
+    'openrouter-deepseek/deepseek-r1-distill-qwen-32b': {
+        "template_type": "reasoning_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": OPENROUTER_API_KEY,
+    },
     
 
     
