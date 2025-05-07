@@ -18,6 +18,7 @@ import os
 import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend
+import openpyxl
 
 
 def load_analysis_file(file_path: str) -> Dict[str, Any]:
@@ -412,6 +413,58 @@ def create_node_prob_by_model_chart(file_paths: List[str], all_vectors_matrices:
     return str(output_file)
 
 
+def save_metrics_to_excel(file_paths: list, all_vectors_matrices: list, ordered_node_types: OrderedDict, output_dir: Path):
+    """
+    将每个模型的所有metric保存到xlsx文件，每个sheet一个模型。
+    1D metric（如Node Type Counts）用单行表格，2D metric（如矩阵）用表格。
+    各metric之间用空行隔开，上方注明metric名字。
+    """
+    from openpyxl import Workbook
+    from openpyxl.utils.dataframe import dataframe_to_rows
+    wb = Workbook()
+    node_types = list(ordered_node_types.keys())
+    metric_order = [
+        ("node_type_counts", "Node Type Counts"),
+        ("node_avg_prob_sum", "Node Average Probabilities"),
+        ("dependency", "Dependency Matrix"),
+        ("source_confidence", "Source Confidence Matrix"),
+        ("target_confidence", "Target Confidence Matrix"),
+        ("confidence_difference", "Source-Target Confidence Difference Matrix"),
+        ("transition_counts", "Transition Counts Matrix")
+    ]
+    
+    for i, (file_path, vectors_matrices) in enumerate(zip(file_paths, all_vectors_matrices)):
+        model_name = get_model_name(file_path)
+        if i == 0:
+            ws = wb.active
+            ws.title = model_name
+        else:
+            ws = wb.create_sheet(title=model_name)
+        row_cursor = 1
+        for metric_key, metric_name in metric_order:
+            if metric_key in vectors_matrices:
+                ws.cell(row=row_cursor, column=1, value=metric_name)
+                row_cursor += 1
+                arr = vectors_matrices[metric_key]
+                if arr.ndim == 1:
+                    # 1D metric: 单行表格
+                    ws.append(["Node Type"] + node_types)
+                    ws.append(["Value"] + [float(f"{v:.4f}") for v in arr])
+                    row_cursor += 2
+                elif arr.ndim == 2:
+                    # 2D metric: 矩阵表格
+                    ws.append(["/"] + node_types)
+                    for idx, row in enumerate(arr):
+                        ws.append([node_types[idx]] + [float(f"{v:.4f}") for v in row])
+                    row_cursor += arr.shape[0] + 1
+                row_cursor += 1  # 空行隔开
+    # 保存
+    xlsx_path = output_dir / "cpg_metrics.xlsx"
+    wb.save(xlsx_path)
+    print(f"Excel metrics saved to: {xlsx_path}")
+    return str(xlsx_path)
+
+
 def save_detailed_analysis(file_paths: List[str], all_vectors_matrices: List[Dict[str, np.ndarray]], similarities: Dict[str, Dict[Tuple[str, str], float]], ordered_node_types: OrderedDict, compare_similarity: bool = True) -> str:
     """
     保存详细分析结果到文本文件
@@ -621,6 +674,9 @@ def save_detailed_analysis(file_paths: List[str], all_vectors_matrices: List[Dic
         
         f.write("\n" + "=" * 100 + "\n")
         f.write("End of Report\n")
+    
+    # 保存所有metric到excel
+    save_metrics_to_excel(file_paths, all_vectors_matrices, ordered_node_types, output_dir)
     
     return str(output_file)
 
