@@ -11,7 +11,7 @@ DEEPSEEK_API_KEY = "sk-2180124961a141829e0cf37c9e0ed30f"
 OPENROUTER_API_KEY = "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"
 # OPENROUTER_API_KEY = "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"#yuchen
 ALIBABA_API_KEY = "sk-10a48e129c8840869cad48efa799022e"
-XAI_API_KEY = "your-xai-api-key"
+XAI_API_KEY = "xai-UBCdsFcTiik7kuU2fiq2RGi11bTK6mjByDjQHSFQr6SZP0UVxqrB6VpTtOnVS45DeDQbMUYbbX3L3tvY"
 
 HF_HOME = "/data/yzeng58/.cache/huggingface"
 TRANSFORMERS_CACHE = "/data/yzeng58/.cache/huggingface/hub"

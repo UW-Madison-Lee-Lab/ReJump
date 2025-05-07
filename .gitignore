@@ -137,3 +137,16 @@ reasoning_analysis/*.json
 reasoning_analysis/*.html
 test_sample_graph_blobs/*
 gsm8k/*
+reasoning_analysis/cpg_detailed_analysis/*
+reasoning_analysis/cpg_detailed_analysis/*png
+reasoning_analysis/cpg_detailed_analysis/*pdf
+reasoning_analysis/cpg_detailed_analysis/*jpg
+reasoning_analysis/cpg_detailed_analysis/*jpeg
+reasoning_analysis/cpg_detailed_analysis/*csv
+reasoning_analysis/cpg_detailed_analysis/*xlsx
+reasoning_analysis/cpg_detailed_analysis/*txt
+reasoning_analysis/cpg_detailed_analysis/*json
+reasoning_analysis/cpg_detailed_analysis/*png
+reasoning_analysis/cpg_detailed_analysis/*pdf
+reasoning_analysis/cpg_detailed_analysis/*jpg
+reasoning_analysis/cpg_detailed_analysis/*jpeg
