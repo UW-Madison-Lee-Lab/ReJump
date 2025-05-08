@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-Preprocess the 24-game dataset to parquet format
+Preprocess the game24 dataset to parquet format
 """
 
 import os
@@ -34,31 +34,31 @@ if __name__ == '__main__':
     parser.add_argument('--hdfs_dir', default=None)
     parser.add_argument('--num_samples', type=int, default=100)
     parser.add_argument('--feature_noise', type=float, default=None)
-    parser.add_argument('--label_noise', type=float, default=None)
-    parser.add_argument('--test_ratio', type=float, default=1) # Default test ratio
-    parser.add_argument('--n_shot', type=int, default=0)
+    parser.add_argument('--test_ratio', type=float, default=1)
+    parser.add_argument('--n_shot', type=int, default=None)
     parser.add_argument('--n_query', type=int, default=1)
     parser.add_argument('--template_type', type=str, default="reasoning_api")
+    parser.add_argument('--label_noise', type=float, default=None)
     parser.add_argument('--data_mode', type=str, default="default", choices=["default"])
 
     args = parser.parse_args()
     
-    data_source = "24-game"
+    data_source = "game24"
     set_seed(42)
     
     if args.n_query != 1:
-        raise ValueError("n_query must be 1 for 24-game dataset")
+        raise ValueError("n_query must be 1 for game24 dataset")
     if args.n_shot != 0:
-        raise ValueError("n_shot must be 0 for 24-game dataset")
+        raise ValueError("n_shot must be 0 for game24 dataset")
     if args.feature_noise is not None and args.feature_noise != 0:
-        raise ValueError("feature_noise must be 0 or None for 24-game dataset")
+        raise ValueError("feature_noise must be 0 or None for game24 dataset")
     if args.label_noise is not None and args.label_noise != 0:
-        raise ValueError("label_noise must be 0 or None for 24-game dataset")
+        raise ValueError("label_noise must be 0 or None for game24 dataset")
     if args.test_ratio != 1:
-        raise ValueError("test_ratio must be 1 for 24-game dataset")
+        raise ValueError("test_ratio must be 1 for game24 dataset")
 
-    # Load the specific 24-game subset
-    # 24-game datasets often only have a 'train' split containing all examples
+    # Load the specific game24 subset
+    # game24 datasets often only have a 'train' split containing all examples
     dataset = load_dataset(
         "nlile/24-game", 
         'default', # Assuming 'default' is the correct subset name
@@ -66,7 +66,7 @@ if __name__ == '__main__':
         split='train' # Assuming the relevant data is in the train split
     )
     
-    print(f"Loaded {len(dataset)} examples from 24-game train split")
+    print(f"Loaded {len(dataset)} examples from game24 train split")
 
     # Shuffle and split the data
     dataset = dataset.shuffle(seed=42)
@@ -101,7 +101,7 @@ if __name__ == '__main__':
                 Now given a game 24 problem, we have 4 numbers: {}, {}, {}, and {}. 
                 Your goal is to use all the 4 numbers and basic arithmetic operations (+ - * /) to obtain 24. 
                 You must use each number exactly once, and you can use parentheses to change the order of operations.
-                Please provide all feasible solutions to this problem. 
+                Please provide one feasible solution to this problem. 
             '''.format(
                 numbers[0], numbers[1], numbers[2], numbers[3],
             )
@@ -110,11 +110,11 @@ if __name__ == '__main__':
             question = make_other_prefix(
                 question = question_raw, 
                 template_type = args.template_type, 
-                solution_example = "[\"2*9+18/3=24\"]", 
+                solution_example = "2*9+18/3=24", 
                 answer_format = "tags",
                 label_str = "letter of the correct answer"
             )
-            # 24-game answers are typically direct strings, no complex extraction needed
+            # game24 answers are typically direct strings, no complex extraction needed
             solution = {"label": [answer_raw]} # Ensure label is a list of strings
 
             data = {
@@ -123,7 +123,7 @@ if __name__ == '__main__':
                     "role": "user",
                     "content": question,
                 }],
-                "ability": "expert_level_qa", # More fitting ability for 24-game
+                "ability": "expert_level_qa", # More fitting ability for game24
                 "reward_model": {
                     "style": "rule", # Assuming simple string matching or similar rule-based check
                     "ground_truth": solution
@@ -153,12 +153,10 @@ if __name__ == '__main__':
         shot=args.n_shot,
         template_type=args.template_type,
         num_samples=args.num_samples,
-        # feature_noise=args.feature_noise, # Removed
-        # label_noise=args.label_noise, # Removed
         feature_noise=None, # Pass None explicitly if function expects it
         label_noise=0.0,   # Pass 0.0 explicitly if function expects it
-        data_mode=args.data_mode,
-        n_query=args.n_query,
+        data_mode="default",
+        n_query=1,
     )
     hdfs_dir = args.hdfs_dir
 

@@ -791,6 +791,9 @@ def _select_rm_score_fn(data_source):
     if data_source == 'gsm8k':
         from verl.utils.reward_score import gsm8k
         return gsm8k.compute_score
+    elif data_source == "game24":
+        from verl.utils.reward_score import game24
+        return game24.compute_score
     elif data_source in ["gpqa-diamond"]:
         from verl.utils.reward_score import general
         return lambda solution_str, ground_truth: general.compute_score(solution_str, ground_truth, answer_format = supported_datasets[data_source]['answer_format'])

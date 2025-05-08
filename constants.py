@@ -543,4 +543,13 @@ supported_datasets = {
         "difficulty": None,
         "answer_format": "tags",
     },
+    "game24": {
+        "num_classes": None,
+        "num_features": None,
+        "feature_noise": None,
+        "label_noise": None,
+        "type": "other",
+        "difficulty": None,
+        "answer_format": "tags",
+    }
 }
