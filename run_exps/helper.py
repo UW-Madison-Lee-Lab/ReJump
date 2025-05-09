@@ -264,5 +264,4 @@ python -m verl.trainer.main_generation_prob \
     trainer.wandb={wandb} \
     rollout.n=1 \
     rollout.api_workers={api_workers} \
-    rollout.model_type=prob
     """
