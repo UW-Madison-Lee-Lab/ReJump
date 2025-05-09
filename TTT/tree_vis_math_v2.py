@@ -534,6 +534,7 @@ if __name__ == "__main__":
         label_noise = 0.0,
         data_mode = "default",
         n_query = 1,
+        temperature = 0.00,
     )
     results = pd.read_parquet(f"{results_dir}/test_default.parquet")
     

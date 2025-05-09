@@ -197,7 +197,7 @@ def parse_json(json_prompt):
         r'\\\\\1',
         json_content
     )
-    # Parse the JSON content
+    
     try: 
         data = json.loads(json_content)
     except json.decoder.JSONDecodeError as e:
@@ -625,6 +625,7 @@ def get_analysis(idx, results, results_dir, overwrite=False):
         save_json(json_data, result_path)
     else:
         json_data = load_json(result_path)
+        
     
     vis_path = visualize_tree_walk(json_data["tree"], json_data["walk"], filename=f"{results_dir}/tree_vis_v3/{idx}", format="pdf")
     filtered_ajd = compute_filtered_average_jump_distance(json_data["tree"], json_data["walk"])
@@ -716,6 +717,7 @@ if __name__ == "__main__":
         label_noise = 0.0,
         data_mode = "default",
         n_query = 1,
+        temperature = 0.00,
     )
     results = pd.read_parquet(f"{results_dir}/test_default.parquet")
     

@@ -151,7 +151,8 @@ def rl_train(
         label_noise=label_noise,
         data_mode=data_mode,
         train_step=0,
-        n_query=n_query
+        n_query=n_query,
+        temperature=0.00,
     )
     output_file = get_dataset_filename(split="test", data_mode=data_mode)
     return f"""
@@ -238,7 +239,8 @@ def inference(
         label_noise=label_noise,
         data_mode=data_mode,
         train_step=train_step,
-        n_query=n_query
+        n_query=n_query,
+        temperature=temperature,
     )
     output_file = get_dataset_filename(split="test", data_mode=data_mode)
     return f"""

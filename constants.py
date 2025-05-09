@@ -89,19 +89,22 @@ def get_result_dir(
     train_step = 0,
     data_mode = "default",
     n_query=1,
+    temperature =0,
 ):
-    return os.path.join(root_dir, 'results', get_model_name(dataset_name, model_name, shot, template_type, response_length, num_samples, feature_noise, label_noise, data_mode, n_query=n_query), f"global_step_{train_step}")
+    return os.path.join(root_dir, 'results', get_model_name(dataset_name, model_name, shot, template_type, response_length, num_samples, feature_noise, label_noise, data_mode, n_query=n_query), f"temperature_{temperature:.2f}", f"global_step_{train_step}")
 def get_configs_via_result_dir(result_dir):
     # Extract model name from the result directory path using regex
-    pattern = r".*results[/\\](.+)[/\\]global_step_(\d+)$"
+    pattern = r".*results[/\\](.+)[/\\]temperature_(.+)[/\\]global_step_(\d+)$"
     match = re.match(pattern, result_dir)
     if match:
         model_name = match.group(1)  # The full model name with all parameters
-        steps = match.group(2)      # The training step number
+        temperature = match.group(2)
+        steps = match.group(3)      # The training step number
     else:
         raise ValueError(f"Invalid result directory structure: {result_dir}")
     configs = get_configs_via_model_name(model_name)
     configs["train_step"] = int(steps)
+    configs["temperature"] = float(temperature)
     return configs
 
     
@@ -404,7 +407,12 @@ supported_llms = {
         "type": "api",
         "api_key": OPENROUTER_API_KEY,
     },
-    
+    "openrouter-deepseek/deepseek-r1-distill-qwen-32b": {
+        "template_type": "reasoning_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": OPENROUTER_API_KEY,
+    },
 }
 
 supported_datasets = {

@@ -252,6 +252,7 @@ if __name__ == "__main__":
                 label_noise = 0.0,
                 data_mode = "default",
                 n_query = 1,
+                temperature = 0.00,
             )
             
     model_pairs = list(itertools.combinations(models, 2))
