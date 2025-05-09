@@ -7,6 +7,8 @@ ANTHROPIC_API_KEY = 'sk-ant-api03-AMHIj-ojTz9mtdXMbNsZwW0Bfcnu0LGxseGeBEB81a4MUU
 GEMINI_API_KEY = "AIzaSyARTR4pSoM8hmIIMEg85OMHD1T9KgaGwV4"
 DEEPSEEK_API_KEY = "sk-ce72d5c263804f29b988f2e8ab53fd62"
 OPENROUTER_API_KEY = "your-openrouter-api-key"
+ALIBABA_API_KEY = "your-alibaba-api-key"
+XAI_API_KEY = "your-xai-api-key"
  
 HF_HOME = "/data/yzeng58/.cache/huggingface"
 TRANSFORMERS_CACHE = "/data/yzeng58/.cache/huggingface/hub"

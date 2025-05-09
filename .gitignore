@@ -120,3 +120,44 @@ environment.py
 
 
 analyze_deepseek/
+
+# vim
+*.swp
+datasets/
+results/
+environment.py
+**/auto/
+**/trials/
+**/run_exps/auto_iterative_sft/
+
+
+analyze_deepseek/
+
+reasoning_analysis/deepseek-r1-cosreg_claude_analysis.parquet
+
+
+#all json and parquet and png files in reasoning_analysis
+reasoning_analysis/*.json
+reasoning_analysis/*.parquet
+reasoning_analysis/*.png
+
+#all files under multi-query-results
+multi-query-results/*
+multi-query-results
+reasoning_analysis/*.parquet
+reasoning_analysis/*.json
+reasoning_analysis/*.html
+
+gsm8k/*
+test_sample_graph/*
+test_sample_graph_blobs/*
+logical_graph_analysis_results/*
+reasoning_analysis/cpg_detailed_analysis/*txt
+reasoning_analysis/cpg_detailed_analysis/*json
+reasoning_analysis/cpg_detailed_analysis/*png
+reasoning_analysis/cpg_detailed_analysis/*pdf
+reasoning_analysis/cpg_detailed_analysis/*jpg
+reasoning_analysis/cpg_detailed_analysis/*jpeg
+reasoning_analysis/cpg_detailed_analysis/*csv
+reasoning_analysis/cpg_detailed_analysis/*xlsx
+reasoning_analysis/cpg_detailed_analysis

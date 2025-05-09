@@ -244,7 +244,7 @@ def inference(
     )
     output_file = get_dataset_filename(split="test", data_mode=data_mode)
     return f"""
-python -m verl.trainer.main_generation \
+python -m verl.trainer.main_generation_prob \
     trainer.nnodes=1 \
     trainer.n_gpus_per_node={n_gpus} \
     data.path={dataset_dir}/{output_file} \
@@ -263,5 +263,6 @@ python -m verl.trainer.main_generation \
     rollout.gpu_memory_utilization=0.8 \
     trainer.wandb={wandb} \
     rollout.n=1 \
-    rollout.api_workers={api_workers}
+    rollout.api_workers={api_workers} \
+    rollout.model_type=prob
     """
