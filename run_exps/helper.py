@@ -250,7 +250,7 @@ python -m verl.trainer.main_generation_prob \
     data.path={dataset_dir}/{output_file} \
     data.prompt_key=prompt \
     data.n_samples=1 \
-    data.batch_size=128 \
+    data.batch_size=16 \
     data.output_path={result_dir}/{output_file} \
     model.path={model_name} \
     +model.trust_remote_code=True \
