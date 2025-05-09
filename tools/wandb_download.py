@@ -66,6 +66,7 @@ def download_artifacts(run_id: str, output_dir: Optional[str] = None) -> List[st
             train_step=configs["train_step"],
             data_mode=configs["data_mode"],
             n_query=configs["n_query"],
+            temperature=configs["temperature"],
         )
     
     # Create output directory if it doesn't exist

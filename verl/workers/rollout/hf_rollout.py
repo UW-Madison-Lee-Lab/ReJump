@@ -22,7 +22,7 @@ import torch.distributed
 from tensordict import TensorDict
 from torch import nn
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
-
+import torch.nn.functional as F
 from verl import DataProto
 from verl.utils.torch_functional import get_eos_mask
 from .base import BaseRollout
@@ -30,6 +30,24 @@ from .base import BaseRollout
 from transformers import GenerationConfig
 
 __all__ = ['HFRollout']
+
+def generate_with_log_probs(
+    model,
+    input_ids,
+    attention_mask=None,
+    do_sample=False,
+    max_length=None,
+    eos_token_id=None,
+    pad_token_id=None,
+    generation_config=None,
+    renormalize_logits=True,
+    output_scores=True,
+    return_dict_in_generate=True,
+    use_cache=True
+    ):
+    # This function is a placeholder for the actual implementation of generating with log probs.
+    # The actual implementation would depend on the specific model and its API.
+    pass
 
 
 class HFRollout(BaseRollout):
@@ -91,12 +109,14 @@ class HFRollout(BaseRollout):
                     eos_token_id=eos_token_id,
                     pad_token_id=pad_token_id,
                     generation_config=generation_config,
-                    # renormalize_logits=True,
-                    output_scores=False,  # this is potentially very large
+                    renormalize_logits=True,
+                    output_scores=True,  # this is potentially very large
                     return_dict_in_generate=True,
                     use_cache=True)
         # TODO: filter out the seq with no answers like ds-chat
         seq = output.sequences
+
+        log_probs = self.module.compute_transition_scores(seq, output.scores)
 
         # huggingface generate will stop generating when all the batch reaches [EOS].
         # We have to pad to response_length
@@ -128,6 +148,7 @@ class HFRollout(BaseRollout):
                 'prompts': prompt,
                 'responses': response,
                 'input_ids': seq,
+                'log_probs': log_probs, 
                 'attention_mask': attention_mask,
                 'position_ids': position_ids
             },

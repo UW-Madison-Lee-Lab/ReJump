@@ -76,11 +76,13 @@ if __name__ == '__main__':
         print(f"Warning: Requested {args.num_samples} samples, but dataset only has {n_total}. Using all examples.")
         args.num_samples = n_total
 
-    n_test = int(args.num_samples * args.test_ratio)
-    n_train = args.num_samples - n_test
+
+    num_samples = args.num_samples if args.num_samples > 0 else n_total
+    n_test = int(num_samples * args.test_ratio) 
+    n_train = num_samples - n_test 
     
     # Select samples
-    sampled_indices = np.random.choice(range(len(dataset)), size=args.num_samples, replace=False)
+    sampled_indices = np.random.choice(range(len(dataset)), size=num_samples, replace=False)
     train_indices = sampled_indices[:n_train]
     test_indices = sampled_indices[n_train:]
 
@@ -109,11 +111,17 @@ Choices:
 (B) {answers[1]}
 (C) {answers[2]}
 (D) {answers[3]}
-Please select the correct answer from the choices. 
+Please select the correct answer from the choices.
             """
             answer_raw = ["A", "B", "C", "D"][answers.index(correct_answer)]
 
-            question = make_other_prefix(question_raw, args.template_type, "A")
+            question = make_other_prefix(
+                question = question_raw, 
+                template_type = args.template_type, 
+                solution_example = "A", 
+                answer_format = "tags",
+                label_str = "letter of the correct answer"
+            )
             # GPQA answers are typically direct strings, no complex extraction needed
             solution = {"label": [answer_raw]} # Ensure label is a list of strings
 

@@ -9,9 +9,11 @@ import pdb
 import re, openai
 import json
 
-from examples.data_preprocess.helper import _select_rm_score_fn
-from google import genai 
+from examples.data_preprocess.helper import _select_rm_score_fn, get_answer_format
+from google import genai
 import httpx
+from constants import supported_datasets
+from google.genai import types
 
 class APIRewardManager:
     """The reward manager for API outputs.
@@ -61,7 +63,12 @@ class APIRewardManager:
             return reward_tensor
 
 class LLMAPI:
-    def __init__(self, api_key: str, model_name: str, template_type: str = None):
+    def __init__(
+        self, 
+        api_key: str, 
+        model_name: str, 
+        template_type: str = None,
+    ):
         """
         Initialize the LLM API client.
         
@@ -106,13 +113,28 @@ class LLMAPI:
             self.client_type = "anthropic"
             if "thinking" in self.model: 
                 self.model = self.model.replace("-thinking", "")
+        elif model_name.startswith("xai/"):
+            self.client = OpenAI(
+                api_key=api_key,
+                base_url="https://api.x.ai/v1"
+            )
+            self.model = model_name.replace("xai/", "")
+            self.client_type = "xai"
         elif model_name.startswith("google/"):
             self.client = genai.Client(api_key=api_key)
             self.model = model_name.replace("google/", "")
             self.client_type = "google"
+        elif model_name.startswith("alibaba/"):
+            self.client = OpenAI(
+                api_key=api_key,
+                base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+            )
+            self.model = model_name.replace("alibaba/", "")
+            self.client_type = "alibaba"
+            if "thinking" in self.model: 
+                self.model = self.model.replace("-thinking", "")
         else:
             raise ValueError(f"Unsupported model: {model_name}")
-
 
         if "reasoning_api" in template_type:
             self.thinking = "enabled"
@@ -122,7 +144,13 @@ class LLMAPI:
             self.thinking = "cot"
         
 
-    def generate(self, messages: List[Dict[str, str]], max_tokens: int = 8000, temperature: float = 0.1) -> str:
+    def generate(
+        self, 
+        messages: List[Dict[str, str]], 
+        max_tokens: int = 8000, 
+        temperature: float = 0.0,
+        data_source: str = None,
+    ) -> str:
         max_retries = 1000  # Increased retry count
         if max_retries <= 0: raise ValueError("max_retries must be greater than 0")
         timeout = 120  # Increased timeout to 120 seconds
@@ -162,42 +190,97 @@ class LLMAPI:
                     response = self.client.models.generate_content(
                         model=self.model,
                         contents = [messages[0]['content']],
+                        config = types.GenerateContentConfig(
+                            temperature=temperature,
+                        )
                     )
                     if response is None or response.candidates is None or len(response.candidates) == 0: 
                         reasoning, output = "", ""
                     else:
                         output = response.candidates[0].content.parts[0].text
                         reasoning = ""
-                else:
+                elif self.client_type in ["openai", "deepseek", "openrouter", "xai"]:
                     response = self.client.chat.completions.create(
                         model=self.model,
                         messages=messages,
+                        temperature=temperature,
                     )
                 
                     output = response.choices[0].message.content
                     reasoning = getattr(response.choices[0].message, 'reasoning_content', None)
                     if reasoning is None:
                         reasoning = getattr(response.choices[0].message, 'reasoning', None)
+                elif self.client_type == "alibaba":
+                    if self.thinking == "enabled":
+                        extra_body = {
+                            "enable_thinking": True,
+                            "thinking_budget": max(1048, min(30000, max_tokens - 10)),
+                            "result_format": "message",
+                        }
+                        stream = True
+                    else:
+                        extra_body = None
+                        stream = False
+                    completion = self.client.chat.completions.create(
+                        model=self.model,
+                        messages=messages,
+                        temperature=temperature,
+                        extra_body=extra_body,
+                        stream=stream,
+                    )
                     
+                    if self.thinking == "enabled":
+                        reasoning_content = ""  # Complete reasoning process
+                        answer_content = ""  # Complete response
+                        is_answering = False  # Whether entering the response phase
+                        
+                        for chunk in completion:
+                            if not chunk.choices:
+                                continue 
+                            
+                            delta = chunk.choices[0].delta
+                            if hasattr(delta, "reasoning_content") and delta.reasoning_content is not None:
+                                reasoning_content += delta.reasoning_content
+                            if hasattr(delta, "content") and delta.content:
+                                if not is_answering:
+                                    is_answering = True
+                                answer_content += delta.content
+                        
+                        reasoning = reasoning_content
+                        output = answer_content
+                    else:
+                        reasoning = ""
+                        output = completion.choices[0].message.content
 
+                if data_source is not None:
+                    answer_format = get_answer_format(supported_datasets[data_source]['answer_format'], "")
+                else:
+                    answer_format = get_answer_format("none", "")
+                    
                 if self.thinking == "enabled":
                     reasoning_content = reasoning
                     answer_content = output
-                    response_content = f"<think>{reasoning_content}\n<answer>{answer_content}</answer>"
+                    if answer_format["left"] in answer_content:
+                        response_content = f"<think>{reasoning_content}</think>\n{answer_content}"
+                    else:
+                        response_content = f"<think>{reasoning_content}</think>\n{get_answer_format(supported_datasets[data_source]['answer_format'], answer_content)['example']}"
                 elif self.thinking == "cot":
                     reasoning_match = re.search(r'<think>(.*?)</think>', output, re.DOTALL)
-                    reasoning_content = reasoning_match.group(1).strip() if reasoning_match else ""
+                    reasoning_content = reasoning_match.group(0).strip() if reasoning_match else ""
                     
-                    answer_match = re.search(r'<answer>(.*?)</answer>', output, re.DOTALL)
-                    answer_content = answer_match.group(1).strip() if answer_match else ""
+                    answer_match = re.search(rf"{get_answer_format(supported_datasets[data_source]['answer_format'], '.*?')['example']}", output, re.DOTALL)
+                    answer_content = answer_match.group(0).strip() if answer_match else ""
                     response_content = output
                 else:
                     reasoning_content = ""
                     answer_content = output
-                    response_content = f"<answer>{answer_content}</answer>"
+                    if answer_format["left"] in answer_content:
+                        response_content = answer_content
+                    else:
+                        response_content = f"{get_answer_format(supported_datasets[data_source]['answer_format'], answer_content)['example']}"
                     
                 # Check if response is complete (ends with proper tags or punctuation)
-                if '</answer>' not in response_content:
+                if answer_format["right"] not in response_content:
                     print(f"output: {output}")
                     print(f"reasoning: {reasoning}")
 
@@ -227,6 +310,9 @@ class LLMAPI:
                 print(f"ClientError: {e}")
                 time.sleep(timeout)
                 
+            except openai.RateLimitError as e:
+                print(f"RateLimitError: {e}")
+                time.sleep(timeout)
                 
             except Exception as e:
                 print(type(e), e)
@@ -248,7 +334,8 @@ class LLMAPI:
             response_content, reasoning_content, answer_content = self.generate(
                 messages=chat,
                 max_tokens=config.rollout.response_length,
-                temperature=config.rollout.temperature if config else 0.7
+                temperature=config.rollout.temperature if config else 0.7,
+                data_source=data_sources[sample_idx],
             )
             response_length = len(response_content.split())
             generation_time = time.time() - gen_start_time

@@ -99,7 +99,11 @@ def main(config):
     use_api = supported_llms[config.model.path]["type"] == "api"
     if use_api:
         api_key = supported_llms[config.model.path]["api_key"]
-        model = LLMAPI(api_key=api_key, model_name=config.model.path, template_type=wandb_configs["template_type"])
+        model = LLMAPI(
+            api_key=api_key, 
+            model_name=config.model.path, 
+            template_type=wandb_configs["template_type"],
+        )
         chat_lst_converter = LLMAPI.convert_chat_list
         # Use Qwen tokenizer for API mode
         local_path = "Qwen/Qwen2.5-3B-Instruct"

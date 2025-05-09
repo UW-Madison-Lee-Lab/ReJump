@@ -54,6 +54,7 @@ def get_df(
         label_noise = supported_datasets[dataset_name]["label_noise"],
         data_mode = "default",
         n_query = 10,
+        temperature = 0.00,
     )
     model_funcs = load_json(f"{result_dir}/test_default_gemini_analysis_llm_analysis.json")
     model_text = pd.read_parquet(f"{result_dir}/test_default_gemini_analysis.parquet")

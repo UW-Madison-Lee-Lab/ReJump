@@ -28,7 +28,7 @@ import argparse
 from constants import get_dataset_dir
 from utils import set_seed
 
-from verl.utils.reward_score.math import remove_boxed, last_boxed_only_string
+from verl.utils.reward_score.general import remove_boxed, last_boxed_only_string
 from datasets import Dataset
 from examples.data_preprocess.helper import make_other_prefix
 
@@ -127,7 +127,13 @@ if __name__ == '__main__':
         def process_fn(example, idx):
             question_raw = example.pop('problem')
             
-            question = make_other_prefix(question_raw, args.template_type)
+            question = make_other_prefix(
+                question = question_raw, 
+                template_type = args.template_type, 
+                solution_example = "0", 
+                answer_format = "box",
+                label_str = "answer"
+            )
 
             answer_raw = example.pop('solution')
             solution = extract_solution(answer_raw)
