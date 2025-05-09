@@ -23,7 +23,7 @@ from pathlib import Path
 # ]
 #concvert the above info into a list with the name as comments
 gemini_api_key_list = [
-    "AIzaSyBgM3S40tAiRJ5J1f-jx8xgecBmbelnPXg",
+    # "AIzaSyBgM3S40tAiRJ5J1f-jx8xgecBmbelnPXg",
     "AIzaSyDIAq1UMSGx1-svNob46Rt616JF0UHW3VY",
     "AIzaSyCCnSBSjD1CgtighzPQyx03HZWvrVSWTHM",
     "AIzaSyBUhgp-FBViNj8VTxM3Tw8gXJsARgyx-dc",
@@ -76,18 +76,18 @@ def run_logical_graph_analysis(base_dir):
     instruction_file = "/home/szhang967/liftr/reasoning_analysis/cognitive_process_graph_prompt.txt"
     
     model_name_list = [
-        "results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Qwen-7B",
-        "results_temperature_0/Qwen-Qwen2.5-7B-Instruct",
+        # "results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Qwen-7B",
+        # "results_temperature_0/Qwen-Qwen2.5-7B-Instruct",
 
-        "results_temperature_0/meta-llama-Llama-3.1-8B-Instruct",
-        "results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Llama-8B",
+        # "results_temperature_0/meta-llama-Llama-3.1-8B-Instruct",
+        # "results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Llama-8B",
 
-        'results_temperature_0/openrouter-qwen-qwq-32b',
+        # 'results_temperature_0/openrouter-qwen-qwq-32b',
 
-        "results_temperature_0/Qwen-Qwen2.5-3B-Instruct",
+        # "results_temperature_0/Qwen-Qwen2.5-3B-Instruct",
 
-        # 'results_temperature_0/openrouter-microsoft-phi-4'
-        
+        # 'results_temperature_0/openrouter-microsoft-phi-4',
+        "results_temperature_0/xai-grok-3-mini-beta"
     ]
     
     # Process all test_default.parquet files

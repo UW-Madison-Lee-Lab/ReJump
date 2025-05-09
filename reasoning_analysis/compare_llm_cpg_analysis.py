@@ -227,6 +227,8 @@ def get_model_name(file_path: str) -> str:
         return "Qwen2.5-7B-Instruct"
     elif "deepseek-ai-DeepSeek-R1-Distill-Qwen-7B" in file_path:
         return "R1-Distill-Qwen-7B"
+    elif "xai-grok-3-mini-beta":
+        return "grok-3-mini-beta"
     else:
         return file_path
     

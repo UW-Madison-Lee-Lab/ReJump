@@ -314,6 +314,11 @@ def process_reasoning_with_probs(probs_dict: Dict[str, Any], processed_input_fil
                                  "!\n", "?\n", ".\n","]\n", ")\n","]\n"," \n","  \n","   \n","    \n","     \n",
                                 "].\n",").\n","}.\n"
                                 ]
+        elif "grok" in processed_input_file_path.lower():
+            split_token_list = [ "!\n\n", "?\n\n", ".\n\n", ").\n\n","].\n\n","}\n\n", " \n\n","  \n\n","\n\n",
+                                 "!\n", "?\n", ".\n","]\n", ")\n","]\n"," \n","  \n","   \n","    \n","     \n",
+                                "].\n",").\n","}.\n"
+                                ]
         else:
             raise NotImplementedError(f"Model {processed_input_file_path} not supported")
         if token in split_token_list:
