@@ -1,5 +1,7 @@
 import pandas as pd
 import os
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from constants import supported_llms, get_model_name, get_model_dir, supported_datasets
 from environment import root_dir
 import argparse
