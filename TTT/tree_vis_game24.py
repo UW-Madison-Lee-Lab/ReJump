@@ -32,53 +32,7 @@ llm = LLMAPI(
 
 def get_tree_prompt(input_str, output_str):
     return f"""
-Your task is to analyze a detailed thinking process for solving a math problem (provided below) and convert it into a reasoning tree. This tree must represent the **chronological flow of solving substantive, mathematically well-posed subproblems or distinct attempts**, starting from an initial state and culminating in answering the original question.
-
-Represent this structure as a **single JSON object** where keys are unique node IDs (e.g., "node1", "node2") and values are node objects detailing each state or subproblem attempt.
-
-**Core Principles for Tree Generation:**
-
-* **Chronological Flow & Dependency:** The tree follows the order of substantive steps/attempts in the reasoning. Parent links indicate the preceding step whose `Result` provides necessary mathematical input.
-  **BRANCHING AND SUBSTEP RULE:** 
-    - Create a new branch **if and only if** the reasoning process explicitly abandons or gives up on a previous approach and then starts a new, distinct solution plan. In other words, a new branch is created always and only when the previous line of reasoning is abandoned and a fundamentally different method is attempted. The new branch should start from the most recent shared node. Even if the solver does not immediately abandon the previous approach, we still consider it an Abandoned Attempt Node and mark it with [Path abandoned] if a different method is initiated that departs from the original direction.
-    - Importantly, whenever a new branch is created, the leaf node where the previous method ended must be explicitly marked with [Path abandoned].
-    - Conversely, if the current node is marked with [Path abandoned], a new branch must always be created.
-    - Importantly, for all subproblems or calculations within a single uninterrupted attempt, even if subcalculations are mathematically independent, represent these steps sequentially in the order they are performed in the reasoning: each node's parent must be the immediately preceding node within that attempt.  
-    That is, substeps within any one attempt always form a single chain.
-* **Substantive, Well-Posed Steps Only:** Nodes must represent **major** intermediate calculations or logical deductions constituting a clear, self-contained mathematical task (like a homework sub-problem). **Aggressively filter out** setup actions, strategy descriptions, narrative, verification, and trivial calculations/manipulations. Minor algebraic steps within a larger logical step must be grouped.
-* **Include Failed Attempts:** Represent distinct, substantive calculation or derivation attempts that were **explicitly abandoned** in the reasoning as separate nodes in the chronological flow. **Do not filter these out.**
-* **Focus on Mathematical Task:** Intermediate `Problem` fields must state a clear mathematical objective based on **all necessary given mathematical conditions and inputs**, avoiding descriptions of the reasoner's process or assumptions *within the Problem text*.
-* **Special Final Node:** The node performing the last calculation for the final answer uses the original problem statement as its `Problem`.
-
-**Node Object Structure:**
-Each node object must contain: `Problem`, `parent`, `Result`.
-
-1.  **`Problem` (String): Defines the specific mathematical task for this node.**
-    * **`node1` (Root):** Must be exactly "Initial State".
-    * **Intermediate Nodes (`node2` to `node(N-1)`):** Formulates a **clear, mathematically well-posed, and self-contained task representing a substantive step or distinct attempt.** Each node represents achieving a distinct intermediate objective through calculation or deduction.
-        * **Format:** Start with "Given..." listing **all essential mathematical conditions, constraints, equations, and input values** (often from parent `Result` or established context like 'point P is on curve C') needed to define and solve *this specific task*. End with a specific mathematical question/instruction (e.g., "Calculate...", "Solve...", "Derive...").
-        * **Content:** The formulation must focus purely on the **mathematical task**, making it **understandable and solvable in isolation** like a homework sub-problem, using only the provided "Given..." information and general mathematical knowledge. **CRITICAL RULE:** The `Problem` text **must not** include descriptions of the reasoner's strategy, assumptions, or procedural instructions reflecting the reasoning flow. State only the necessary mathematical conditions and the objective. The task must be **substantive**. **CRITICAL FILTERING RULE:** **DO NOT** create separate nodes for individual algebraic manipulations... [rest of filtering rule stays the same - GROUP minor operations]. Also filter out narrative, setup, verification. No meta-tags or node ID references.
-    * **`nodeN` (Final Calculation Node):** **This node represents the very last calculation step that produces the final answer.** Its `Problem` field **must contain the verbatim Original Problem Statement.**
-
-2.  **`parent` (String): Identifies the immediately preceding substantive step providing necessary input.**
-    * **`node1`:** Must be "none".
-    * **Other Nodes (`node2` to `nodeN`):** Must be the ID of the node whose `Result` provides the direct mathematical prerequisite for the task in the current node's `Problem`. (For abandoned attempts, the parent is the node preceding the attempt).
-
-3.  **`Result` (String): Records the mathematical outcome of completing the task.**
-    * **`node1`:** "Original problem statement provided as context." (or similar).
-    * **Intermediate Nodes (`node2` to `node(N-1)`):** The direct mathematical outcome of achieving the task defined in `Problem`. Summarizes the result of grouped operations.
-    * **Abandoned Attempt Nodes:** Must state any partial outcome and explicitly end with "[Path abandoned]".
-    * **`nodeN` (Final Calculation Node):** Must be the **final answer** to the Original Problem Statement.
-
-**Instructions for Analysis:**
-1.  **Inputs:** Use the "Original Problem Statement" and "Input Reasoning Process".
-2.  **Identify & Filter Steps:** Read the reasoning chronologically. Identify **major** calculation phases, key logical deductions, or distinct attempts. **Crucially, ensure that distinct, substantive attempts explicitly marked as abandoned in the reasoning are identified and *not* filtered out.** Apply the **CRITICAL FILTERING and GROUPING RULES** aggressively: Group sequences of trivial algebraic steps into the single larger objective they serve. Filter out non-mathematical content, setup, strategy descriptions/assumptions-as-actions, and verification. Only create nodes for the remaining substantive steps and distinct abandoned attempts.
-3.  **Create Nodes Sequentially:**
-    * Create `node1`.
-    * For each identified **substantive step/objective/attempt** *before* the final answer calculation: Create the corresponding intermediate node (`node2`, `node3`, ...). Determine `parent`. Formulate the `Problem` strictly according to Rule 1 (well-posed, self-contained task including **all necessary conditions/constraints**, no process descriptions). Record `Result`. Link abandoned attempt nodes chronologically.
-    * For the **final calculation step**: Create `nodeN`. Determine `parent`. Set `Problem` to verbatim Original Problem Statement. Set `Result` to final answer.
-4.  **Formatting:** Use LaTeX (`$...$`) for all math notation.
-5.  **Output:** Produce a single JSON object.
+Given the problem statement and reasoning process below. Your task is to analyze a detailed thinking process for solving a math problem (provided below) and convert it into a reasoning tree. **Do not try to solve the problem yourself, fully use the given reasoning process and just convert it!**
 
 ---
 **BEGIN ORIGINAL PROBLEM STATEMENT**
@@ -96,7 +50,38 @@ Each node object must contain: `Problem`, `parent`, `Result`.
 **END INPUT REASONING PROCESS**
 ---
 
-Generate the JSON output based on these instructions.
+Here are some instructions:
+
+**Node Object Structure:**
+
+Each node object must contain: `Problem`, `parent`, `Result`.
+
+1. **`Problem` (String): A partial solution containing the four numbers and any calculation has been tried. Only use numbers, + - * / and parentheses.
+
+* **`node1` (Root):** Must be exactly the four initial numbers in the problem. For example, "9,3,12,8".
+
+* **Non-leaf Nodes:** Each node describes the partial solution being explored. For example, for problem 9,3,12,8, an intermediate node "9-3, 12, 8" means that we have tried (9-3), and need to try 2 more calculations with numbers 12 and 8 to get 24. Give all these nodes indexes number to keep tracking (after node1).
+
+* **Leaf node:** **This node represents the very last calculation step that produces the final answer after three calculation steps.** For example, for problem 9,3,12,8, this could be "9-3+128", which is a leaf node that is unsuccessful. Another successful leaf node could be "(9-3)*(128)". Also use an index number for each one (after node1).
+
+Pay attention that the problem statement of each node should be unique. If two nodes have the same description (i.e., the same partial calculation and the numbers not calculated so far), merge them into one.
+
+2. **`parent` (String):
+
+* **`node1` (root):** Must be None.
+
+* **Other nodes:** Must be the previous partial solution that the current node builds on. For example, the parent of the node "9-3, 12, 8" is "9,3,12,8". But here just use the index number to indicate the index of its parent node.
+
+3. **`Result` (String):
+
+* **`root`:** None.
+
+* **Intermediate Nodes:** None.
+
+* **Leaf node** Must be the **final answer**. For example, the result of node "9-3+12-8" is 10. Written in latex.
+
+Please generate a single JSON output. This output must be a **single JSON object** where keys are unique node IDs (e.g., "node1", "node2", corresponding to the index numbers assigned to track the nodes) and values are the node objects (containing 'Problem', 'parent', 'Result') as detailed above.
+
     """
     
 def get_walk_prompt(input_str, output_str, tree_json):
@@ -605,7 +590,9 @@ def get_analysis(idx, results, results_dir, overwrite=False):
         os.makedirs(os.path.dirname(result_path), exist_ok=True)
         input_str = results.iloc[idx]["prompt"][0]["content"]
         output_str = results.iloc[idx]["responses"][0]
-        corr = results.iloc[idx]["answers"][0] == results.iloc[idx]["reward_model"]["ground_truth"]["label"][0]
+        model_answer = results.iloc[idx]["answers"][0]
+        ground_truth_answers = results.iloc[idx]["reward_model"]["ground_truth"]["label"][0]
+        corr = model_answer in ground_truth_answers
         tree_prompt = get_tree_prompt(input_str, output_str)
         tree_json = llm.generate([{
             "role": "user",
@@ -687,10 +674,10 @@ def get_analysis(idx, results, results_dir, overwrite=False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--idx", type=int, nargs='+', default=[])
-    parser.add_argument("--dataset_name", type=str, default="math500", choices=["gsm8k", "math500", "gpqa-diamond"])
+    parser.add_argument("--dataset_name", type=str, default="game24", choices=["gsm8k", "math500", "gpqa-diamond","game24"])
     parser.add_argument("--model_name", type=str, default="deepseek-ai/deepseek-reasoner")
     parser.add_argument("--overwrite", action="store_true")
-    parser.add_argument("--num_samples", type=int, default=-1)
+    parser.add_argument("--num_samples", type=int, default=100)
     parser.add_argument("--wandb", action="store_true")
     args = parser.parse_args()
     

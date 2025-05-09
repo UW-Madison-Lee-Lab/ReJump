@@ -734,6 +734,7 @@ if __name__ == "__main__":
     total_node_counts = [] # Initialize list for total node counts
     forgetting_rates = [] # Initialize list for forgetting rates
     average_verification_rates_list = [] # Initialize list for average_verification_rate
+    forgetting_rate_one_indices = [] # Initialize list for indices with forgetting_rate == 1
 
     for idx in tqdm(idxs):
         attempts, success, overwrite = 0, False, args.overwrite
@@ -761,6 +762,12 @@ if __name__ == "__main__":
         forgetting_rates.append(graph_metric["forgetting_rate"]) # Append forgetting rate
         average_verification_rates_list.append(graph_metric["average_verification_rate"]) # Append average_verification_rate
         
+        if graph_metric["forgetting_rate"] == 1: # Check if forgetting_rate is 1
+            forgetting_rate_one_indices.append(idx) # Add index to the list
+     
+    # Print indices with forgetting_rate == 1
+    print(f"Indices with forgetting_rate == 1: --idx {' '.join(map(str, forgetting_rate_one_indices))}")     
+            
     filtered_ajd = sum(filtered_ajds) / len(filtered_ajds) if filtered_ajds and len(filtered_ajds) > 0 else None
     print(f"Filtered AJD: {filtered_ajd}")
     
@@ -784,6 +791,8 @@ if __name__ == "__main__":
     overall_avg_verification_rate = sum(average_verification_rates_list) / len(average_verification_rates_list) if average_verification_rates_list and len(average_verification_rates_list) > 0 else None
     print(f"Average Verification Rate: {overall_avg_verification_rate:.4f}" if overall_avg_verification_rate is not None else "Average Verification Rate: None")
         
+
+            
     if args.wandb:
         wandb.log({
             "filtered_ajd": filtered_ajd,
