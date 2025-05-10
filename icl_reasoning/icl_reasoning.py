@@ -137,8 +137,7 @@ def load_deepseek_results(
         label_noise = label_noise,
         train_step = train_step,
         data_mode = data_mode,
-        n_query = n_query,
-        temperature = 0.00
+        n_query = n_query
     )
     result_path = os.path.join(result_dir, "test_default.parquet")
     

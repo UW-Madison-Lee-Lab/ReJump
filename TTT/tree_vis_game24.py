@@ -674,7 +674,7 @@ def get_analysis(idx, results, results_dir, overwrite=False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--idx", type=int, nargs='+', default=[])
-    parser.add_argument("--dataset_name", type=str, default="game24", choices=["gsm8k", "math500", "gpqa-diamond","game24"])
+    parser.add_argument("--dataset_name", type=str, default="game24", choices=["game24"])
     parser.add_argument("--model_name", type=str, default="deepseek-ai/deepseek-reasoner")
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--num_samples", type=int, default=100)

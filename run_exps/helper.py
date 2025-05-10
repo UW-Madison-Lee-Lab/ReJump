@@ -13,68 +13,16 @@ def gen_dataset(
     label_noise=0.0,
     data_mode="default",
     test_ratio=1,
+    response_length=3046,
 ):
-    if "ricl" in template_type:
-        if supported_datasets[dataset_name]["type"] == "regression":
-            example_datasets = ["l1normreg", "cosreg", "quadreg", "expreg"]
-        else:
-            example_datasets = ["circles", "moons", "linear", "blobs"]
-            
-        if dataset_name in example_datasets:
-            example_datasets.remove(dataset_name)
-        ricl_shot = int(re.match(r".*?ricl_(\d+)", template_type).group(1))
-        example_datasets = example_datasets[:ricl_shot]
-        
-        icl_examples = []
-        for i, example_dataset in enumerate(example_datasets):
-            icl_example_prompt = f"""
-    "+icl_examples.{i}.dataset_name={example_dataset}" \
-    "+icl_examples.{i}.label_noise={label_noise}" \
-    "+icl_examples.{i}.feature_noise={supported_datasets[example_dataset]['feature_noise']}" \
-    "+icl_examples.{i}.shot=50" \
-    "+icl_examples.{i}.n_query={n_query}" \
-    "+icl_examples.{i}.response_length=3046" \
-    "+icl_examples.{i}.num_samples=500" \
-    "+icl_examples.{i}.num_examples=1" \
-    "+icl_examples.{i}.train_step=0" \
-    "+icl_examples.{i}.data_mode={data_mode}"
-        """
-            icl_examples.append(icl_example_prompt)
-            
-        max_length = 40000 if supported_datasets[dataset_name]["type"] == "regression" else 80000
-        icl_examples_prompt = ''.join(icl_examples).replace('\n', '')
-        command = f"""
-python -m icl_reasoning.icl_reasoning \
-    "+icl_examples=[]" \
-    {icl_examples_prompt} \
-    "+mode=reasoning" \
-    "+template_type={template_type}" \
-    "+tokenizer_name=Qwen/Qwen2.5-3B-Instruct" \
-    "+icl_example_seed=42" \
-    "+test_data_seed=42" \
-    "+train_step=0" \
-    "+data_mode=default" \
-    "+icl_example_maxlength={max_length}" \
-    "+test_data.dataset_name={dataset_name}" \
-    "+test_data.label_noise={label_noise}" \
-    "+test_data.feature_noise={feature_noise}" \
-    "+test_data.num_samples={num_samples}" \
-    "+test_data.test_ratio=0.2" \
-    "+test_data_examples.dataset_name={dataset_name}" \
-    "+test_data_examples.label_noise={label_noise}" \
-    "+test_data_examples.feature_noise={feature_noise}" \
-    "+test_data_examples.shot={shot}" \
-    "+test_data_examples.n_query={n_query}"
-        """
+    if dataset_name == "blobs":
+        feature_noise = 1.0 if feature_noise is None else feature_noise
+    elif dataset_name in ["moons", "linear"]:
+        feature_noise = 0.1 if feature_noise is None else feature_noise
+    elif dataset_name == "circles":
+        feature_noise = 0.01 if feature_noise is None else feature_noise
     else:
-        if dataset_name == "blobs":
-            feature_noise = 1.0 if feature_noise is None else feature_noise
-        elif dataset_name in ["moons", "linear"]:
-            feature_noise = 0.1 if feature_noise is None else feature_noise
-        elif dataset_name == "circles":
-            feature_noise = 0.01 if feature_noise is None else feature_noise
-        else:
-            feature_noise = 0
+        feature_noise = 0
         command = f"""
 python -m examples.data_preprocess.{dataset_name} \
     --template_type={template_type} \
@@ -86,9 +34,53 @@ python -m examples.data_preprocess.{dataset_name} \
     --label_noise={label_noise} \
     --data_mode={data_mode}
             """ 
+    
+    if "ricl" in template_type:
+        if supported_datasets[dataset_name]["type"] == "regression":
+            example_datasets = ["l1normreg", "cosreg", "quadreg", "expreg"]
+            example_datasets.remove(dataset_name)
+        elif supported_datasets[dataset_name]["type"] == "classification":
+            example_datasets = ["circles", "moons", "linear", "blobs"]
+            example_datasets.remove(dataset_name)
+        else:
+            example_datasets = [dataset_name]
             
+        ricl_shot = int(re.match(r".*?ricl_(\d+)", template_type).group(1))
+        dataset_path = get_dataset_dir(
+            dataset_name=dataset_name,
+            shot=shot,
+            template_type=template_type,
+            num_samples=num_samples,
+            feature_noise=feature_noise,
+            label_noise=label_noise,
+            data_mode=data_mode,
+            n_query=n_query
+        )
+        
+        result_path = get_result_dir(
+            dataset_name=example_datasets[0],
+            model_name="xai/grok-3-mini-beta",
+            shot=shot,
+            template_type=template_type,
+            response_length=response_length,
+            num_samples=num_samples,
+            feature_noise=feature_noise,
+            label_noise=label_noise,
+            train_step=0,
+            data_mode=data_mode,
+            n_query=n_query,
+            temperature=0.00
+        )
+        
+        command += f"""
+python -m icl_reasoning.icl_reasoning_v2 \
+    --dataset_path {dataset_path} \
+    --result_path {result_path} \
+    --num_shot {ricl_shot} \
+    --output_path {dataset_path}
+        """
     return command
-
+        
 
 def mix_dataset(
     dataset_path,

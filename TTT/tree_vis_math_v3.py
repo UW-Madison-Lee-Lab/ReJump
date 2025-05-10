@@ -270,6 +270,9 @@ def visualize_tree_walk(tree_data, walk_data, filename="tree_walk_visualization_
         to_node = step.get('to')
         category = step.get('category', 'unknown') # Still needed for color
 
+        if from_node == 'none' and to_node == 'node1':
+            continue
+
         if from_node in tree_data and to_node in tree_data:
             edge_color = walk_colors.get(category, default_walk_color)
             step_number = str(i + 1) # Get the step number (1-based)
@@ -627,6 +630,13 @@ def get_analysis(idx, results, results_dir, overwrite=False):
         json_data = load_json(result_path)
         
     
+    # Filter out the specific walk elements before visualization
+    if "walk" in json_data and isinstance(json_data["walk"], list):
+        json_data["walk"] = [
+            step for step in json_data["walk"]
+            if not (step.get("from") == "none" and step.get("to") == "node1")
+        ]
+
     vis_path = visualize_tree_walk(json_data["tree"], json_data["walk"], filename=f"{results_dir}/tree_vis_v3/{idx}", format="pdf")
     filtered_ajd = compute_filtered_average_jump_distance(json_data["tree"], json_data["walk"])
     print(f"Index {idx}: Filtered AJD = {filtered_ajd}")
