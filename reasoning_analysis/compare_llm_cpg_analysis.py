@@ -20,6 +20,21 @@ import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend
 import openpyxl
 
+def node_type_rename(node_type: str) -> str:
+    if node_type == "Meta-Cognition/Plan":
+        return "Meta-Cognition"
+    elif node_type == "Conclusion/Assertion":
+        return "Assertion"
+    elif node_type == "Observation/Given":
+        return "Observation"
+    elif node_type == "Calculation/Process Step":
+        return "Calculation"
+    else:
+        raise ValueError(f"Unknown node type: {node_type}")
+    return node_type
+
+from matplotlib.backends.backend_pdf import PdfPages
+
 
 def load_analysis_file(file_path: str) -> Dict[str, Any]:
     """
@@ -250,6 +265,10 @@ def create_node_type_counts_chart(file_paths: List[str], all_vectors_matrices: L
         Path to the saved chart file
     """
     # Extract file names for legend
+    #fileter file_paths and all_vectors_matrices to only include models in model_name_list
+    file_paths, all_vectors_matrices = filter_file_paths(file_paths, all_vectors_matrices, ["R1-Distill-Llama-8B", "Llama-3.1-8B-Instruct", "Qwen2.5-7B-Instruct", "R1-Distill-Qwen-7B"])
+
+
     file_names = [get_model_name(path) for path in file_paths]
     
     # Collect data for each file
@@ -278,8 +297,15 @@ def create_node_type_counts_chart(file_paths: List[str], all_vectors_matrices: L
                 df_data[node_type] = []
             df_data[node_type].append(values[idx])
     
-    # Create plot
-    fig = plt.figure(figsize=(12, 8))
+    # Set up figure with LaTeX fonts for better PDF quality
+    plt.rcParams.update({
+        "font.family": "serif",
+        "font.size": 10,
+        "text.usetex": False  # Set to True if LaTeX is available
+    })
+    
+    # Create plot with compact size for paper
+    fig = plt.figure(figsize=(7, 5), dpi=300)
     ax = fig.add_subplot(111)
     
     # Set up bar positions
@@ -292,40 +318,64 @@ def create_node_type_counts_chart(file_paths: List[str], all_vectors_matrices: L
         if file_name in data:
             x_positions = np.arange(num_types) + (i - num_files/2 + 0.5) * bar_width
             values = [data[file_name][ordered_node_types[node_type]] for node_type in node_types]
-            ax.bar(x_positions, values, width=bar_width, label=file_name)
+            bars = ax.bar(x_positions, values, width=bar_width, label=file_name)
+            
+            # Add value labels for significant values
+            for j, bar in enumerate(bars):
+                height = bar.get_height()
+                if height > (max(values) * 0.1):  # Only label significant values
+                    ax.text(bar.get_x() + bar.get_width()/2., height + 0.01,
+                           f'{height:.2f}', ha='center', va='bottom', 
+                           fontsize=7, rotation=0)
     
     # Set labels and title
-    ax.set_xlabel('Node Type')
+    # ax.set_xlabel('Node Type')
     
     if data_key == "node_type_counts":
         if normalize:
             ax.set_ylabel('Proportion')
-            ax.set_title('Node Type Proportions Comparison Across Models')
-            output_file = output_dir / "node_type_proportions_comparison.png"
+            ax.set_title('Node Type Proportions Across Models')
+            output_file = output_dir / "node_type_proportions_comparison.pdf"
         else:
             ax.set_ylabel('Count')
-            ax.set_title('Node Type Counts Comparison Across Models')
-            output_file = output_dir / "node_type_counts_comparison.png"
+            ax.set_title('Node Type Counts Across Models')
+            output_file = output_dir / "node_type_counts_comparison.pdf"
     elif data_key == "node_avg_prob_sum":
         ax.set_ylabel('Average Probability')
-        ax.set_title('Node Average Probabilities Comparison Across Models')
-        output_file = output_dir / "node_avg_prob_comparison.png"
+        ax.set_title('Node Average Probabilities Across Models')
+        output_file = output_dir / "node_avg_prob_comparison.pdf"
     else:
         ax.set_ylabel('Value')
         ax.set_title(f'{data_key} Comparison Across Models')
-        output_file = output_dir / f"{data_key}_comparison.png"
+        output_file = output_dir / f"{data_key}_comparison.pdf"
         
     ax.set_xticks(np.arange(num_types))
-    ax.set_xticklabels(node_types, rotation=45, ha='right')
-    ax.legend()
+    ax.set_xticklabels(node_types, rotation=45, ha='right', fontsize=8)
+    
+    # Add legend with smaller font
+    ax.legend(fontsize=8, loc='best')
+    
+    # Adjust layout to be compact
     plt.tight_layout()
     
-    # Save figure
-    plt.savefig(output_file, dpi=300)
+    # Save as PDF
+    plt.savefig(output_file, format='pdf', bbox_inches='tight')
     plt.close()
     
     return str(output_file)
 
+
+def filter_file_paths(file_paths: List[str], all_vectors_matrices: List[Dict[str, np.ndarray]], model_names: List[str]) -> Tuple[List[str], List[Dict[str, np.ndarray]]]:
+    assert len(file_paths) == len(all_vectors_matrices)
+    filtered_paths = []
+    filtered_matrices = []
+    
+    for i, path in enumerate(file_paths):
+        if get_model_name(path) in model_names:
+            filtered_paths.append(path)
+            filtered_matrices.append(all_vectors_matrices[i])
+    
+    return filtered_paths, filtered_matrices
 
 def create_node_prob_by_model_chart(file_paths: List[str], all_vectors_matrices: List[Dict[str, np.ndarray]], 
                                 ordered_node_types: OrderedDict, output_dir: Path, 
@@ -346,6 +396,8 @@ def create_node_prob_by_model_chart(file_paths: List[str], all_vectors_matrices:
         Path to the saved chart file
     """
     # Extract file names for x-axis
+
+
     file_names = [get_model_name(path) for path in file_paths]
     
     # Collect data for each file and node type
@@ -372,8 +424,15 @@ def create_node_prob_by_model_chart(file_paths: List[str], all_vectors_matrices:
             for node_type in ordered_node_types.keys():
                 data[node_type].append(0)
     
-    # Create plot
-    fig = plt.figure(figsize=(14, 8))
+    # Set up figure with LaTeX fonts for better PDF quality
+    plt.rcParams.update({
+        "font.family": "serif",
+        "font.size": 10,
+        "text.usetex": False  # Set to True if LaTeX is available
+    })
+    
+    # Create plot with compact size for paper
+    fig = plt.figure(figsize=(7, 5), dpi=300)
     ax = fig.add_subplot(111)
     
     # Set up bar positions
@@ -384,36 +443,48 @@ def create_node_prob_by_model_chart(file_paths: List[str], all_vectors_matrices:
     # Plot bars for each node type
     for i, (node_type, values) in enumerate(data.items()):
         x_positions = np.arange(num_models) + (i - num_types/2 + 0.5) * bar_width
-        ax.bar(x_positions, values, width=bar_width, label=node_type)
+        bars = ax.bar(x_positions, values, width=bar_width, label=node_type)
+        
+        # Add value labels for significant values
+        for j, bar in enumerate(bars):
+            height = bar.get_height()
+            if height > (max(values) * 0.1) and height > 0.05:  # Only label significant values
+                ax.text(bar.get_x() + bar.get_width()/2., height + 0.01,
+                       f'{height:.2f}', ha='center', va='bottom', 
+                       fontsize=7, rotation=0)
     
     # Set labels and title
-    ax.set_xlabel('Model')
+    # ax.set_xlabel('Model')
     
     if data_key == "node_type_counts":
         if normalize:
             ax.set_ylabel('Proportion')
             ax.set_title('Node Type Proportions by Model')
-            output_file = output_dir / "node_type_proportions_by_model_comparison.png"
+            output_file = output_dir / "node_type_proportions_by_model_comparison.pdf"
         else:
             ax.set_ylabel('Count')
             ax.set_title('Node Type Counts by Model')
-            output_file = output_dir / "node_type_counts_by_model_comparison.png"
+            output_file = output_dir / "node_type_counts_by_model_comparison.pdf"
     elif data_key == "node_avg_prob_sum":
         ax.set_ylabel('Average Probability')
         ax.set_title('Node Average Probabilities by Model')
-        output_file = output_dir / "node_avg_prob_by_model_comparison.png"
+        output_file = output_dir / "node_avg_prob_by_model_comparison.pdf"
     else:
         ax.set_ylabel('Value')
         ax.set_title(f'{data_key} by Model')
-        output_file = output_dir / f"{data_key}_by_model_comparison.png"
+        output_file = output_dir / f"{data_key}_by_model_comparison.pdf"
     
     ax.set_xticks(np.arange(num_models))
-    ax.set_xticklabels(file_names, rotation=45, ha='right')
-    ax.legend(title='Node Type')
+    ax.set_xticklabels(file_names, rotation=45, ha='right', fontsize=8)
+    
+    # Add legend with smaller font
+    ax.legend(title='Node Type', fontsize=7, title_fontsize=8, loc='best')
+    
+    # Adjust layout to be compact
     plt.tight_layout()
     
-    # Save figure
-    plt.savefig(output_file, dpi=300)
+    # Save as PDF
+    plt.savefig(output_file, format='pdf', bbox_inches='tight')
     plt.close()
     
     return str(output_file)
@@ -473,32 +544,50 @@ def save_metrics_to_excel(file_paths: list, all_vectors_matrices: list, ordered_
 
 def plot_confidence_node_type_transition(file_paths, all_vectors_matrices, ordered_node_types, output_dir):
     """
-    对每个模型、每种source node type，画一张不同source_avg_prob区间下target node type分布的分组柱状图。
-    图片保存到 output_dir/confidence-node-type-transition/模型名/SourceType.png
+    For each model and source node type, create a grouped bar chart showing the distribution of 
+    target node types across different confidence intervals.
+    Saves figures to output_dir/confidence-node-type-transition/model_name/SourceType.pdf
     """
     import matplotlib.pyplot as plt
     import numpy as np
+    from matplotlib.backends.backend_pdf import PdfPages
+    
+    # Use LaTeX fonts for better PDF quality
+    plt.rcParams.update({
+        "font.family": "serif",
+        "font.size": 10,
+        "text.usetex": False  # Set to True if LaTeX is available
+    })
+    
     node_types = list(ordered_node_types.keys())
-    bins = np.linspace(0.8, 1.0, 3)  # 10 bins: [0.8,0.82), [0.82,0.84), ..., [0.98,1.0]
+    bins = np.linspace(0.8, 1.0, 3)  # Confidence bins from 0.8 to 1.0
     bin_labels = [f"[{bins[i]:.2f},{bins[i+1]:.2f})" for i in range(len(bins)-2)] + [f"[{bins[-2]:.2f},{bins[-1]:.2f}]"]
-    # 创建总目录
+    
+    # Create output directory
     base_dir = output_dir / "confidence-node-type-transition"
     base_dir.mkdir(exist_ok=True)
+    
     for file_path, vectors_matrices in zip(file_paths, all_vectors_matrices):
         model_name = get_model_name(file_path)
         model_dir = base_dir / model_name
         model_dir.mkdir(exist_ok=True)
-        transitions = None
-        # 兼容不同数据结构
+        
+        # Get transition data
         if "all_confidence_transitions" in vectors_matrices:
             transitions = vectors_matrices["all_confidence_transitions"]
+            #rename node types
+            transitions = [{"source_node": node_type_rename(t["source_node"]), "target_node": node_type_rename(t["target_node"]), 
+                            "source_avg_prob": t["source_avg_prob"], "target_avg_prob": t["target_avg_prob"]} for t in transitions]
         else:
             print(f"Warning: No confidence transitions data found in {file_path}, skipping this model")
             continue
+            
         for source_type in node_types:
-            # 初始化统计
+            # Initialize statistics
             bin_target_counts = [dict.fromkeys(node_types, 0) for _ in range(len(bins)-1)]
             bin_total = [0 for _ in range(len(bins)-1)]
+            
+            # Count transitions
             for t in transitions:
                 if t.get("source_node") != source_type:
                     continue
@@ -508,56 +597,65 @@ def plot_confidence_node_type_transition(file_paths, all_vectors_matrices, order
                     continue
                 if source_prob < 0.8 or source_prob > 1.0:
                     continue
-                # 找到对应bin
+                    
+                # Find corresponding bin
                 for i in range(len(bins)-1):
                     if (i < len(bins)-2 and bins[i] <= source_prob < bins[i+1]) or (i == len(bins)-2 and bins[i] <= source_prob <= bins[i+1]):
                         bin_target_counts[i][target_type] += 1
                         bin_total[i] += 1
                         break
             
-            # 只包含除当前source_type以外的节点类型
+            # Only include node types other than the current source_type
             other_node_types = [nt for nt in node_types if nt != source_type]
             
-            # 归一化，只考虑除当前source_type以外的节点类型
+            # Normalize considering only node types other than source_type
             bin_target_props = []
             for i in range(len(bin_target_counts)):
-                # 计算除source_type外的总数
+                # Calculate total excluding source_type
                 other_total = sum(bin_target_counts[i][nt] for nt in other_node_types)
                 if other_total > 0:
-                    # 只归一化其他节点类型
+                    # Normalize only other node types
                     bin_target_props.append([bin_target_counts[i][nt]/other_total for nt in other_node_types])
                 else:
                     bin_target_props.append([0 for _ in other_node_types])
             
-            # 画图
-            fig, ax = plt.subplots(figsize=(10,6))
+            # Create figure (compact size for paper)
+            fig, ax = plt.subplots(figsize=(5, 3.5), dpi=300)
             x = np.arange(len(bin_labels))
             bar_width = 0.8 / len(other_node_types)
             
+            # Plot bars for each target node type
             for j, nt in enumerate(other_node_types):
-                # 绘制柱状图
                 values = [bin_target_props[i][j] for i in range(len(bin_labels))]
                 bars = ax.bar(x + (j - len(other_node_types)/2 + 0.5)*bar_width, 
                        values, width=bar_width, label=nt)
                 
-                # 在柱子顶部添加数值标签
+                # Add value labels on top of bars
                 for i, bar in enumerate(bars):
                     height = bar.get_height()
-                    if height > 0:  # 只为非零值添加标签
+                    if height > 0.05:  # Only label bars with significant values
                         ax.text(bar.get_x() + bar.get_width()/2., height + 0.01,
                                 f'{height:.2f}', ha='center', va='bottom', 
-                                fontsize=8, rotation=0)
+                                fontsize=7)
             
+            # Set labels and title
             ax.set_xticks(x)
             ax.set_xticklabels(bin_labels, rotation=30)
             ax.set_xlabel('Source Node Confidence Bin')
             ax.set_ylabel('Proportion')
-            ax.set_title(f'Target node distribution from {source_type} nodes by confidence ({model_name})')
-            ax.legend(title='Target Node Type')
+            ax.set_title(f'Target Distribution from {source_type} ({model_name})')
+            
+            # Add legend with smaller font
+            ax.legend(title='Target Node Type', fontsize=7, title_fontsize=8)
+            
+            # Adjust layout to be compact
             plt.tight_layout()
+            
+            # Save as PDF
             source_type_filename = source_type.replace(" ", "_").replace("/", "_")
-            fig.savefig(model_dir / f"{source_type_filename}.png")
+            fig.savefig(model_dir / f"{source_type_filename}.pdf", format='pdf', bbox_inches='tight')
             plt.close(fig)
+            
     print(f"Confidence node type transition plots saved to: {base_dir}")
 
 
@@ -583,6 +681,8 @@ def save_detailed_analysis(file_paths: List[str], all_vectors_matrices: List[Dic
     # 创建输出文件
     output_file = output_dir / f"cpg_analysis.txt"
     
+    file_paths, all_vectors_matrices = filter_file_paths(file_paths, all_vectors_matrices, ["qwq-32b", "R1-Distill-Llama-8B", "Llama-3.1-8B-Instruct", "Qwen2.5-7B-Instruct", "R1-Distill-Qwen-7B"])
+
     # 创建节点类型计数比较图 (按节点类型分组)
     chart_file = create_node_type_counts_chart(file_paths, all_vectors_matrices, ordered_node_types, output_dir, 
                                               normalize=False, data_key="node_type_counts")
@@ -767,9 +867,9 @@ def save_detailed_analysis(file_paths: List[str], all_vectors_matrices: List[Dic
                 # 计算平均相似度
                 avg_similarity = sum(pairs.values()) / len(pairs)
                 f.write(f"\n  Average {metric} similarity: {avg_similarity:.4f}\n\n")
-            
-            f.write("\n" + "=" * 100 + "\n")
-            f.write("End of Report\n")
+        
+        f.write("\n" + "=" * 100 + "\n")
+        f.write("End of Report\n")
     
     # 保存所有metric到excel
     save_metrics_to_excel(file_paths, all_vectors_matrices, ordered_node_types, output_dir)
@@ -958,6 +1058,8 @@ def main():
     
     # Compare the files
     similarities, file_paths_valid, all_vectors_matrices, all_ordered_node_types = compare_analysis_files(args.files)
+
+    all_ordered_node_types = OrderedDict([(node_type_rename(node_type), i) for node_type, i in all_ordered_node_types.items()])
     
     # Print the results
     print("\nSimilarity Analysis Results:")
