@@ -33,27 +33,12 @@ gemini_api_key_list = [
     "AIzaSyA0vPcRshKiv5fftazBAbxdIHvtLyHCCiE",
     
 ]#use these keys by turns
-# def get_data_type(file_path):
-#     data_type_dict = {
-#         "circles": "classification",
-#         "blobs": "classification",
-#         "moons": "classification",
-#         "linear": "classification",
-        
-#         "expreg": "regression",
-#         "l1normreg": "regression",
-#         "quadreg": "regression",
-#         "linreg": "regression",
-#         "cosreg": "regression",
-#         "pwreg": "regression",
-
-#         "gsm8k": "unknown",
-#         "math500": "unknown",
-#     }
-#     for key, value in data_type_dict.items():
-#         if key in file_path:
-#             return value
-#     raise NotImplementedError(f"Unknown data type for file: {file_path}")
+def get_data_type(file_path):
+    from llm_analysis import data_type_dict
+    for key, value in data_type_dict.items():
+        if key in file_path:
+            return value
+    raise NotImplementedError(f"Unknown data type for file: {file_path}")
 
 # def get_model_name(file_path):
 #     if "deepseek-ai-deepseek-reasoner" in file_path:
@@ -63,7 +48,7 @@ gemini_api_key_list = [
 #     else:
 #         return "unknown"
 
-def run_logical_graph_analysis(base_dir):
+def run_tree_analysis(base_dir):
     # Path to analysis script
 
     ###debug
@@ -73,21 +58,12 @@ def run_logical_graph_analysis(base_dir):
     # base_dir = '/staging/szhang967/results'
      ###
     analysis_script = "/home/szhang967/liftr/reasoning_analysis/analyze_responses.py"
-    instruction_file = "/home/szhang967/liftr/reasoning_analysis/cognitive_process_graph_prompt.txt"
+    instruction_file_classification = "/home/szhang967/liftr/reasoning_analysis/classification-fitting_model_extraction_prompt.txt"
+    instruction_file_regression = "/home/szhang967/liftr/reasoning_analysis/regression-fitting_model_extraction_prompt.txt"
     
     model_name_list = [
-        # "results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Qwen-7B",
-        # "results_temperature_0/Qwen-Qwen2.5-7B-Instruct",
-
-        # "results_temperature_0/meta-llama-Llama-3.1-8B-Instruct",
-        # "results_temperature_0/deepseek-ai-DeepSeek-R1-Distill-Llama-8B",
-
-        # 'results_temperature_0/openrouter-qwen-qwq-32b',
-
-        # "results_temperature_0/Qwen-Qwen2.5-3B-Instruct",
-
-        # 'results_temperature_0/openrouter-microsoft-phi-4',
-        "results_temperature_0/xai-grok-3-mini-beta"
+        "multi-query-results/xai-grok-3-mini-beta",
+        'multi-query-results/openrouter-qwen-qwq-32b'
     ]
     
     # Process all test_default.parquet files
@@ -106,6 +82,14 @@ def run_logical_graph_analysis(base_dir):
                 
                 # Run analysis
                 # import pdb; pdb.set_trace()
+                data_type = get_data_type(input_file)
+                if data_type == "classification":
+                    instruction_file = instruction_file_classification
+                elif data_type == "regression":
+                    instruction_file = instruction_file_regression
+                else:
+                    raise NotImplementedError(f"Unknown data type: {data_type}")
+                # import pdb; pdb.set_trace()
                 cmd = [
                     "python", analysis_script,
                     "--input", input_file,
@@ -113,8 +97,8 @@ def run_logical_graph_analysis(base_dir):
                     "--llm", "gemini",
                     "--temperature", "0",
                     "--max_tokens", "35000",
-                    "--output_suffix", "_cognitive_process_graph",
-                    "--field_of_interests", "cognitive_process_graph",
+                    "--output_suffix", "_tree",
+                    "--field_of_interests", "tree",
                     # "--debug"
                 ]
                 try:
@@ -123,9 +107,9 @@ def run_logical_graph_analysis(base_dir):
                 except subprocess.CalledProcessError as e:
                     print(f"Error processing {input_file}: {e}")
                 
-                gemini_analysis_output_file = input_file.replace("test_default.parquet", "test_default_gemini_analysis_cognitive_process_graph.parquet")
-                logical_graph_analysis_script = "/home/szhang967/liftr/reasoning_analysis/llm_logical_graph_analysis.py"
-                subprocess.run(["python", logical_graph_analysis_script, "--input", gemini_analysis_output_file], check=True)
+                # gemini_analysis_output_file = input_file.replace("test_default.parquet", "test_default_gemini_analysis_tree.parquet")
+                # tree_analysis_script = "/home/szhang967/liftr/reasoning_analysis/llm_analysis.py"
+                # subprocess.run(["python", tree_analysis_script, "--input", gemini_analysis_output_file, '--data_type', data_type], check=True)
                 os.environ["GEMINI_API_KEY"] = ""
 
                 
@@ -133,11 +117,11 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Run logical graph analysis pipeline on model results.')
     parser.add_argument('--base-dir', 
                       type=str, 
-                    #   default="/home/szhang967/liftr/multi-query-results",
-                      default = '/staging/szhang967/results_temperature_0',
+                      default="/home/szhang967/liftr/multi-query-results",
+                    #   default = '/staging/szhang967/results_temperature_0',
                       help='Base directory to search for test_default.parquet files')
     return parser.parse_args()
 
 if __name__ == "__main__":
     args = parse_args()
-    run_logical_graph_analysis(args.base_dir) 
+    run_tree_analysis(args.base_dir) 

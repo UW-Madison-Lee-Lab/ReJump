@@ -69,6 +69,7 @@ def download_artifacts(run_id: str, output_dir: Optional[str] = None) -> List[st
     
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
+    # import pdb; pdb.set_trace()
     
     downloaded_paths = []
     

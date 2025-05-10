@@ -389,19 +389,30 @@ def process_row(args, input_file_path: str):
     try:
         # Handle responses based on its type (could be string or list)
         # reasonings_str, reasoning_dict = process_reasoning(row['reasonings'][0])
-        reasonings_str, reasoning_dict = process_reasoning_with_probs(row['probs'][0], input_file_path)
+        # reasonings_str, reasoning_dict = process_reasoning_with_probs(row['probs'][0], input_file_path)
+
         input_prompt = row['prompt'][0]['content']
         responses = row['responses'][0]
 
-        if field_of_interests == 'input+reasonings':
-            # Concatenate 'prompt' and 'reasonings' fields
+        # if field_of_interests == 'input+reasonings':
+        #     # Concatenate 'prompt' and 'reasonings' fields
+        #     total_input = 'Input: ' + input_prompt + '\n' + 'Reasoning: ' + reasonings_str
+        # elif field_of_interests == 'reasonings':
+        #     total_input = reasonings_str
+        # elif field_of_interests == 'responses':
+        #     total_input = responses
+        # else:
+        #     raise NotImplementedError(f"Field of interests {field_of_interests} not implemented")
+        
+        if field_of_interests == 'cognitive_process_graph':
+            reasonings_str, reasoning_dict = process_reasoning_with_probs(row['probs'][0], input_file_path)
             total_input = 'Input: ' + input_prompt + '\n' + 'Reasoning: ' + reasonings_str
-        elif field_of_interests == 'reasonings':
-            total_input = reasonings_str
-        elif field_of_interests == 'responses':
+        elif field_of_interests == 'tree':
             total_input = responses
+            reasoning_dict = {}
         else:
             raise NotImplementedError(f"Field of interests {field_of_interests} not implemented")
+
         
         if "<INSERT MODEL OUTPUT TRANSCRIPT HERE>" in instruction:
             prompt = instruction.replace("<INSERT MODEL OUTPUT TRANSCRIPT HERE>", total_input)
@@ -466,7 +477,10 @@ def process_file(
         batch_size = min(batch_size, 5)
     
     # Filter out rows with empty logprobs or tokens before processing
-    df = filter_invalid_rows(df)
+    if field_of_interests == 'cognitive_process_graph':
+        df = filter_invalid_rows(df)
+    else:
+        pass
 
     # If DataFrame becomes empty after filtering, exit early
     if df.empty:

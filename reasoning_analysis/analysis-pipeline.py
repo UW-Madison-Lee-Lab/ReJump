@@ -39,8 +39,8 @@ def run_analysis_pipeline(base_dir="/home/szhang967/liftr/multi-query-results"):
                 #     continue
                 # if "claude" not in input_file:
                 #     continue
-                if "circles" not in input_file:
-                    continue
+                # if "circles" not in input_file:
+                #     continue
                 
                 # # Run llm_analysis.py
                 # analysis_script = "/home/szhang967/liftr/reasoning_analysis/llm_analysis.py"
@@ -48,8 +48,8 @@ def run_analysis_pipeline(base_dir="/home/szhang967/liftr/multi-query-results"):
 
                 # Run llm_logical_graph_analysis.py
                 logical_graph_input_file = input_file.replace("test_default_gemini_analysis.parquet", "test_default_gemini_analysis_logical_graph.parquet")
-                logical_graph_analysis_script = "/home/szhang967/liftr/reasoning_analysis/llm_logical_graph_analysis.py"
-                subprocess.run(["python", logical_graph_analysis_script, "--input", logical_graph_input_file], check=True)
+                # logical_graph_analysis_script = "/home/szhang967/liftr/reasoning_analysis/llm_logical_graph_analysis.py"
+                # subprocess.run(["python", logical_graph_analysis_script, "--input", logical_graph_input_file], check=True)
                 
                 # # Get the output file path (same directory as input)
                 # output_dir = os.path.dirname(input_file)

@@ -11,7 +11,20 @@ The module also computes:
 
 These metrics help compare LLM-generated models with their scikit-learn counterparts.
 """
+data_type_dict = {
+        "circles": "classification",
+        "blobs": "classification",
+        "moons": "classification",
+        "linear": "classification",
+        
+        "expreg": "regression",
+        "l1normreg": "regression",
+        "quadreg": "regression",
+        "linreg": "regression",
+        "cosreg": "regression",
+        "pwreg": "regression",
 
+    }
 import json
 import os
 import argparse
@@ -97,7 +110,6 @@ def process_parquet_file(input_file: str, output_dir: Optional[str] = None,
         },
         "samples": []
     }
-    
     # Sample the dataframe if needed
     display_df = df
     if max_samples > 0 and max_samples < len(df):
@@ -115,13 +127,15 @@ def process_parquet_file(input_file: str, output_dir: Optional[str] = None,
         ground_truth = get_ground_truth(row)
         if ground_truth is None or 'in_context_samples' not in ground_truth:
             continue
-            
+        
         # Get data source if available
         data_source = row.get('data_source', 'unknown')
         
         # Process LLM analysis
         llm_json = row['llm_analysis_extracted_json']
         evaluation_table = process_llm_analysis(llm_json, ground_truth, data_type)
+        # import pdb; pdb.set_trace()
+
         
         if evaluation_table:
             # Create sample data structure
@@ -167,7 +181,7 @@ def main():
                         help='Directory to save the output file (default: same as input file)')
     parser.add_argument('--max-samples', type=int, default=0,
                         help='Maximum number of samples to include (default: 0 = all samples)')
-    parser.add_argument('--data_type', type=str,
+    parser.add_argument('--data_type', type=str,required=True,
                         choices=['regression', 'classification'],
                         help='Data type to extract')
     
