@@ -20,6 +20,7 @@ from collections import deque
 # Note: The following import might need to be moved to the top of the file
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
+from verl.utils.reward_score.game24 import compare_answer
 
 # model = "xai/grok-3-mini-beta"
 # model = "claude/claude-3-7-sonnet-20250219-thinking"
@@ -591,8 +592,7 @@ def get_analysis(idx, results, results_dir, overwrite=False):
         input_str = results.iloc[idx]["prompt"][0]["content"]
         output_str = results.iloc[idx]["responses"][0]
         model_answer = results.iloc[idx]["answers"][0]
-        ground_truth_answers = results.iloc[idx]["reward_model"]["ground_truth"]["label"][0]
-        corr = model_answer in ground_truth_answers
+        corr = compare_answer(model_answer)
         tree_prompt = get_tree_prompt(input_str, output_str)
         tree_json = llm.generate([{
             "role": "user",
@@ -612,7 +612,12 @@ def get_analysis(idx, results, results_dir, overwrite=False):
         save_json(json_data, result_path)
     else:
         json_data = load_json(result_path)
-    
+        input_str = results.iloc[idx]["prompt"][0]["content"]
+        output_str = results.iloc[idx]["responses"][0]
+        model_answer = results.iloc[idx]["answers"][0]
+        corr = compare_answer(model_answer)
+        json_data["corr"] = corr
+
     vis_path = visualize_tree_walk(json_data["tree"], json_data["walk"], filename=f"{results_dir}/tree_vis_v3/{idx}", format="pdf")
     filtered_ajd = compute_filtered_average_jump_distance(json_data["tree"], json_data["walk"])
     print(f"Index {idx}: Filtered AJD = {filtered_ajd}")
@@ -669,6 +674,7 @@ def get_analysis(idx, results, results_dir, overwrite=False):
         "total_node_count": total_node_count,
         "forgetting_rate": forgetting_rate,
         "average_verification_rate": average_verification_rate,
+        "corr": json_data["corr"],
     }
 
 if __name__ == "__main__":
@@ -720,6 +726,7 @@ if __name__ == "__main__":
     total_node_counts = [] # Initialize list for total node counts
     forgetting_rates = [] # Initialize list for forgetting rates
     average_verification_rates_list = [] # Initialize list for average_verification_rate
+    corrs = []
 
     for idx in tqdm(idxs):
         attempts, success, overwrite = 0, False, args.overwrite
@@ -746,30 +753,49 @@ if __name__ == "__main__":
         total_node_counts.append(graph_metric["total_node_count"]) # Append total node count
         forgetting_rates.append(graph_metric["forgetting_rate"]) # Append forgetting rate
         average_verification_rates_list.append(graph_metric["average_verification_rate"]) # Append average_verification_rate
-        
-    filtered_ajd = sum(filtered_ajds) / len(filtered_ajds) if filtered_ajds and len(filtered_ajds) > 0 else None
+        corrs.append(graph_metric["corr"])  
+    metric_dict = {
+        "filtered_ajd": filtered_ajds,
+        "average_solution_count": average_solution_counts,
+        "calculation_arrow_counts": calculation_arrow_counts,
+        "verification_arrow_counts": verification_arrow_counts,
+        "backtracking_arrow_counts": backtracking_arrow_counts,
+        "total_node_counts": total_node_counts,
+        "forgetting_rates": forgetting_rates,
+        "average_verification_rates": average_verification_rates_list,
+        "corrs": corrs,
+    }
+    
+    metric_df = pd.DataFrame(metric_dict)
+    metric_df = metric_df.dropna(how='any')
+
+    filtered_ajd = np.mean(metric_df["filtered_ajd"])
     print(f"Filtered AJD: {filtered_ajd}")
     
-    avg_sol_count = sum(average_solution_counts) / len(average_solution_counts) if average_solution_counts and len(average_solution_counts) > 0 else None
+    avg_sol_count = np.mean(metric_df["average_solution_count"])
     print(f"Average Solution Count: {avg_sol_count}") # Print average solution count
     
-    avg_calc_arrows = sum(calculation_arrow_counts) / len(calculation_arrow_counts) if calculation_arrow_counts and len(calculation_arrow_counts) > 0 else None
-    avg_ver_arrows = sum(verification_arrow_counts) / len(verification_arrow_counts) if verification_arrow_counts and len(verification_arrow_counts) > 0 else None
-    avg_back_arrows = sum(backtracking_arrow_counts) / len(backtracking_arrow_counts) if backtracking_arrow_counts and len(backtracking_arrow_counts) > 0 else None
+    avg_calc_arrows = np.mean(metric_df["calculation_arrow_counts"])
+    avg_ver_arrows = np.mean(metric_df["verification_arrow_counts"])
+    avg_back_arrows = np.mean(metric_df["backtracking_arrow_counts"])
 
     print(f"Average Calculation Arrows: {avg_calc_arrows}")
     print(f"Average Verification Arrows: {avg_ver_arrows}")
     print(f"Average Backtracking Arrows: {avg_back_arrows}")
         
-    avg_total_nodes = sum(total_node_counts) / len(total_node_counts) if total_node_counts and len(total_node_counts) > 0 else None
+    avg_total_nodes = np.mean(metric_df["total_node_counts"])
     print(f"Average Total Node Count: {avg_total_nodes}") # Print average total_node_count
     
-    avg_forgetting_rate = sum(forgetting_rates) / len(forgetting_rates) if forgetting_rates and len(forgetting_rates) > 0 else None
+    avg_forgetting_rate = np.mean(metric_df["forgetting_rates"])
     print(f"Average Forgetting Rate: {avg_forgetting_rate}") # Print average forgetting_rate
     
-    overall_avg_verification_rate = sum(average_verification_rates_list) / len(average_verification_rates_list) if average_verification_rates_list and len(average_verification_rates_list) > 0 else None
+    overall_avg_verification_rate = np.mean(metric_df["average_verification_rates"])
     print(f"Average Verification Rate: {overall_avg_verification_rate:.4f}" if overall_avg_verification_rate is not None else "Average Verification Rate: None")
         
+    avg_corr = np.mean(metric_df["corrs"])
+    print(f"Average Correlation: {avg_corr}")
+    
+    
     if args.wandb:
         wandb.log({
             "filtered_ajd": filtered_ajd,
@@ -780,5 +806,6 @@ if __name__ == "__main__":
             "average_total_node_count": avg_total_nodes, # Log average total_node_count
             "average_forgetting_rate": avg_forgetting_rate, # Log average forgetting_rate
             "overall_average_verification_rate": overall_avg_verification_rate, # Log overall_average_verification_rate
+            "average_correlation": avg_corr,
         })
         wandb.finish()

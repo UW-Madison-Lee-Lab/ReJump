@@ -693,6 +693,7 @@ def get_analysis(idx, results, results_dir, overwrite=False):
         "total_node_count": total_node_count,
         "forgetting_rate": forgetting_rate,
         "average_verification_rate": average_verification_rate,
+        "corr": json_data["corr"],
     }
 
 if __name__ == "__main__":
@@ -703,6 +704,8 @@ if __name__ == "__main__":
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--num_samples", type=int, default=-1)
     parser.add_argument("--wandb", action="store_true")
+    parser.add_argument("--mode", type=str, default="default", choices=["default", "ricl_1", "ricl_2", "ricl_3", "ricl_4", "ricl_5", "ricl_6", "ricl_7", "ricl_8", "ricl_9", "ricl_10"])
+    parser.add_argument("--temperature", type=float, default=0.00)
     args = parser.parse_args()
     
     if args.wandb:
@@ -716,18 +719,22 @@ if __name__ == "__main__":
         if not wandb_init(project_name, WANDB_INFO["entity"], wandb_config):
             exit()
             
+    if args.mode == "default":
+        template_type = supported_llms[args.model_name]["template_type"]
+    else:
+        template_type = f"{supported_llms[args.model_name]['template_type']}_{args.mode}"
     results_dir = get_result_dir(
         dataset_name = args.dataset_name,
         model_name = args.model_name,
         shot = 0,
-        template_type = supported_llms[args.model_name]["template_type"],
+        template_type = template_type,
         response_length = 404,
         num_samples = args.num_samples,
         feature_noise = supported_datasets[args.dataset_name]["feature_noise"],
         label_noise = 0.0,
         data_mode = "default",
         n_query = 1,
-        temperature = 0.00,
+        temperature = args.temperature,
     )
     results = pd.read_parquet(f"{results_dir}/test_default.parquet")
     
@@ -746,7 +753,8 @@ if __name__ == "__main__":
     average_verification_rates_list = [] # Initialize list for average_verification_rate
     forgetting_rate_one_indices = [] # Initialize list for indices with forgetting_rate == 1
     none_ajd_indices = [] # Initialize list for indices with filtered_ajd == None
-
+    corrs = []
+    
     for idx in tqdm(idxs):
         attempts, success, overwrite = 0, False, args.overwrite
         while attempts < 5 and not success:
@@ -772,6 +780,7 @@ if __name__ == "__main__":
         total_node_counts.append(graph_metric["total_node_count"]) # Append total node count
         forgetting_rates.append(graph_metric["forgetting_rate"]) # Append forgetting rate
         average_verification_rates_list.append(graph_metric["average_verification_rate"]) # Append average_verification_rate
+        corrs.append(graph_metric["corr"])
         
         if graph_metric["forgetting_rate"] == 1: # Check if forgetting_rate is 1
             forgetting_rate_one_indices.append(idx) # Add index to the list
@@ -785,30 +794,47 @@ if __name__ == "__main__":
     # Print indices with filtered_ajd == None
     print(f"Indices with filtered_ajd == None: --idx {' '.join(map(str, none_ajd_indices))}")
             
-    filtered_ajd = sum(filtered_ajds) / len(filtered_ajds) if filtered_ajds and len(filtered_ajds) > 0 else None
+            
+    metric_dict = {
+        "filtered_ajd": filtered_ajds,
+        "average_solution_count": average_solution_counts,
+        "calculation_arrow_counts": calculation_arrow_counts,
+        "verification_arrow_counts": verification_arrow_counts,
+        "backtracking_arrow_counts": backtracking_arrow_counts,
+        "total_node_counts": total_node_counts,
+        "forgetting_rates": forgetting_rates,
+        "average_verification_rates": average_verification_rates_list,
+        "corrs": corrs,
+    }
+    
+    metric_df = pd.DataFrame(metric_dict)
+    metric_df = metric_df.dropna(how='any')
+    
+    filtered_ajd = np.mean(metric_df["filtered_ajd"])
     print(f"Filtered AJD: {filtered_ajd}")
     
-    avg_sol_count = sum(average_solution_counts) / len(average_solution_counts) if average_solution_counts and len(average_solution_counts) > 0 else None
+    avg_sol_count = np.mean(metric_df["average_solution_count"])
     print(f"Average Solution Count: {avg_sol_count}") # Print average solution count
     
-    avg_calc_arrows = sum(calculation_arrow_counts) / len(calculation_arrow_counts) if calculation_arrow_counts and len(calculation_arrow_counts) > 0 else None
-    avg_ver_arrows = sum(verification_arrow_counts) / len(verification_arrow_counts) if verification_arrow_counts and len(verification_arrow_counts) > 0 else None
-    avg_back_arrows = sum(backtracking_arrow_counts) / len(backtracking_arrow_counts) if backtracking_arrow_counts and len(backtracking_arrow_counts) > 0 else None
+    avg_calc_arrows = np.mean(metric_df["calculation_arrow_counts"])
+    avg_ver_arrows = np.mean(metric_df["verification_arrow_counts"])
+    avg_back_arrows = np.mean(metric_df["backtracking_arrow_counts"])
 
     print(f"Average Calculation Arrows: {avg_calc_arrows}")
     print(f"Average Verification Arrows: {avg_ver_arrows}")
     print(f"Average Backtracking Arrows: {avg_back_arrows}")
         
-    avg_total_nodes = sum(total_node_counts) / len(total_node_counts) if total_node_counts and len(total_node_counts) > 0 else None
+    avg_total_nodes = np.mean(metric_df["total_node_counts"])
     print(f"Average Total Node Count: {avg_total_nodes}") # Print average total_node_count
     
-    avg_forgetting_rate = sum(forgetting_rates) / len(forgetting_rates) if forgetting_rates and len(forgetting_rates) > 0 else None
+    avg_forgetting_rate = np.mean(metric_df["forgetting_rates"])
     print(f"Average Forgetting Rate: {avg_forgetting_rate}") # Print average forgetting_rate
     
-    overall_avg_verification_rate = sum(average_verification_rates_list) / len(average_verification_rates_list) if average_verification_rates_list and len(average_verification_rates_list) > 0 else None
+    overall_avg_verification_rate = np.mean(metric_df["average_verification_rates"])
     print(f"Average Verification Rate: {overall_avg_verification_rate:.4f}" if overall_avg_verification_rate is not None else "Average Verification Rate: None")
         
-
+    avg_corr = np.mean(metric_df["corrs"])
+    print(f"Average Correlation: {avg_corr}")
             
     if args.wandb:
         wandb.log({
@@ -820,5 +846,6 @@ if __name__ == "__main__":
             "average_total_node_count": avg_total_nodes, # Log average total_node_count
             "average_forgetting_rate": avg_forgetting_rate, # Log average forgetting_rate
             "overall_average_verification_rate": overall_avg_verification_rate, # Log overall_average_verification_rate
+            "average_correlation": avg_corr,
         })
         wandb.finish()
