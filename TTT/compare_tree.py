@@ -12,6 +12,15 @@ import wandb
 from environment import WANDB_INFO
 from utils import set_seed
 import signal
+from scipy.spatial.distance import jensenshannon
+
+# Module-level constants for action flow similarity
+_ACTION_TYPES = ['calculation/derivation', 'verification', 'backtracking']
+_ACTION_MAP = {action: i for i, action in enumerate(_ACTION_TYPES)}
+_NUM_ACTIONS = len(_ACTION_TYPES)
+# Small constant for smoothing probabilities to avoid zeros and ensure valid distributions
+_SMOOTHING_ALPHA = 1e-9 
+
 
 def get_compare_prompt(str1, str2):
     return f"""
@@ -72,6 +81,17 @@ class SimpleNode:
             cls.print_tree(child, indent, i == child_count - 1)
 
 
+def count_nodes(node: SimpleNode) -> int:
+    
+    if node is None:
+        return 0
+    
+    count = 1  # Count the current node
+    for child in SimpleNode.get_children(node):
+        count += count_nodes(child)
+    return count
+
+
 # Function to compute the tree edit distance using zss.simple_distance
 def compute_tree_edit_distance(tree1_root, tree2_root):
     """
@@ -117,6 +137,80 @@ def compute_tree_edit_distance(tree1_root, tree2_root):
         signal.alarm(0)
     return distance
 
+def compute_tree_similarity(tree1_root, tree2_root):
+    return 1 - compute_tree_edit_distance(tree1_root, tree2_root)/max(count_nodes(tree1_root), count_nodes(tree2_root))
+
+def _get_transition_matrix(walk):
+    """
+    Builds a 3x3 transition-probability matrix from a walk.
+    P_ab is the empirical probability of moving from action type a to b.
+    Uses smoothing to ensure all probabilities are > 0 and rows sum to 1.
+    """
+    counts = np.zeros((_NUM_ACTIONS, _NUM_ACTIONS))
+
+    # Ensure walk is a list-like sequence of actions and has at least one transition
+    if walk and hasattr(walk, '__iter__') and not isinstance(walk, str) and len(walk) >= 2:
+        for i in range(len(walk) - 1):
+            action_from_str = walk[i]
+            action_to_str = walk[i+1]
+            
+            # Only consider transitions between known action types
+            if action_from_str["category"] in _ACTION_MAP and action_to_str["category"] in _ACTION_MAP:
+                idx_from = _ACTION_MAP[action_from_str["category"]]
+                idx_to = _ACTION_MAP[action_to_str["category"]]
+                counts[idx_from, idx_to] += 1
+
+    prob_matrix = np.zeros((_NUM_ACTIONS, _NUM_ACTIONS))
+    for i in range(_NUM_ACTIONS):
+        row_sum = np.sum(counts[i, :])
+        # Denominator is guaranteed positive if _SMOOTHING_ALPHA > 0
+        denominator = row_sum + _NUM_ACTIONS * _SMOOTHING_ALPHA
+        prob_matrix[i, :] = (counts[i, :] + _SMOOTHING_ALPHA) / denominator
+            
+    return prob_matrix
+
+def compute_walk_similarity(walk1, walk2):
+    """
+    Computes the Action-Flow Similarity between two walks (sequences of actions).
+    Similarity = 1 - JS(P1 || P2), where P1 and P2 are transition probability matrices,
+    and JS is the Jensen-Shannon divergence, averaged over states.
+    The JSD is calculated using log base 2, so its value is in [0,1].
+    The final similarity score is also in [0,1].
+    """
+    P1 = _get_transition_matrix(walk1)
+    P2 = _get_transition_matrix(walk2)
+
+    js_divergences_per_state = []
+    for i in range(_NUM_ACTIONS):
+        p_s = P1[i, :]
+        q_s = P2[i, :]
+        
+        # scipy.spatial.distance.jensenshannon returns sqrt(JSD).
+        # We use base=2.0 for JSD to be in [0,1].
+        jsd_s_sqrt = jensenshannon(p_s, q_s, base=2.0)
+        
+        # With smoothing in _get_transition_matrix, p_s and q_s should always be
+        # valid probability distributions, so jsd_s_sqrt should not be NaN.
+        # This check is a safeguard.
+        if np.isnan(jsd_s_sqrt):
+            jsd_s = 1.0  # Assign maximal divergence if NaN occurs
+        else:
+            jsd_s = jsd_s_sqrt**2  # Square to get JSD in [0,1]
+        
+        js_divergences_per_state.append(jsd_s)
+
+    # _NUM_ACTIONS is expected to be > 0 (it's 3).
+    # If js_divergences_per_state were empty, mean would result in NaN or error.
+    if not js_divergences_per_state: # Should not be hit for _NUM_ACTIONS = 3
+        # This case implies _NUM_ACTIONS was 0, which is an invalid setup.
+        # Return lowest similarity or handle as error.
+        return 0.0 
+
+    mean_jsd = np.mean(js_divergences_per_state) # mean_jsd will be in [0,1]
+    
+    similarity = 1.0 - mean_jsd  # similarity will be in [0,1]
+    
+    return similarity
 
 def build_tree_from_flat_format(json_data):
     """
@@ -276,7 +370,8 @@ if __name__ == "__main__":
             
             n_samples = len(pd.read_parquet(f"{results_dir1}/test_default.parquet"))
             
-            distances = []
+            tree_similarities = []
+            walk_similarities = []
             
             print("--------------------------------"*2)
             print(f"|{model_pair[0]}|{model_pair[1]}|{dataset}|")
@@ -291,40 +386,43 @@ if __name__ == "__main__":
                 
                 if flow_dict1 is None or flow_dict2 is None:
                     print(f"Debug: Failed to load JSON for sample {i}. Skipping.")
-                    distance = None # Ensure distance is None so it's skipped
+                    tree_similarity = None # Ensure distance is None so it's skipped
                     continue
 
                 tree1, tree2 = None, None # Initialize
-                try:
-                    tree1 = get_root_node(flow_dict1)
-                    tree2 = get_root_node(flow_dict2)
+                tree1 = get_root_node(flow_dict1)
+                tree2 = get_root_node(flow_dict2)
+                walk1, walk2 = flow_dict1["walk"], flow_dict2["walk"]
 
-                    if tree1 is None or tree2 is None:
-                        print(f"Debug: Failed to build one or both trees for sample {i}. Tree1: {'OK' if tree1 else 'Failed'}, Tree2: {'OK' if tree2 else 'Failed'}. Skipping distance computation.")
-                        distance = None
-                    else:
-                        distance = compute_tree_edit_distance(tree1, tree2)
+                if tree1 is None or tree2 is None:
+                    print(f"Debug: Failed to build one or both trees for sample {i}. Tree1: {'OK' if tree1 else 'Failed'}, Tree2: {'OK' if tree2 else 'Failed'}. Skipping distance computation.")
+                    tree_similarity = None
+                    walk_similarity = None
+                else:
+                    tree_similarity = compute_tree_similarity(tree1, tree2)
+                    walk_similarity = compute_walk_similarity(walk1, walk2)
+
                 
-                except Exception as e: # Catch any other unexpected error during tree processing or distance calc
-                    print(f"Debug: An unexpected error occurred for sample {i} while building trees or computing distance. Error: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    distance = None
-                
-                if distance is None:
+                if tree_similarity is None or walk_similarity is None:
                     print(f"Debug: Distance is None for sample {i}. Skipping.")
                     continue
                 
-                print(f"Sample {i}: Distance = {distance}") # Print individual distance
-                distances.append(distance)
+                print(f"Sample {i}: Tree Similarity = {tree_similarity}, Walk Similarity = {walk_similarity}") # Print individual distance
+                tree_similarities.append(tree_similarity)
+                walk_similarities.append(walk_similarity)
                 # Calculate running average and update tqdm postfix
 
-                current_avg_distance = np.mean(distances)
-                pbar.set_description(f'Avg Dist: {current_avg_distance:.4f}')
+                current_avg_tree_similarity = np.mean(tree_similarities)
+                current_avg_walk_similarity = np.mean(walk_similarities)
+                pbar.set_description(f'Avg Tree Similarity: {current_avg_tree_similarity:.4f}, Avg Walk Similarity: {current_avg_walk_similarity:.4f}')
                 
-            print(f"Average distance between {model_pair[0]} and {model_pair[1]} on {dataset}: {np.mean(distances):.2f}")
+            print(f"Average tree similarity between {model_pair[0]} and {model_pair[1]} on {dataset}: {np.mean(tree_similarities):.2f}")
+            print(f"Average walk similarity between {model_pair[0]} and {model_pair[1]} on {dataset}: {np.mean(walk_similarities):.2f}")
     
             if args.wandb:
-                wandb.log({"distance": np.mean(distances)})
+                wandb.log({
+                    "tree_similarity": np.mean(tree_similarities), 
+                    "walk_similarity": np.mean(walk_similarities)
+                })
                 wandb.finish()
     

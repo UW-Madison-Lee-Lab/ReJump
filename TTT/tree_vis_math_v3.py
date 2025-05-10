@@ -21,6 +21,10 @@ from collections import deque
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
 
+import xgboost as xgb
+from sklearn.model_selection import train_test_split
+from collections import Counter
+
 # model = "xai/grok-3-mini-beta"
 # model = "claude/claude-3-7-sonnet-20250219-thinking"
 model = "google/gemini-2.5-pro-preview-03-25"
@@ -700,7 +704,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--idx", type=int, nargs='+', default=[])
     parser.add_argument("--dataset_name", type=str, default="math500", choices=["gsm8k", "math500", "gpqa-diamond"])
-    parser.add_argument("--model_name", type=str, default="deepseek-ai/deepseek-reasoner")
+    parser.add_argument("--model_name", type=str, nargs='+', default=["deepseek-ai/deepseek-reasoner"])
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--num_samples", type=int, default=-1)
     parser.add_argument("--wandb", action="store_true")
@@ -708,144 +712,197 @@ if __name__ == "__main__":
     parser.add_argument("--temperature", type=float, default=0.00)
     args = parser.parse_args()
     
-    if args.wandb:
-        wandb_config = {
-            "dataset_name": args.dataset_name,
-            "model_name": args.model_name,
-            "num_samples": args.num_samples,
+    all_metrics = {}
+    for model_name in args.model_name:
+        if args.wandb:
+            wandb_config = {
+                "dataset_name": args.dataset_name,
+                "model_name": args.model_name,
+                "num_samples": args.num_samples,
+            }
+            project_name = f"{WANDB_INFO['project']}-tree-vis-v3"
+            
+            if not wandb_init(project_name, WANDB_INFO["entity"], wandb_config):
+                exit()
+                
+        if args.mode == "default":
+            template_type = supported_llms[model_name]["template_type"]
+        else:
+            template_type = f"{supported_llms[model_name]['template_type']}_{args.mode}"
+        results_dir = get_result_dir(
+            dataset_name = args.dataset_name,
+            model_name = model_name,
+            shot = 0,
+            template_type = template_type,
+            response_length = 404,
+            num_samples = args.num_samples,
+            feature_noise = supported_datasets[args.dataset_name]["feature_noise"],
+            label_noise = 0.0,
+            data_mode = "default",
+            n_query = 1,
+            temperature = args.temperature,
+        )
+        results = pd.read_parquet(f"{results_dir}/test_default.parquet")
+        
+        if len(args.idx) == 0:
+            idxs = range(len(results))
+        else:
+            idxs = args.idx
+        
+        filtered_ajds = []
+        average_solution_counts = [] # Initialize list for average solution counts
+        calculation_arrow_counts = []
+        verification_arrow_counts = []
+        backtracking_arrow_counts = []
+        total_node_counts = [] # Initialize list for total node counts
+        forgetting_rates = [] # Initialize list for forgetting rates
+        average_verification_rates_list = [] # Initialize list for average_verification_rate
+        forgetting_rate_one_indices = [] # Initialize list for indices with forgetting_rate == 1
+        none_ajd_indices = [] # Initialize list for indices with filtered_ajd == None
+        corrs = []
+        
+        for idx in tqdm(idxs):
+            attempts, success, overwrite = 0, False, args.overwrite
+            while attempts < 5 and not success:
+                try:
+                    graph_metric = get_analysis(idx, results, results_dir, overwrite)
+                    success = True
+                except KeyboardInterrupt:
+                    raise KeyboardInterrupt
+                except pdb.bdb.BdbQuit:
+                    raise pdb.bdb.BdbQuit
+                except Exception as e:
+                    print(f"Error: {type(e)} {e}")
+                    print(f"Attempt {attempts} failed")
+                    attempts += 1
+                    overwrite = True
+                    continue
+            
+            filtered_ajds.append(graph_metric["filtered_ajd"])
+            average_solution_counts.append(graph_metric["average_solution_count"]) # Append average solution count
+            calculation_arrow_counts.append(graph_metric["calculation_count"])
+            verification_arrow_counts.append(graph_metric["verification_count"])
+            backtracking_arrow_counts.append(graph_metric["backtracking_count"])
+            total_node_counts.append(graph_metric["total_node_count"]) # Append total node count
+            forgetting_rates.append(graph_metric["forgetting_rate"]) # Append forgetting rate
+            average_verification_rates_list.append(graph_metric["average_verification_rate"]) # Append average_verification_rate
+            corrs.append(graph_metric["corr"])
+            
+            if graph_metric["forgetting_rate"] == 1: # Check if forgetting_rate is 1
+                forgetting_rate_one_indices.append(idx) # Add index to the list
+            
+            if graph_metric["filtered_ajd"] is None: # Check if filtered_ajd is None
+                none_ajd_indices.append(idx) # Add index to the list
+        
+        # Print indices with forgetting_rate == 1
+        print(f"Indices with forgetting_rate == 1: --idx {' '.join(map(str, forgetting_rate_one_indices))}")     
+        
+        # Print indices with filtered_ajd == None
+        print(f"Indices with filtered_ajd == None: --idx {' '.join(map(str, none_ajd_indices))}")
+                
+                
+        metric_dict = {
+            "filtered_ajd": filtered_ajds,
+            "average_solution_count": average_solution_counts,
+            "calculation_arrow_counts": calculation_arrow_counts,
+            "verification_arrow_counts": verification_arrow_counts,
+            "backtracking_arrow_counts": backtracking_arrow_counts,
+            "total_node_counts": total_node_counts,
+            "forgetting_rates": forgetting_rates,
+            "average_verification_rates": average_verification_rates_list,
+            "corrs": corrs,
         }
-        project_name = f"{WANDB_INFO['project']}-tree-vis-v3"
         
-        if not wandb_init(project_name, WANDB_INFO["entity"], wandb_config):
-            exit()
-            
-    if args.mode == "default":
-        template_type = supported_llms[args.model_name]["template_type"]
-    else:
-        template_type = f"{supported_llms[args.model_name]['template_type']}_{args.mode}"
-    results_dir = get_result_dir(
-        dataset_name = args.dataset_name,
-        model_name = args.model_name,
-        shot = 0,
-        template_type = template_type,
-        response_length = 404,
-        num_samples = args.num_samples,
-        feature_noise = supported_datasets[args.dataset_name]["feature_noise"],
-        label_noise = 0.0,
-        data_mode = "default",
-        n_query = 1,
-        temperature = args.temperature,
-    )
-    results = pd.read_parquet(f"{results_dir}/test_default.parquet")
-    
-    if len(args.idx) == 0:
-        idxs = range(len(results))
-    else:
-        idxs = args.idx
-    
-    filtered_ajds = []
-    average_solution_counts = [] # Initialize list for average solution counts
-    calculation_arrow_counts = []
-    verification_arrow_counts = []
-    backtracking_arrow_counts = []
-    total_node_counts = [] # Initialize list for total node counts
-    forgetting_rates = [] # Initialize list for forgetting rates
-    average_verification_rates_list = [] # Initialize list for average_verification_rate
-    forgetting_rate_one_indices = [] # Initialize list for indices with forgetting_rate == 1
-    none_ajd_indices = [] # Initialize list for indices with filtered_ajd == None
-    corrs = []
-    
-    for idx in tqdm(idxs):
-        attempts, success, overwrite = 0, False, args.overwrite
-        while attempts < 5 and not success:
-            try:
-                graph_metric = get_analysis(idx, results, results_dir, overwrite)
-                success = True
-            except KeyboardInterrupt:
-                raise KeyboardInterrupt
-            except pdb.bdb.BdbQuit:
-                raise pdb.bdb.BdbQuit
-            except Exception as e:
-                print(f"Error: {type(e)} {e}")
-                print(f"Attempt {attempts} failed")
-                attempts += 1
-                overwrite = True
-                continue
+        metric_df = pd.DataFrame(metric_dict)
+        metric_df = metric_df.dropna(how='any')
         
-        filtered_ajds.append(graph_metric["filtered_ajd"])
-        average_solution_counts.append(graph_metric["average_solution_count"]) # Append average solution count
-        calculation_arrow_counts.append(graph_metric["calculation_count"])
-        verification_arrow_counts.append(graph_metric["verification_count"])
-        backtracking_arrow_counts.append(graph_metric["backtracking_count"])
-        total_node_counts.append(graph_metric["total_node_count"]) # Append total node count
-        forgetting_rates.append(graph_metric["forgetting_rate"]) # Append forgetting rate
-        average_verification_rates_list.append(graph_metric["average_verification_rate"]) # Append average_verification_rate
-        corrs.append(graph_metric["corr"])
+        filtered_ajd = np.mean(metric_df["filtered_ajd"])
+        print(f"Filtered AJD: {filtered_ajd}")
         
-        if graph_metric["forgetting_rate"] == 1: # Check if forgetting_rate is 1
-            forgetting_rate_one_indices.append(idx) # Add index to the list
+        avg_sol_count = np.mean(metric_df["average_solution_count"])
+        print(f"Average Solution Count: {avg_sol_count}") # Print average solution count
         
-        if graph_metric["filtered_ajd"] is None: # Check if filtered_ajd is None
-            none_ajd_indices.append(idx) # Add index to the list
-     
-    # Print indices with forgetting_rate == 1
-    print(f"Indices with forgetting_rate == 1: --idx {' '.join(map(str, forgetting_rate_one_indices))}")     
-    
-    # Print indices with filtered_ajd == None
-    print(f"Indices with filtered_ajd == None: --idx {' '.join(map(str, none_ajd_indices))}")
-            
-            
-    metric_dict = {
-        "filtered_ajd": filtered_ajds,
-        "average_solution_count": average_solution_counts,
-        "calculation_arrow_counts": calculation_arrow_counts,
-        "verification_arrow_counts": verification_arrow_counts,
-        "backtracking_arrow_counts": backtracking_arrow_counts,
-        "total_node_counts": total_node_counts,
-        "forgetting_rates": forgetting_rates,
-        "average_verification_rates": average_verification_rates_list,
-        "corrs": corrs,
-    }
-    
-    metric_df = pd.DataFrame(metric_dict)
-    metric_df = metric_df.dropna(how='any')
-    
-    filtered_ajd = np.mean(metric_df["filtered_ajd"])
-    print(f"Filtered AJD: {filtered_ajd}")
-    
-    avg_sol_count = np.mean(metric_df["average_solution_count"])
-    print(f"Average Solution Count: {avg_sol_count}") # Print average solution count
-    
-    avg_calc_arrows = np.mean(metric_df["calculation_arrow_counts"])
-    avg_ver_arrows = np.mean(metric_df["verification_arrow_counts"])
-    avg_back_arrows = np.mean(metric_df["backtracking_arrow_counts"])
+        avg_calc_arrows = np.mean(metric_df["calculation_arrow_counts"])
+        avg_ver_arrows = np.mean(metric_df["verification_arrow_counts"])
+        avg_back_arrows = np.mean(metric_df["backtracking_arrow_counts"])
 
-    print(f"Average Calculation Arrows: {avg_calc_arrows}")
-    print(f"Average Verification Arrows: {avg_ver_arrows}")
-    print(f"Average Backtracking Arrows: {avg_back_arrows}")
-        
-    avg_total_nodes = np.mean(metric_df["total_node_counts"])
-    print(f"Average Total Node Count: {avg_total_nodes}") # Print average total_node_count
-    
-    avg_forgetting_rate = np.mean(metric_df["forgetting_rates"])
-    print(f"Average Forgetting Rate: {avg_forgetting_rate}") # Print average forgetting_rate
-    
-    overall_avg_verification_rate = np.mean(metric_df["average_verification_rates"])
-    print(f"Average Verification Rate: {overall_avg_verification_rate:.4f}" if overall_avg_verification_rate is not None else "Average Verification Rate: None")
-        
-    avg_corr = np.mean(metric_df["corrs"])
-    print(f"Average Correlation: {avg_corr}")
+        print(f"Average Calculation Arrows: {avg_calc_arrows}")
+        print(f"Average Verification Arrows: {avg_ver_arrows}")
+        print(f"Average Backtracking Arrows: {avg_back_arrows}")
             
-    if args.wandb:
-        wandb.log({
-            "filtered_ajd": filtered_ajd,
-            "average_solution_count": avg_sol_count, # Log average solution count
-            "average_calculation_arrows": avg_calc_arrows,
-            "average_verification_arrows": avg_ver_arrows,
-            "average_backtracking_arrows": avg_back_arrows,
-            "average_total_node_count": avg_total_nodes, # Log average total_node_count
-            "average_forgetting_rate": avg_forgetting_rate, # Log average forgetting_rate
-            "overall_average_verification_rate": overall_avg_verification_rate, # Log overall_average_verification_rate
-            "average_correlation": avg_corr,
-        })
-        wandb.finish()
+        avg_total_nodes = np.mean(metric_df["total_node_counts"])
+        print(f"Average Total Node Count: {avg_total_nodes}") # Print average total_node_count
+        
+        avg_forgetting_rate = np.mean(metric_df["forgetting_rates"])
+        print(f"Average Forgetting Rate: {avg_forgetting_rate}") # Print average forgetting_rate
+        
+        overall_avg_verification_rate = np.mean(metric_df["average_verification_rates"])
+        print(f"Average Verification Rate: {overall_avg_verification_rate:.4f}" if overall_avg_verification_rate is not None else "Average Verification Rate: None")
+            
+        avg_corr = np.mean(metric_df["corrs"])
+        print(f"Average Correlation: {avg_corr}")
+                
+        if args.wandb:
+            wandb.log({
+                "filtered_ajd": filtered_ajd,
+                "average_solution_count": avg_sol_count, # Log average solution count
+                "average_calculation_arrows": avg_calc_arrows,
+                "average_verification_arrows": avg_ver_arrows,
+                "average_backtracking_arrows": avg_back_arrows,
+                "average_total_node_count": avg_total_nodes, # Log average total_node_count
+                "average_forgetting_rate": avg_forgetting_rate, # Log average forgetting_rate
+                "overall_average_verification_rate": overall_avg_verification_rate, # Log overall_average_verification_rate
+                "average_correlation": avg_corr,
+            })
+            wandb.finish()
+            
+        for metric in metric_dict:
+            if not metric in all_metrics:
+                all_metrics[metric] = []
+            all_metrics[metric].extend(metric_dict[metric])
+            
+
+    # Check the importance of each feature using XGBoost regressor
+    feature_columns = [
+        "filtered_ajd",
+        "forgetting_rates",
+        "average_verification_rates",
+        "average_solution_count"
+    ]
+    target_column = "corrs"
+
+    # Prepare X and y, dropping rows with NaN in any feature or target
+    valid_rows = metric_df[feature_columns + [target_column]].dropna()
+    X = valid_rows[feature_columns].values
+    y = valid_rows[target_column].values
+
+    if len(X) > 0:
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+        # Since 'corr' is a binary variable, use a classifier instead of regressor
+        model = xgb.XGBClassifier(n_estimators=100, random_state=42, use_label_encoder=False, eval_metric='logloss')
+        model.fit(X_train, y_train)
+
+        # Check R2 score (for classifier, use accuracy and optionally ROC-AUC)
+        y_pred = model.predict(X_test)
+        accuracy = np.mean(y_pred == y_test)
+        print(f"Classifier Accuracy (R2 not meaningful for classification): {accuracy:.4f}")
+
+        # INSERT_YOUR_CODE
+        # Check the accuracy of a majority classifier (predicts the most common class)
+        if len(y_test) > 0:
+            majority_class = Counter(y_train).most_common(1)[0][0]
+            majority_pred = np.full_like(y_test, fill_value=majority_class)
+            majority_accuracy = np.mean(majority_pred == y_test)
+            print(f"Majority Classifier Accuracy: {majority_accuracy:.4f}")
+        else:
+            print("Not enough test data to compute majority classifier accuracy.")
+        # Check feature importances
+        importances = model.feature_importances_
+        # Optionally, print sorted feature importances
+        sorted_features = sorted(zip(feature_columns, importances), key=lambda x: x[1], reverse=True)
+        print("Features ranked by importance:")
+        for name, importance in sorted_features:
+            print(f"  {name}: {importance:.4f}")
+    else:
+        print("Not enough valid data to check feature importance.")
