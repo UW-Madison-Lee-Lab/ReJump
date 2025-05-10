@@ -735,6 +735,7 @@ if __name__ == "__main__":
     forgetting_rates = [] # Initialize list for forgetting rates
     average_verification_rates_list = [] # Initialize list for average_verification_rate
     forgetting_rate_one_indices = [] # Initialize list for indices with forgetting_rate == 1
+    none_ajd_indices = [] # Initialize list for indices with filtered_ajd == None
 
     for idx in tqdm(idxs):
         attempts, success, overwrite = 0, False, args.overwrite
@@ -764,9 +765,15 @@ if __name__ == "__main__":
         
         if graph_metric["forgetting_rate"] == 1: # Check if forgetting_rate is 1
             forgetting_rate_one_indices.append(idx) # Add index to the list
+        
+        if graph_metric["filtered_ajd"] is None: # Check if filtered_ajd is None
+            none_ajd_indices.append(idx) # Add index to the list
      
     # Print indices with forgetting_rate == 1
     print(f"Indices with forgetting_rate == 1: --idx {' '.join(map(str, forgetting_rate_one_indices))}")     
+    
+    # Print indices with filtered_ajd == None
+    print(f"Indices with filtered_ajd == None: --idx {' '.join(map(str, none_ajd_indices))}")
             
     filtered_ajd = sum(filtered_ajds) / len(filtered_ajds) if filtered_ajds and len(filtered_ajds) > 0 else None
     print(f"Filtered AJD: {filtered_ajd}")
