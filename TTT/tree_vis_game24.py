@@ -664,6 +664,79 @@ def get_analysis(idx, results, results_dir, overwrite=False):
         average_verification_rate = 0 # Or None, depending on desired behavior for no arrows
     print(f"Index {idx}: Verification Rate = {average_verification_rate:.4f}")
 
+    # --- Call compare_answer for each node in the Filtered leaf visit sequence (using Problem field) and print the output ---
+    tree_data_for_leaf_check = json_data.get("tree", {})
+    walk_data_for_leaf_check = json_data.get("walk", [])
+
+    num_filtered_leaves_for_sr = 0 # Initialize for Success Rate calculation
+    num_successful_filtered_leaves_for_sr = 0 # Initialize for Success Rate calculation
+    filtered_leaf_is_correct_list_for_or = [] # Initialize for Overthinking Rate
+
+    if not tree_data_for_leaf_check or not isinstance(tree_data_for_leaf_check, dict):
+        print(f"Index {idx}: Tree data is missing or invalid for leaf answer check.")
+    else:
+        parents, depths, leaves, children, root_id = _build_tree_info_from_parent_links(tree_data_for_leaf_check)
+        if parents is None:
+            print(f"Index {idx}: Could not build tree info for leaf answer check.")
+        elif not leaves:
+            print(f"Index {idx}: No leaf nodes found in the tree for leaf answer check.")
+        else:
+            full_walk_sequence = _reconstruct_walk_sequence(walk_data_for_leaf_check)
+            if full_walk_sequence is None:
+                print(f"Index {idx}: Could not reconstruct walk sequence for leaf answer check.")
+            elif not full_walk_sequence:
+                print(f"Index {idx}: Walk sequence is empty for leaf answer check.")
+            else:
+                filtered_leaf_sequence_for_check = _filter_leaf_visits(full_walk_sequence, walk_data_for_leaf_check, leaves, depths)
+                
+                if filtered_leaf_sequence_for_check:
+                    print(f"Index {idx}: Checking answers for Filtered Leaf Visit Sequence (using Problem field): {filtered_leaf_sequence_for_check}")
+                    num_filtered_leaves_for_sr = len(filtered_leaf_sequence_for_check) # Total number of filtered leaves
+
+                    for node_id in filtered_leaf_sequence_for_check:
+                        if node_id in tree_data_for_leaf_check and isinstance(tree_data_for_leaf_check[node_id], dict):
+                            leaf_node_info = tree_data_for_leaf_check[node_id]
+                            # Get the expression from the 'Problem' field.
+                            expression_from_leaf_problem = leaf_node_info.get("Problem")
+
+                            if expression_from_leaf_problem is not None:
+                                # Add "=24" to the expression string from the Problem field
+                                # so that the compare_answer function can evaluate it correctly.
+                                expression_to_evaluate = str(expression_from_leaf_problem) + "=24"
+                                is_correct_for_leaf = compare_answer(expression_to_evaluate)
+                                print(f"  Leaf Node {node_id}: Problem='{expression_from_leaf_problem}', compare_answer output={is_correct_for_leaf}")
+                                if is_correct_for_leaf == 1: # Count successful ones
+                                    num_successful_filtered_leaves_for_sr += 1
+                                filtered_leaf_is_correct_list_for_or.append(is_correct_for_leaf == 1)
+                            else:
+                                print(f"  Leaf Node {node_id}: 'Problem' field is missing or None.")
+                                filtered_leaf_is_correct_list_for_or.append(False)
+                        else:
+                            print(f"  Leaf Node {node_id}: Not found in tree_data or invalid format.")
+                            filtered_leaf_is_correct_list_for_or.append(False)
+                else:
+                    print(f"Index {idx}: Filtered leaf visit sequence is empty for answer check.")
+    # --- End of modified logic ---
+
+    sample_success_rate = 0.0
+    if num_filtered_leaves_for_sr > 0:
+        sample_success_rate = num_successful_filtered_leaves_for_sr / num_filtered_leaves_for_sr
+    print(f"Index {idx}: Success Rate = {sample_success_rate:.4f}")
+
+    # Calculate Overthinking Rate
+    sample_overthinking_rate = 0.0
+    if num_filtered_leaves_for_sr > 0: # Denominator must be greater than 0
+        first_success_idx_for_or = -1
+        for i, is_correct in enumerate(filtered_leaf_is_correct_list_for_or):
+            if is_correct:
+                first_success_idx_for_or = i
+                break
+        
+        if first_success_idx_for_or != -1: # If a success was found
+            nodes_after_first_success = num_filtered_leaves_for_sr - (first_success_idx_for_or + 1)
+            sample_overthinking_rate = nodes_after_first_success / num_filtered_leaves_for_sr
+    print(f"Index {idx}: Overthinking Rate = {sample_overthinking_rate:.4f}")
+
     return {
         "graph": vis_path,
         "filtered_ajd": filtered_ajd,
@@ -675,6 +748,8 @@ def get_analysis(idx, results, results_dir, overwrite=False):
         "forgetting_rate": forgetting_rate,
         "average_verification_rate": average_verification_rate,
         "corr": json_data["corr"],
+        "success_rate": sample_success_rate,
+        "overthinking_rate": sample_overthinking_rate, # Added overthinking rate
     }
 
 if __name__ == "__main__":
@@ -727,6 +802,8 @@ if __name__ == "__main__":
     forgetting_rates = [] # Initialize list for forgetting rates
     average_verification_rates_list = [] # Initialize list for average_verification_rate
     corrs = []
+    success_rates_list = [] # Initialize list for success rates
+    overthinking_rates_list = [] # Initialize list for overthinking rates
 
     for idx in tqdm(idxs):
         attempts, success, overwrite = 0, False, args.overwrite
@@ -754,6 +831,16 @@ if __name__ == "__main__":
         forgetting_rates.append(graph_metric["forgetting_rate"]) # Append forgetting rate
         average_verification_rates_list.append(graph_metric["average_verification_rate"]) # Append average_verification_rate
         corrs.append(graph_metric["corr"])  
+        if graph_metric.get("success_rate") is not None:
+            success_rates_list.append(graph_metric["success_rate"])
+        else:
+            success_rates_list.append(0.0) # Default if None, though it should always be float
+        
+        if graph_metric.get("overthinking_rate") is not None:
+            overthinking_rates_list.append(graph_metric["overthinking_rate"])
+        else:
+            overthinking_rates_list.append(0.0) # Default if None
+
     metric_dict = {
         "filtered_ajd": filtered_ajds,
         "average_solution_count": average_solution_counts,
@@ -764,6 +851,8 @@ if __name__ == "__main__":
         "forgetting_rates": forgetting_rates,
         "average_verification_rates": average_verification_rates_list,
         "corrs": corrs,
+        "success_rates": success_rates_list,
+        "overthinking_rates": overthinking_rates_list, # Added to metric_dict
     }
     
     metric_df = pd.DataFrame(metric_dict)
@@ -795,6 +884,12 @@ if __name__ == "__main__":
     avg_corr = np.mean(metric_df["corrs"])
     print(f"Average Correlation: {avg_corr}")
     
+    avg_success_rate = np.mean(metric_df["success_rates"]) if "success_rates" in metric_df.columns and not metric_df["success_rates"].empty else 0.0
+    print(f"Average Success Rate: {avg_success_rate:.4f}")
+    
+    avg_overthinking_rate = np.mean(metric_df["overthinking_rates"]) if "overthinking_rates" in metric_df.columns and not metric_df["overthinking_rates"].empty else 0.0
+    print(f"Average Overthinking Rate: {avg_overthinking_rate:.4f}")
+    
     
     if args.wandb:
         wandb.log({
@@ -807,5 +902,7 @@ if __name__ == "__main__":
             "average_forgetting_rate": avg_forgetting_rate, # Log average forgetting_rate
             "overall_average_verification_rate": overall_avg_verification_rate, # Log overall_average_verification_rate
             "average_correlation": avg_corr,
+            "average_success_rate": avg_success_rate,
+            "average_overthinking_rate": avg_overthinking_rate, # Log average overthinking rate
         })
         wandb.finish()
