@@ -412,12 +412,12 @@ def make_other_prefix(
         instruction_following = f"""
         {question} Your response should just be the answer containing only {label_str} with no additional text—for example, {answer_example['example']}
         """
-    elif template_type == "standard_api":
+    elif template_type == "standard_api" or "ricl" in template_type:
         instruction_following = f"""
-        {question} Please provide your thinking process in <think> </think> tags. Your final answer should be enclosed in {answer_example['mention']}, containing only {label_str} with no additional text—for example, {answer_example['example']}
+        {question} Please provide your thinking process in <think> </think> tags. After that, your final answer should be enclosed in {answer_example['mention']}, containing only {label_str} with no additional text—for example, {answer_example['example']}
         """
     else:
-        raise ValueError(f"Template type {template_type} is not supported for GSM8k")
+        raise ValueError(f"Template type {template_type} is not supported for datasets")
 
     return instruction_following
 

@@ -40,7 +40,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--hdfs_dir', default=None)
     parser.add_argument('--num_samples', type=int, default=100)
-    parser.add_argument('--feature_noise', type=float, default=None)
+    parser.add_argument('--feature_noise', type=lambda x: float(x) if x.lower() != 'none' else None, default=None)
     parser.add_argument('--test_ratio', type=float, default=1)
     parser.add_argument('--n_shot', type=int, default=None)
     parser.add_argument('--n_query', type=int, default=1)

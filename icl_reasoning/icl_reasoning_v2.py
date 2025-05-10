@@ -22,8 +22,9 @@ if __name__ == "__main__":
         prompt = row["prompt"][0]["content"]
         
         replace = len(args.result_path) < args.num_shot
-        result_idices = random.choices(np.arange(len(args.result_path)), k=args.num_shot, replace=replace)
+        result_idices = np.random.choice(np.arange(len(args.result_path)), size=args.num_shot, replace=replace)
         indices = [i]
+        examples = []
         
         for result_idx in result_idices:
             result_df = result_dfs[result_idx]
@@ -32,22 +33,23 @@ if __name__ == "__main__":
                 other_indices.remove(j)
             random_index = random.choice(other_indices)
             indices.append(random_index)
+            examples.append(result_df.iloc[random_index])
         new_prompt = f"""
         You will be provided with examples of how a skilled reasoner solves a problem.
         Study the examples carefully to understand the reasoning process.
         """
-        for j in random_index:
+        for j, example in enumerate(examples):
             new_prompt += f"""
-            |--- Example {j} ---|
-            Q: {result_df.iloc[j]['prompt'][0]['content']}
-            A: {result_df.iloc[j]['responses'][0]}
-            |--- End of Example {j} ---|
+|------ Example {j} ------|
+Q: {example['prompt'][0]['content']}
+A: {example['responses'][0]}
+|------ End of Example {j} ------|
             """
         new_prompt += f"""
-        Now, solve the problem following a similar reasoning approach.
-        |--- Problem ---|
-        Q: {prompt}
-        |--- End of Problem ---|
+Now, solve the problem following a similar reasoning approach.
+|------ Problem ------|
+Q: {prompt}
+|------ End of Problem ------|
         """
         
         new_row = row.copy()
@@ -56,6 +58,7 @@ if __name__ == "__main__":
         
     new_df = pd.DataFrame(new_df)
     new_df.to_parquet(args.output_path)
+    print(f"Saved to {args.output_path}")
 
 
 

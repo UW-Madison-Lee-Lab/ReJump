@@ -384,7 +384,7 @@ def compute_score(solution_str, ground_truth, answer_format) -> float:
             retval = 1.
     except Exception as e:
         print(type(e))
-        pdb.set_trace()
+        retval = 0.
 
     return retval
 

@@ -22,7 +22,8 @@ def gen_dataset(
     elif dataset_name == "circles":
         feature_noise = 0.01 if feature_noise is None else feature_noise
     else:
-        feature_noise = 0
+        feature_noise = None
+        
         command = f"""
 python -m examples.data_preprocess.{dataset_name} \
     --template_type={template_type} \
@@ -56,26 +57,30 @@ python -m examples.data_preprocess.{dataset_name} \
             data_mode=data_mode,
             n_query=n_query
         )
+        dataset_path = f"{dataset_path}/test_{data_mode}.parquet"
         
-        result_path = get_result_dir(
-            dataset_name=example_datasets[0],
-            model_name="xai/grok-3-mini-beta",
-            shot=shot,
-            template_type=template_type,
-            response_length=response_length,
-            num_samples=num_samples,
-            feature_noise=feature_noise,
-            label_noise=label_noise,
-            train_step=0,
-            data_mode=data_mode,
-            n_query=n_query,
-            temperature=0.00
-        )
+        result_paths = []
+        for example_dataset in example_datasets:
+            result_path = get_result_dir(
+                dataset_name=example_dataset,
+                model_name="deepseek-ai/deepseek-reasoner",
+                shot=shot,
+                template_type="reasoning_api",
+                response_length=response_length,
+                num_samples=num_samples,
+                feature_noise=feature_noise,
+                label_noise=label_noise,
+                train_step=0,
+                data_mode=data_mode,
+                n_query=n_query,
+                temperature=0.00,
+            )
+            result_paths.append(f"{result_path}/test_{data_mode}.parquet")
         
         command += f"""
 python -m icl_reasoning.icl_reasoning_v2 \
     --dataset_path {dataset_path} \
-    --result_path {result_path} \
+    --result_path {' '.join(result_paths)} \
     --num_shot {ricl_shot} \
     --output_path {dataset_path}
         """
