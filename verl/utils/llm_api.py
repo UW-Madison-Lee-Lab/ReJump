@@ -238,11 +238,15 @@ class LLMAPI:
                             #token_info contains token,logprob,bytes,top_logprobs...
                             token_logprob_dict['tokens'].append(token_info.token)
                             token_logprob_dict['logprobs'].append(token_info.logprob)# Storing chosen token's logprob as an example
-                    # import pdb; pdb.set_trace()
                     output = response.choices[0].message.content
                     reasoning = getattr(response.choices[0].message, 'reasoning_content', None)
+
                     if reasoning is None:
                         reasoning = getattr(response.choices[0].message, 'reasoning', None)
+                    print(type(output))
+                    print(type(reasoning))
+                    # import pdb; pdb.set_trace()
+                    
                 elif self.client_type == "alibaba":
                     if self.thinking == "enabled":
                         extra_body = {
