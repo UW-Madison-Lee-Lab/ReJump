@@ -93,7 +93,8 @@ for dataset in dataset_list:
                                 feature_noise=feature_noise,
                                 label_noise=args.label_noise,
                                 data_mode=args.data_mode,
-                                test_ratio=args.test_ratio
+                                test_ratio=args.test_ratio,
+                                response_length=response_length
                             )
                             command_list.append(gen_command)
                             if args.train:
