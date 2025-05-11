@@ -102,14 +102,14 @@ def run_tree_analysis(base_dir):
                     # "--debug"
                 ]
                 try:
-                    subprocess.run(cmd, check=True)
+                    # subprocess.run(cmd, check=True)
                     print(f"Successfully processed {input_file}")
                 except subprocess.CalledProcessError as e:
                     print(f"Error processing {input_file}: {e}")
                 
-                # gemini_analysis_output_file = input_file.replace("test_default.parquet", "test_default_gemini_analysis_tree.parquet")
-                # tree_analysis_script = "/home/szhang967/liftr/reasoning_analysis/llm_analysis.py"
-                # subprocess.run(["python", tree_analysis_script, "--input", gemini_analysis_output_file, '--data_type', data_type], check=True)
+                gemini_analysis_output_file = input_file.replace("test_default.parquet", "test_default_gemini_analysis_tree.parquet")
+                tree_analysis_script = "/home/szhang967/liftr/reasoning_analysis/llm_analysis.py"
+                subprocess.run(["python", tree_analysis_script, "--input", gemini_analysis_output_file, '--data_type', data_type], check=True)
                 os.environ["GEMINI_API_KEY"] = ""
 
                 
