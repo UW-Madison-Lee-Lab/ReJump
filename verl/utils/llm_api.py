@@ -269,7 +269,10 @@ class LLMAPI:
                     reasoning_match = re.search(r'<think>(.*?)</think>', output, re.DOTALL)
                     reasoning_content = reasoning_match.group(0).strip() if reasoning_match else ""
                     
-                    answer_match = re.search(rf"{get_answer_format(supported_datasets[data_source]['answer_format'], '.*?')['example']}", output, re.DOTALL)
+                    pattern = get_answer_format(supported_datasets[data_source]['answer_format'], '.*?')['example']
+                    if pattern.startswith("\\boxed"):
+                        pattern = "\\" + pattern
+                    answer_match = re.search(rf"{pattern}", output)
                     answer_content = answer_match.group(0).strip() if answer_match else ""
                     response_content = output
                 else:

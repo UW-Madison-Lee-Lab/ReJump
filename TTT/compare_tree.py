@@ -323,7 +323,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     #parser.add_argument("--model", type=str, nargs='+', default=["deepseek-ai/deepseek-reasoner", "xai/grok-3-mini-beta", "alibaba/qwen-turbo-2025-04-28-thinking"])
     parser.add_argument("--model", type=str, nargs='+', default=["deepseek-ai/deepseek-reasoner", "xai/grok-3-mini-beta"])
-    parser.add_argument("--dataset", type=str, nargs='+', default=["math500"])
+    parser.add_argument("--dataset", type=str, nargs='+', default=["math500", "game24"])
     parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--idx", type=int, nargs='+', default=None, help="List of sample indices to process")
     args = parser.parse_args()
@@ -341,7 +341,7 @@ if __name__ == "__main__":
                 shot = 0,
                 template_type = supported_llms[model]["template_type"],
                 response_length = 404,
-                num_samples = -1,
+                num_samples = -1 if dataset == "math500" else 100,
                 feature_noise = supported_datasets[dataset]["feature_noise"],
                 label_noise = 0.0,
                 data_mode = "default",

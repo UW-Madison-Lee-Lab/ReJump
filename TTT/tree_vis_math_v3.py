@@ -21,6 +21,7 @@ from collections import deque
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
 
+from verl.utils.reward_score.math500 import compute_score
 import xgboost as xgb
 from sklearn.model_selection import train_test_split
 from collections import Counter
@@ -612,7 +613,7 @@ def get_analysis(idx, results, results_dir, overwrite=False):
         os.makedirs(os.path.dirname(result_path), exist_ok=True)
         input_str = results.iloc[idx]["prompt"][0]["content"]
         output_str = results.iloc[idx]["responses"][0]
-        corr = results.iloc[idx]["answers"][0] == results.iloc[idx]["reward_model"]["ground_truth"]["label"][0]
+        corr = compute_score(output_str, results.iloc[idx]["reward_model"]["ground_truth"], "box")
         tree_prompt = get_tree_prompt(input_str, output_str)
         tree_json = llm.generate([{
             "role": "user",
@@ -632,6 +633,10 @@ def get_analysis(idx, results, results_dir, overwrite=False):
         save_json(json_data, result_path)
     else:
         json_data = load_json(result_path)
+        input_str = results.iloc[idx]["prompt"][0]["content"]
+        output_str = results.iloc[idx]["responses"][0]
+        corr = compute_score(output_str, results.iloc[idx]["reward_model"]["ground_truth"], "box")
+        json_data["corr"] = corr
         
     
     # Filter out the specific walk elements before visualization
@@ -687,6 +692,34 @@ def get_analysis(idx, results, results_dir, overwrite=False):
         average_verification_rate = 0 # Or None, depending on desired behavior for no arrows
     print(f"Index {idx}: Verification Rate = {average_verification_rate:.4f}")
 
+    # ---- NEW: Calculate no_calculation_edge ----
+    no_calculation_edge_value = 0
+    missing_calculation_edges_list = []
+    tree_nodes_data = json_data.get("tree", {})
+    walk_steps_for_check = json_data.get("walk", []) # Already filtered for "none" -> "node1"
+
+    # Create a set of calculation/derivation walks for efficient lookup: (from_node, to_node)
+    calculation_walks_set = set()
+    if isinstance(walk_steps_for_check, list):
+        for step in walk_steps_for_check:
+            if isinstance(step, dict) and step.get("category") == "calculation/derivation":
+                calculation_walks_set.add((step.get("from"), step.get("to")))
+
+    if isinstance(tree_nodes_data, dict):
+        for node_id, node_info in tree_nodes_data.items():
+            parent_id = node_info.get("parent")
+            # Check if it's a valid tree edge (parent exists and is not 'none')
+            if parent_id and parent_id != "none" and parent_id in tree_nodes_data:
+                # This represents a tree edge: parent_id -> node_id
+                if (parent_id, node_id) not in calculation_walks_set:
+                    no_calculation_edge_value = 1
+                    missing_calculation_edges_list.append(f"{parent_id} -> {node_id}")
+    
+    print(f"Index {idx}: no_calculation_edge = {no_calculation_edge_value}")
+    if no_calculation_edge_value == 1:
+        print(f"Index {idx}: Missing calculation edges: {', '.join(missing_calculation_edges_list)}")
+    # ---- END NEW ----
+
     return {
         "graph": vis_path,
         "filtered_ajd": filtered_ajd,
@@ -698,6 +731,8 @@ def get_analysis(idx, results, results_dir, overwrite=False):
         "forgetting_rate": forgetting_rate,
         "average_verification_rate": average_verification_rate,
         "corr": json_data["corr"],
+        "no_calculation_edge": no_calculation_edge_value,
+        "missing_edges_info": ', '.join(missing_calculation_edges_list) if no_calculation_edge_value == 1 else ""
     }
 
 if __name__ == "__main__":
@@ -717,8 +752,10 @@ if __name__ == "__main__":
         if args.wandb:
             wandb_config = {
                 "dataset_name": args.dataset_name,
-                "model_name": args.model_name,
+                "model_name": model_name,
                 "num_samples": args.num_samples,
+                "mode": args.mode,
+                "temperature": args.temperature,
             }
             project_name = f"{WANDB_INFO['project']}-tree-vis-v3"
             
@@ -760,6 +797,9 @@ if __name__ == "__main__":
         forgetting_rate_one_indices = [] # Initialize list for indices with forgetting_rate == 1
         none_ajd_indices = [] # Initialize list for indices with filtered_ajd == None
         corrs = []
+        no_calculation_edge_values = [] # For storing 0 or 1 for each sample
+        all_samples_missing_edges_info = [] # For storing detailed string info for samples with missing edges
+        no_calculation_edge_one_indices = [] # Initialize list for indices with no_calculation_edge == 1
         
         for idx in tqdm(idxs):
             attempts, success, overwrite = 0, False, args.overwrite
@@ -788,6 +828,10 @@ if __name__ == "__main__":
             average_verification_rates_list.append(graph_metric["average_verification_rate"]) # Append average_verification_rate
             corrs.append(graph_metric["corr"])
             
+            no_calculation_edge_values.append(graph_metric["no_calculation_edge"])
+            if graph_metric["no_calculation_edge"] == 1:
+                no_calculation_edge_one_indices.append(idx)
+            
             if graph_metric["forgetting_rate"] == 1: # Check if forgetting_rate is 1
                 forgetting_rate_one_indices.append(idx) # Add index to the list
             
@@ -797,9 +841,11 @@ if __name__ == "__main__":
         # Print indices with forgetting_rate == 1
         print(f"Indices with forgetting_rate == 1: --idx {' '.join(map(str, forgetting_rate_one_indices))}")     
         
+        # Print indices with no_calculation_edge == 1
+        print(f"Indices with no_calculation_edge == 1: --idx {' '.join(map(str, no_calculation_edge_one_indices))}")
+
         # Print indices with filtered_ajd == None
         print(f"Indices with filtered_ajd == None: --idx {' '.join(map(str, none_ajd_indices))}")
-                
                 
         metric_dict = {
             "filtered_ajd": filtered_ajds,
@@ -811,39 +857,46 @@ if __name__ == "__main__":
             "forgetting_rates": forgetting_rates,
             "average_verification_rates": average_verification_rates_list,
             "corrs": corrs,
+            "no_calculation_edge": no_calculation_edge_values, # Add new metric to dict
         }
         
         metric_df = pd.DataFrame(metric_dict)
-        metric_df = metric_df.dropna(how='any')
+        # It's usually better to handle NaNs explicitly or ensure they are not produced for critical metrics.
+        # 'no_calculation_edge' should always be 0 or 1, so it won't introduce NaNs itself.
+        metric_df = metric_df.dropna(how='any') 
         
-        filtered_ajd = np.mean(metric_df["filtered_ajd"])
+        filtered_ajd = np.mean(metric_df["filtered_ajd"]) if "filtered_ajd" in metric_df.columns and not metric_df["filtered_ajd"].empty else np.nan
         print(f"Filtered AJD: {filtered_ajd}")
         
-        avg_sol_count = np.mean(metric_df["average_solution_count"])
+        avg_sol_count = np.mean(metric_df["average_solution_count"]) if "average_solution_count" in metric_df.columns and not metric_df["average_solution_count"].empty else np.nan
         print(f"Average Solution Count: {avg_sol_count}") # Print average solution count
         
-        avg_calc_arrows = np.mean(metric_df["calculation_arrow_counts"])
-        avg_ver_arrows = np.mean(metric_df["verification_arrow_counts"])
-        avg_back_arrows = np.mean(metric_df["backtracking_arrow_counts"])
+        avg_calc_arrows = np.mean(metric_df["calculation_arrow_counts"]) if "calculation_arrow_counts" in metric_df.columns and not metric_df["calculation_arrow_counts"].empty else np.nan
+        avg_ver_arrows = np.mean(metric_df["verification_arrow_counts"]) if "verification_arrow_counts" in metric_df.columns and not metric_df["verification_arrow_counts"].empty else np.nan
+        avg_back_arrows = np.mean(metric_df["backtracking_arrow_counts"]) if "backtracking_arrow_counts" in metric_df.columns and not metric_df["backtracking_arrow_counts"].empty else np.nan
 
         print(f"Average Calculation Arrows: {avg_calc_arrows}")
         print(f"Average Verification Arrows: {avg_ver_arrows}")
         print(f"Average Backtracking Arrows: {avg_back_arrows}")
             
-        avg_total_nodes = np.mean(metric_df["total_node_counts"])
+        avg_total_nodes = np.mean(metric_df["total_node_counts"]) if "total_node_counts" in metric_df.columns and not metric_df["total_node_counts"].empty else np.nan
         print(f"Average Total Node Count: {avg_total_nodes}") # Print average total_node_count
         
-        avg_forgetting_rate = np.mean(metric_df["forgetting_rates"])
+        avg_forgetting_rate = np.mean(metric_df["forgetting_rates"]) if "forgetting_rates" in metric_df.columns and not metric_df["forgetting_rates"].empty else np.nan
         print(f"Average Forgetting Rate: {avg_forgetting_rate}") # Print average forgetting_rate
         
-        overall_avg_verification_rate = np.mean(metric_df["average_verification_rates"])
-        print(f"Average Verification Rate: {overall_avg_verification_rate:.4f}" if overall_avg_verification_rate is not None else "Average Verification Rate: None")
+        overall_avg_verification_rate = np.mean(metric_df["average_verification_rates"]) if "average_verification_rates" in metric_df.columns and not metric_df["average_verification_rates"].empty else np.nan
+        print(f"Average Verification Rate: {overall_avg_verification_rate:.4f}" if overall_avg_verification_rate is not None and not np.isnan(overall_avg_verification_rate) else "Average Verification Rate: N/A")
             
-        avg_corr = np.mean(metric_df["corrs"])
+        avg_corr = np.mean(metric_df["corrs"]) if "corrs" in metric_df.columns and not metric_df["corrs"].empty else np.nan
         print(f"Average Correlation: {avg_corr}")
+        
+        # Calculate and print average for no_calculation_edge (Proportion of samples with the issue)
+        avg_no_calc_edge = np.mean(metric_df["no_calculation_edge"]) if "no_calculation_edge" in metric_df.columns and not metric_df["no_calculation_edge"].empty else np.nan
+        print(f"Proportion of samples with no_calculation_edge=1: {avg_no_calc_edge:.4f}" if avg_no_calc_edge is not None and not np.isnan(avg_no_calc_edge) else "Proportion of samples with no_calculation_edge=1: N/A")
                 
         if args.wandb:
-            wandb.log({
+            wandb_log_data = {
                 "filtered_ajd": filtered_ajd,
                 "average_solution_count": avg_sol_count, # Log average solution count
                 "average_calculation_arrows": avg_calc_arrows,
@@ -853,7 +906,11 @@ if __name__ == "__main__":
                 "average_forgetting_rate": avg_forgetting_rate, # Log average forgetting_rate
                 "overall_average_verification_rate": overall_avg_verification_rate, # Log overall_average_verification_rate
                 "average_correlation": avg_corr,
-            })
+                "average_no_calculation_edge": avg_no_calc_edge, # Log new metric
+            }
+            # Filter out NaN values before logging to wandb
+            wandb_log_data = {k: v for k, v in wandb_log_data.items() if v is not None and not np.isnan(v)}
+            wandb.log(wandb_log_data)
             wandb.finish()
             
         for metric in metric_dict:
@@ -867,7 +924,8 @@ if __name__ == "__main__":
         "filtered_ajd",
         "forgetting_rates",
         "average_verification_rates",
-        "average_solution_count"
+        "average_solution_count",
+        "no_calculation_edge"  # Add new feature for model input
     ]
     target_column = "corrs"
 
@@ -883,10 +941,9 @@ if __name__ == "__main__":
         model = xgb.XGBClassifier(n_estimators=100, random_state=42, use_label_encoder=False, eval_metric='logloss')
         model.fit(X_train, y_train)
 
-        # Check R2 score (for classifier, use accuracy and optionally ROC-AUC)
         y_pred = model.predict(X_test)
         accuracy = np.mean(y_pred == y_test)
-        print(f"Classifier Accuracy (R2 not meaningful for classification): {accuracy:.4f}")
+        print(f"Classifier Accuracy: {accuracy:.4f}")
 
         # INSERT_YOUR_CODE
         # Check the accuracy of a majority classifier (predicts the most common class)

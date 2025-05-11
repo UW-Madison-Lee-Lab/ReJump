@@ -592,6 +592,7 @@ def get_analysis(idx, results, results_dir, overwrite=False):
         input_str = results.iloc[idx]["prompt"][0]["content"]
         output_str = results.iloc[idx]["responses"][0]
         model_answer = results.iloc[idx]["answers"][0]
+        if "<answer>" in model_answer: model_answer = model_answer.split("<answer>")[1].split("</answer>")[0]
         corr = compare_answer(model_answer)
         tree_prompt = get_tree_prompt(input_str, output_str)
         tree_json = llm.generate([{
@@ -615,6 +616,7 @@ def get_analysis(idx, results, results_dir, overwrite=False):
         input_str = results.iloc[idx]["prompt"][0]["content"]
         output_str = results.iloc[idx]["responses"][0]
         model_answer = results.iloc[idx]["answers"][0]
+        if "<answer>" in model_answer: model_answer = model_answer.split("<answer>")[1].split("</answer>")[0]
         corr = compare_answer(model_answer)
         json_data["corr"] = corr
 
@@ -759,6 +761,8 @@ if __name__ == "__main__":
     parser.add_argument("--model_name", type=str, default="deepseek-ai/deepseek-reasoner")
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--num_samples", type=int, default=100)
+    parser.add_argument("--temperature", type=float, default=0.00)
+    parser.add_argument("--mode", type=str, default="default", choices=["default", "ricl_1", "ricl_2", "ricl_3", "ricl_4", "ricl_5", "ricl_6", "ricl_7", "ricl_8", "ricl_9", "ricl_10"])
     parser.add_argument("--wandb", action="store_true")
     args = parser.parse_args()
     
@@ -767,24 +771,30 @@ if __name__ == "__main__":
             "dataset_name": args.dataset_name,
             "model_name": args.model_name,
             "num_samples": args.num_samples,
+            "temperature": args.temperature,
+            "mode": args.mode,
         }
         project_name = f"{WANDB_INFO['project']}-tree-vis-v3"
         
         if not wandb_init(project_name, WANDB_INFO["entity"], wandb_config):
             exit()
             
+    if args.mode == "default":
+        template_type = supported_llms[args.model_name]["template_type"]
+    else:
+        template_type = f"{supported_llms[args.model_name]['template_type']}_{args.mode}"
     results_dir = get_result_dir(
         dataset_name = args.dataset_name,
         model_name = args.model_name,
         shot = 0,
-        template_type = supported_llms[args.model_name]["template_type"],
+        template_type = template_type,
         response_length = 404,
         num_samples = args.num_samples,
         feature_noise = supported_datasets[args.dataset_name]["feature_noise"],
         label_noise = 0.0,
         data_mode = "default",
         n_query = 1,
-        temperature = 0.00,
+        temperature = args.temperature,
     )
     results = pd.read_parquet(f"{results_dir}/test_default.parquet")
     

@@ -384,7 +384,7 @@ supported_llms = {
         "api_key": ALIBABA_API_KEY,
     },
     "alibaba/qwen2.5-14b-instruct": {
-        "template_type": "reasoning_api",
+        "template_type": "standard_api",
         "model_size": 0,
         "type": "api",
         "api_key": ALIBABA_API_KEY,
@@ -396,7 +396,7 @@ supported_llms = {
         "api_key": XAI_API_KEY,
     },
     "openrouter-microsoft/phi-4-reasoning-plus": {
-        "template_type": "reasoning_api",
+        "template_type": "standard_api",
         "model_size": 0,
         "type": "api",
         "api_key": OPENROUTER_API_KEY,
