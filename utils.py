@@ -78,7 +78,7 @@ def save_json(data, file_path):
     with open(file_path, 'w') as f:
         json.dump(data, f)
 
-def wandb_init(project_name, entity_name, config):
+def wandb_init(project_name, entity_name, config, resume=False):
     
     api = wandb.Api()
     project_path = f"{entity_name}/{project_name}"
@@ -88,13 +88,24 @@ def wandb_init(project_name, entity_name, config):
             if run.config[key] != config[key]:
                 break
         else:
-            print(f"Run with this config already exists: {run.url}")
-            print("Exiting.")
-            return 0
+            if not resume: 
+                print(f"Run with this config already exists: {run.url}")
+                print("Exiting.")
+                return 0
+            else:
+                run_id = run.id
+                wandb.init(
+                    project = project_name,
+                    entity = entity_name,
+                    id = run_id,
+                    resume = "allow"
+                )
+                return 1
         
     wandb.init(
         project=project_name, 
         entity=entity_name, 
         config=config
     )
+
     return 1

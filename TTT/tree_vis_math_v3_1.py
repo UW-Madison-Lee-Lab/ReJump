@@ -28,11 +28,21 @@ from collections import Counter
 
 # model = "xai/grok-3-mini-beta"
 # model = "claude/claude-3-7-sonnet-20250219-thinking"
-model = "google/gemini-2.5-pro-preview-03-25"
-llm = LLMAPI(
-    api_key=supported_llms[model]["api_key"],
-    model_name=model,
+
+
+model_pro = "google/gemini-2.5-pro-preview-03-25"
+llm_pro = LLMAPI(
+    api_key=supported_llms[model_pro]["api_key"],
+    model_name=model_pro,
     template_type="reasoning_api"
+)
+
+
+model_flash_parsing = "google/gemini-2.5-flash-preview-04-17"
+llm_flash_for_parsing = LLMAPI(
+    api_key=supported_llms[model_flash_parsing]["api_key"],
+    model_name=model_flash_parsing,
+    template_type="reasoning_api" 
 )
 
 def get_tree_prompt(input_str, output_str):
@@ -104,6 +114,52 @@ Each node object must contain: `Problem`, `parent`, `Result`.
 Generate the JSON output based on these instructions.
     """
     
+def get_result_parsing_and_comparison_prompt(result_string, ground_truth_string):
+    return f"""You are an expert AI assistant. Your task is to analyze a 'Result' string from a mathematical reasoning step and compare its final numerical answer to a 'Ground Truth' value.
+
+Instructions:
+1.  Extract the final numerical value(s) from the 'Result' string. 
+    - If multiple numbers are present, focus on the one that seems to be the conclusive answer of that step.
+    - Handle approximations (e.g., "approx 46.0", "is about 3.14").
+    - If the result explicitly states abandonment (e.g., "[Path abandoned]"), extract the numerical value derived *before* abandonment, if any. If no clear numerical value was derived, use "N/A" for the parsed value.
+    - If no specific numerical answer can be clearly identified, use "N/A" for the parsed value.
+
+2.  Compare the extracted numerical value with the 'Ground Truth' value.
+    - The comparison should determine if they are essentially the same, considering potential minor differences in formatting or precision (e.g., "46" vs "46.0", "1.03" vs "1.035" if context implies rounding).
+    - If the parsed value is "N/A", the comparison result should be "NOT_APPLICABLE".
+    - If the ground truth is empty or clearly not a comparable numerical value, and the parsed value is numerical, consider it a "MISMATCH" unless specified otherwise.
+
+3.  Output a single JSON object with two keys:
+    -   `"parsed_value"`: The extracted numerical value as a string (e.g., "46", "3.14", "N/A").
+    -   `"match_status"`: A string indicating the comparison result. Must be one of: "MATCH", "MISMATCH", "NOT_APPLICABLE".
+
+Example:
+Result string: "Using the approximations, $tan x^\circ \\approx \\frac{{1.3270 + 6.3138}}{{1.3270 \\times 6.3138 - 1}} \\approx \\frac{{7.6408}}{{8.381 - 1}} \\approx \\frac{{7.6408}}{{7.381}} \\approx 1.0355$. This implies $x \\approx arctan(1.0355) \\approx 46.0^\circ$. [Path abandoned]"
+Ground Truth string: "46"
+Expected JSON Output: {{"parsed_value": "46.0", "match_status": "MATCH"}}
+
+Result string: "The answer is $y=3$."
+Ground Truth string: "3.0"
+Expected JSON Output: {{"parsed_value": "3", "match_status": "MATCH"}}
+
+Result string: "The calculation leads to $10/2 = 5$. However, this path is incorrect."
+Ground Truth string: "7"
+Expected JSON Output: {{"parsed_value": "5", "match_status": "MISMATCH"}}
+
+Result string: "[Path abandoned] No value obtained."
+Ground Truth string: "10"
+Expected JSON Output: {{"parsed_value": "N/A", "match_status": "NOT_APPLICABLE"}}
+
+---
+Result string to analyze:
+{result_string}
+
+Ground Truth value:
+{ground_truth_string}
+---
+
+JSON Output:"""
+
 def get_walk_prompt(input_str, output_str, tree_json):
     return f"""
 You are an AI assistant specialized in analyzing mathematical reasoning processes. Your task is to trace the provided reasoning text against a structured reasoning tree and generate a "walk" representing the trajectory of the thought process.
@@ -509,28 +565,29 @@ def _filter_leaf_visits(full_walk_sequence, walk_steps_list, leaves, depths):
 # **** NEW Function to compute average solution count ****
 def compute_average_solution_count(tree_data, walk_steps_list):
     """
-    Computes the number of leaf nodes in the tree.
+    Computes the number of leaf nodes in the tree and returns their IDs.
 
     Args:
         tree_data (dict): Dict representing tree {node_id: {"parent": parent_id,...}}
         walk_steps_list (list): List of dicts representing steps (unused in this function but kept for consistency).
 
     Returns:
-        int or None: The number of leaf nodes, or None if tree data is invalid.
+        tuple (int or None, set or None): The number of leaf nodes and a set of their IDs,
+                                         or (None, None) if tree data is invalid.
     """
     parents, depths, leaves, children, root_id = _build_tree_info_from_parent_links(tree_data)
 
     if parents is None:
         print("Error: Could not process tree data for solution count.")
-        return None
+        return (None, None)
 
     if not leaves:
         # This could mean no reachable leaf nodes or an empty tree.
         # Depending on definition, 0 might be more appropriate than None if tree is valid but has no leaves.
         print("Info: No leaf nodes found or tree is empty. Returning 0 solutions.")
-        return 0
+        return (0, set())
 
-    return len(leaves)
+    return (len(leaves), leaves)
 
 
 # **** Main function updated to use the filtering ****
@@ -615,13 +672,13 @@ def get_analysis(idx, results, results_dir, overwrite=False):
         output_str = results.iloc[idx]["responses"][0]
         corr = compute_score(output_str, results.iloc[idx]["reward_model"]["ground_truth"], "box")
         tree_prompt = get_tree_prompt(input_str, output_str)
-        tree_json = llm.generate([{
+        tree_json = llm_pro.generate([{
             "role": "user",
             "content": tree_prompt
         }])[2]
         
         walk_prompt = get_walk_prompt(input_str, output_str, tree_json)
-        walk_json = llm.generate([{
+        walk_json = llm_pro.generate([{
             "role": "user",
             "content": walk_prompt
         }])[2]
@@ -650,8 +707,126 @@ def get_analysis(idx, results, results_dir, overwrite=False):
     filtered_ajd = compute_filtered_average_jump_distance(json_data["tree"], json_data["walk"])
     print(f"Index {idx}: Filtered AJD = {filtered_ajd}")
     
-    average_solution_count = compute_average_solution_count(json_data["tree"], json_data["walk"])
-    print(f"Index {idx}: Solution Count = {average_solution_count}")
+    solution_count, leaf_node_ids = compute_average_solution_count(json_data["tree"], json_data["walk"])
+    all_samples_leaf_node_parsed_results = []
+    all_samples_leaf_node_parsed_corrs = []
+    all_samples_success_rates = []
+    all_samples_overthinking_rates = []
+    
+    ground_truth_value = str(results.iloc[idx]["reward_model"]["ground_truth"]) # Ensure GT is a string for the prompt
+    problem_global_corr = json_data["corr"] # Corr from compute_score(output_str, ground_truth)
+
+    if solution_count is not None:
+        print(f"Index {idx}: Solution Count = {solution_count}")
+        sorted_leaf_ids = sorted(list(leaf_node_ids)) if leaf_node_ids is not None else []
+        print(f"Index {idx}: Leaf Node IDs = {sorted_leaf_ids if sorted_leaf_ids else 'N/A'}")
+        
+        if solution_count == 1 and sorted_leaf_ids:
+            # If there's only one leaf node, it's the final answer by definition in this context.
+            # Skip LLM parsing and use its actual Result and the global correlation.
+            single_leaf_id = sorted_leaf_ids[0]
+            actual_result = json_data["tree"].get(single_leaf_id, {}).get("Result", "N/A (Result missing for single leaf)")
+            all_samples_leaf_node_parsed_results.append(actual_result)
+            all_samples_leaf_node_parsed_corrs.append(float(problem_global_corr))
+            all_samples_success_rates.append(json_data["corr"])
+            all_samples_overthinking_rates.append(0.0)
+            
+        elif solution_count > 1 and sorted_leaf_ids: # Only proceed if there are multiple leaf nodes
+            for leaf_id in sorted_leaf_ids:
+                parsed_value_text = "N/A (processing error)"
+                match_corr = 0.0 # Default to 0.0 for correlation
+                
+                # Always use LLM for initial parsing and comparison for all leaf nodes in this branch
+                if leaf_id in json_data["tree"] and "Result" in json_data["tree"][leaf_id]:
+                    result_text = json_data["tree"][leaf_id]["Result"]
+                    if "parsed_value" in json_data["tree"][leaf_id]:
+                        parsed_value_text = json_data["tree"][leaf_id]["parsed_value"]
+                        match_corr = json_data["tree"][leaf_id]["match_corr"]
+                    else:
+                        parsing_comparison_prompt = get_result_parsing_and_comparison_prompt(result_text, ground_truth_value)
+                        llm_response_raw = llm_flash_for_parsing.generate([{"role": "user", "content": parsing_comparison_prompt}])
+                        
+                        llm_output_str = llm_response_raw[2].strip() if len(llm_response_raw) > 2 and isinstance(llm_response_raw[2], str) else ""
+                        
+                        try:
+                            if llm_output_str.startswith("```json"):
+                                llm_output_str = re.search(r"```json\s*(.*?)\s*```", llm_output_str, re.DOTALL).group(1)
+                            
+                            response_json = json.loads(llm_output_str)
+                            parsed_value_text = response_json.get("parsed_value", "N/A (LLM missing parsed_value)")
+                            match_status = response_json.get("match_status", "N/A (LLM missing match_status)")
+                            
+                            if match_status == "MATCH":
+                                match_corr = 1.0
+                            elif match_status == "MISMATCH":
+                                match_corr = 0.0
+                            else: 
+                                match_corr = 0.0 
+                                
+                            json_data["tree"][leaf_id]["parsed_value"] = parsed_value_text
+                            json_data["tree"][leaf_id]["match_corr"] = match_corr
+                            save_json(json_data, result_path)
+                                
+                        except json.JSONDecodeError as e:
+                            print(f"Index {idx}, Node {leaf_id}: JSONDecodeError parsing LLM output - '{llm_output_str}'. Error: {e}")
+                            parsed_value_text = "N/A (LLM JSON error)"
+                            match_corr = 0.0
+                        except KeyboardInterrupt:
+                            raise KeyboardInterrupt
+                        except pdb.bdb.BdbQuit:
+                            raise pdb.bdb.BdbQuit
+                        except Exception as e:
+                            print(f"Index {idx}, Node {leaf_id}: Error processing LLM output - '{llm_output_str}'. Error: {type(e).__name__} {e}")
+                            parsed_value_text = "N/A (LLM other error)"
+                            match_corr = 0.0
+                else:
+                    parsed_value_text = "N/A (Result not found in tree)"
+                    match_corr = 0.0 
+                    
+                all_samples_leaf_node_parsed_results.append(parsed_value_text)
+                all_samples_leaf_node_parsed_corrs.append(float(match_corr)) # Ensure it's float
+                all_samples_success_rates.append(float(match_corr))
+                all_samples_overthinking_rates.append(0.0)
+            
+            # After processing all leaf nodes, override the last element if list is not empty
+            if all_samples_leaf_node_parsed_results: 
+                last_leaf_id_in_sequence = sorted_leaf_ids[-1]
+                actual_last_leaf_result = json_data["tree"].get(last_leaf_id_in_sequence, {}).get("Result", "N/A (Result missing for actual last leaf)")
+                
+                all_samples_leaf_node_parsed_results[-1] = actual_last_leaf_result
+                all_samples_leaf_node_parsed_corrs[-1] = float(problem_global_corr)
+                all_samples_success_rates[-1] = float(problem_global_corr)
+                all_samples_overthinking_rates[-1] = 0.0
+        
+        # This print statement will now cover all cases: solution_count == 1, solution_count > 1, or empty if sorted_leaf_ids was empty
+        print(f"Index {idx}: Leaf Node Parsed Results = {all_samples_leaf_node_parsed_results}")
+        print(f"Index {idx}: Leaf Node Parsed Results Corrs = {all_samples_leaf_node_parsed_corrs}")
+
+        # Calculate Success Rate for the current sample
+        current_sample_success_rate = 0.0 # Default for empty or error cases
+        if all_samples_leaf_node_parsed_corrs: # Check if the list is not empty
+            current_sample_success_rate = sum(c == 1.0 for c in all_samples_leaf_node_parsed_corrs) / len(all_samples_leaf_node_parsed_corrs)
+        print(f"Index {idx}: Success Rate = {current_sample_success_rate:.4f}")
+
+        # Calculate Overthinking Rate for the current sample
+        current_sample_overthinking_rate = 0.0
+        if all_samples_leaf_node_parsed_corrs:
+            try:
+                first_one_index = all_samples_leaf_node_parsed_corrs.index(1.0)
+                elements_after_first_one = len(all_samples_leaf_node_parsed_corrs) - 1 - first_one_index
+                current_sample_overthinking_rate = elements_after_first_one / len(all_samples_leaf_node_parsed_corrs)
+            except ValueError: # No 1.0 found in the list
+                current_sample_overthinking_rate = 0.0
+        print(f"Index {idx}: Overthinking Rate = {current_sample_overthinking_rate:.4f}")
+
+    else: # solution_count is None (error) or 0
+        current_sample_success_rate = 0.0 # Default success rate if no leaves or error
+        current_sample_overthinking_rate = 0.0 # Default overthinking rate
+        print(f"Index {idx}: Solution Count = N/A (Error in processing)")
+        print(f"Index {idx}: Leaf Node IDs = N/A")
+        print(f"Index {idx}: Leaf Node Parsed Results = []")
+        print(f"Index {idx}: Leaf Node Parsed Results Corrs = []")
+        
     
     # Count arrow types
     calculation_count = 0
@@ -723,7 +898,11 @@ def get_analysis(idx, results, results_dir, overwrite=False):
     return {
         "graph": vis_path,
         "filtered_ajd": filtered_ajd,
-        "average_solution_count": average_solution_count,
+        "average_solution_count": solution_count,
+        "leaf_node_parsed_results": all_samples_leaf_node_parsed_results,
+        "leaf_node_parsed_results_corrs": all_samples_leaf_node_parsed_corrs,
+        "success_rate": current_sample_success_rate,
+        "overthinking_rate": current_sample_overthinking_rate,
         "calculation_count": calculation_count,
         "verification_count": verification_count,
         "backtracking_count": backtracking_count,
@@ -732,7 +911,9 @@ def get_analysis(idx, results, results_dir, overwrite=False):
         "average_verification_rate": average_verification_rate,
         "corr": json_data["corr"],
         "no_calculation_edge": no_calculation_edge_value,
-        "missing_edges_info": ', '.join(missing_calculation_edges_list) if no_calculation_edge_value == 1 else ""
+        "missing_edges_info": ', '.join(missing_calculation_edges_list) if no_calculation_edge_value == 1 else "",
+        "success_rates": all_samples_success_rates,
+        "overthinking_rates": all_samples_overthinking_rates,
     }
 
 if __name__ == "__main__":
@@ -759,8 +940,7 @@ if __name__ == "__main__":
             }
             project_name = f"{WANDB_INFO['project']}-tree-vis-v3"
             
-            if not wandb_init(project_name, WANDB_INFO["entity"], wandb_config):
-                exit()
+            wandb_run = wandb_init(project_name, WANDB_INFO["entity"], wandb_config, resume = True)
                 
         if args.mode == "default":
             template_type = supported_llms[model_name]["template_type"]
@@ -800,6 +980,10 @@ if __name__ == "__main__":
         no_calculation_edge_values = [] # For storing 0 or 1 for each sample
         all_samples_missing_edges_info = [] # For storing detailed string info for samples with missing edges
         no_calculation_edge_one_indices = [] # Initialize list for indices with no_calculation_edge == 1
+        all_samples_leaf_node_parsed_results = [] # INITIALIZE HERE
+        all_samples_leaf_node_parsed_corrs = []   
+        all_samples_success_rates = [] # Initialize list for collecting success rates from all samples
+        all_samples_overthinking_rates = [] # Initialize list for collecting overthinking rates
         
         for idx in tqdm(idxs):
             attempts, success, overwrite = 0, False, args.overwrite
@@ -818,25 +1002,29 @@ if __name__ == "__main__":
                     overwrite = True
                     continue
             
-            filtered_ajds.append(graph_metric["filtered_ajd"])
-            average_solution_counts.append(graph_metric["average_solution_count"]) # Append average solution count
-            calculation_arrow_counts.append(graph_metric["calculation_count"])
-            verification_arrow_counts.append(graph_metric["verification_count"])
-            backtracking_arrow_counts.append(graph_metric["backtracking_count"])
-            total_node_counts.append(graph_metric["total_node_count"]) # Append total node count
-            forgetting_rates.append(graph_metric["forgetting_rate"]) # Append forgetting rate
-            average_verification_rates_list.append(graph_metric["average_verification_rate"]) # Append average_verification_rate
-            corrs.append(graph_metric["corr"])
+            filtered_ajds.append(graph_metric.get("filtered_ajd"))
+            average_solution_counts.append(graph_metric.get("average_solution_count")) 
+            calculation_arrow_counts.append(graph_metric.get("calculation_count"))
+            verification_arrow_counts.append(graph_metric.get("verification_count"))
+            backtracking_arrow_counts.append(graph_metric.get("backtracking_count"))
+            total_node_counts.append(graph_metric.get("total_node_count")) 
+            forgetting_rates.append(graph_metric.get("forgetting_rate")) 
+            average_verification_rates_list.append(graph_metric.get("average_verification_rate")) 
+            corrs.append(graph_metric.get("corr"))
             
-            no_calculation_edge_values.append(graph_metric["no_calculation_edge"])
-            if graph_metric["no_calculation_edge"] == 1:
+            no_calculation_edge_values.append(graph_metric.get("no_calculation_edge"))
+            if graph_metric.get("no_calculation_edge") == 1:
                 no_calculation_edge_one_indices.append(idx)
             
-            if graph_metric["forgetting_rate"] == 1: # Check if forgetting_rate is 1
-                forgetting_rate_one_indices.append(idx) # Add index to the list
+            # Ensure success_rate is appended only ONCE per sample
+            all_samples_success_rates.append(graph_metric.get("success_rate", 0.0)) 
+            all_samples_overthinking_rates.append(graph_metric.get("overthinking_rate", 0.0)) # Append current sample's overthinking rate
             
-            if graph_metric["filtered_ajd"] is None: # Check if filtered_ajd is None
-                none_ajd_indices.append(idx) # Add index to the list
+            if graph_metric.get("forgetting_rate") == 1: 
+                forgetting_rate_one_indices.append(idx) 
+            
+            if graph_metric.get("filtered_ajd") is None: 
+                none_ajd_indices.append(idx) 
         
         # Print indices with forgetting_rate == 1
         print(f"Indices with forgetting_rate == 1: --idx {' '.join(map(str, forgetting_rate_one_indices))}")     
@@ -861,9 +1049,20 @@ if __name__ == "__main__":
             "forgetting_rates": forgetting_rates,
             "average_verification_rates": average_verification_rates_list,
             "corrs": corrs,
-            "no_calculation_edge": no_calculation_edge_values, # Add new metric to dict
+            "no_calculation_edge": no_calculation_edge_values, 
+            "success_rates": all_samples_success_rates,
+            "overthinking_rates": all_samples_overthinking_rates,
         }
         
+        # Debug: Print lengths of lists in metric_dict before creating DataFrame
+        # print("\n--- Lengths of lists in metric_dict ---")
+        # for key, value in metric_dict.items():
+        #     if isinstance(value, list):
+        #         print(f"Length of {key}: {len(value)}")
+        #     # else:
+        #     #     print(f"Value of {key} (not a list): {value}") # Optional: print non-list items
+        # print("-------------------------------------\n")
+
         metric_df = pd.DataFrame(metric_dict)
         # It's usually better to handle NaNs explicitly or ensure they are not produced for critical metrics.
         # 'no_calculation_edge' should always be 0 or 1, so it won't introduce NaNs itself.
@@ -898,29 +1097,51 @@ if __name__ == "__main__":
         # Calculate and print average for no_calculation_edge (Proportion of samples with the issue)
         avg_no_calc_edge = np.mean(metric_df["no_calculation_edge"]) if "no_calculation_edge" in metric_df.columns and not metric_df["no_calculation_edge"].empty else np.nan
         print(f"Proportion of samples with no_calculation_edge=1: {avg_no_calc_edge:.4f}" if avg_no_calc_edge is not None and not np.isnan(avg_no_calc_edge) else "Proportion of samples with no_calculation_edge=1: N/A")
+        
+        # Calculate and print Average Success Rate
+        avg_success_rate = np.mean(metric_df["success_rates"]) if "success_rates" in metric_df.columns and not metric_df["success_rates"].empty else np.nan
+        print(f"Average Success Rate: {avg_success_rate:.4f}" if avg_success_rate is not None and not np.isnan(avg_success_rate) else "Average Success Rate: N/A")
+        
+        # Calculate and print Average Overthinking Rate
+        avg_overthinking_rate = np.mean(metric_df["overthinking_rates"]) if "overthinking_rates" in metric_df.columns and not metric_df["overthinking_rates"].empty else np.nan
+        print(f"Average Overthinking Rate: {avg_overthinking_rate:.4f}" if avg_overthinking_rate is not None and not np.isnan(avg_overthinking_rate) else "Average Overthinking Rate: N/A")
                 
         if args.wandb:
-            wandb_log_data = {
-                "filtered_ajd": filtered_ajd,
-                "average_solution_count": avg_sol_count, # Log average solution count
-                "average_calculation_arrows": avg_calc_arrows,
-                "average_verification_arrows": avg_ver_arrows,
-                "average_backtracking_arrows": avg_back_arrows,
-                "average_total_node_count": avg_total_nodes, # Log average total_node_count
-                "average_forgetting_rate": avg_forgetting_rate, # Log average forgetting_rate
-                "overall_average_verification_rate": overall_avg_verification_rate, # Log overall_average_verification_rate
-                "average_correlation": avg_corr,
-                "average_no_calculation_edge": avg_no_calc_edge, # Log new metric
-            }
-            # Filter out NaN values before logging to wandb
-            wandb_log_data = {k: v for k, v in wandb_log_data.items() if v is not None and not np.isnan(v)}
-            wandb.log(wandb_log_data)
+            # wandb_log_data = {
+            #     "filtered_ajd": filtered_ajd,
+            #     "average_solution_count": avg_sol_count, # Log average solution count
+            #     "average_calculation_arrows": avg_calc_arrows,
+            #     "average_verification_arrows": avg_ver_arrows,
+            #     "average_backtracking_arrows": avg_back_arrows,
+            #     "average_total_node_count": avg_total_nodes, # Log average total_node_count
+            #     "average_forgetting_rate": avg_forgetting_rate, # Log average forgetting_rate
+            #     "overall_average_verification_rate": overall_avg_verification_rate, # Log overall_average_verification_rate
+            #     "average_correlation": avg_corr,
+            #     "average_no_calculation_edge": avg_no_calc_edge, # Log new metric
+            #     "average_success_rate": avg_success_rate, # Log Average Success Rate
+            #     "average_overthinking_rate": avg_overthinking_rate, # Log Average Overthinking Rate
+            # }
+            # # Filter out NaN values before logging to wandb
+            # wandb_log_data = {k: v for k, v in wandb_log_data.items() if v is not None and not np.isnan(v)}
+            # wandb.log(wandb_log_data)
+            
+
+            # wandb.finish()
+            wandb.log({
+                "average_success_rate": avg_success_rate, # Log Average Success Rate
+                "average_overthinking_rate": avg_overthinking_rate, # Log Average Overthinking Rate
+            })
             wandb.finish()
             
         for metric in metric_dict:
             if not metric in all_metrics:
                 all_metrics[metric] = []
-            all_metrics[metric].extend(metric_dict[metric])
+            # Handle potential list of lists for specific metrics if all_metrics is designed for it
+            if metric in ["leaf_node_parsed_results", "leaf_node_parsed_results_corrs"]:
+                 # If you decide to collect these detailed lists in all_metrics later, handle appropriately
+                 # For now, metric_dict for DataFrame doesn't have them, so this won't be hit for them.
+                 pass 
+            all_metrics[metric].extend(metric_dict.get(metric, [])) # Use .get for safety
             
 
     # Check the importance of each feature using XGBoost regressor
@@ -929,7 +1150,9 @@ if __name__ == "__main__":
         "forgetting_rates",
         "average_verification_rates",
         "average_solution_count",
-        "no_calculation_edge"  # Add new feature for model input
+        "no_calculation_edge",  
+        "success_rates",
+        "overthinking_rates" # Add new feature for model input
     ]
     target_column = "corrs"
 

@@ -615,9 +615,12 @@ def get_analysis(idx, results, results_dir, overwrite=False):
         json_data = load_json(result_path)
         input_str = results.iloc[idx]["prompt"][0]["content"]
         output_str = results.iloc[idx]["responses"][0]
-        model_answer = results.iloc[idx]["answers"][0]
-        if "<answer>" in model_answer: model_answer = model_answer.split("<answer>")[1].split("</answer>")[0]
-        corr = compare_answer(model_answer)
+        if "<answer>" in output_str:
+            # Find all <answer></answer> pairs
+            answer_matches = re.findall(r'<answer>(.*?)</answer>', output_str, re.DOTALL)
+            if answer_matches:
+                output_str = answer_matches[-1]  # Use the first match
+        corr = compare_answer(output_str)
         json_data["corr"] = corr
 
     vis_path = visualize_tree_walk(json_data["tree"], json_data["walk"], filename=f"{results_dir}/tree_vis_v3/{idx}", format="pdf")

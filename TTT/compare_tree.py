@@ -323,6 +323,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     #parser.add_argument("--model", type=str, nargs='+', default=["deepseek-ai/deepseek-reasoner", "xai/grok-3-mini-beta", "alibaba/qwen-turbo-2025-04-28-thinking"])
     parser.add_argument("--model", type=str, nargs='+', default=["deepseek-ai/deepseek-reasoner", "xai/grok-3-mini-beta"])
+    parser.add_argument("--temperature", type=float, nargs='+', default=[0.0, 0.5, 1.0])
     parser.add_argument("--dataset", type=str, nargs='+', default=["math500", "game24"])
     parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--idx", type=int, nargs='+', default=None, help="List of sample indices to process")
@@ -333,7 +334,14 @@ if __name__ == "__main__":
     
     results_dirs = {}
     
-    for model in models:
+    if len(args.temperature) == 1:
+        temperatures = [args.temperature[0] for _ in models]
+    else:
+        if len(args.temperature) != len(models):
+            raise ValueError(f"Number of temperatures ({len(args.temperature)}) must match number of models ({len(models)})")
+        temperatures = args.temperature
+    
+    for model, temperature in zip(models, temperatures):
         for dataset in datasets:
             results_dirs[(model, dataset)] = get_result_dir(
                 dataset_name = dataset,
@@ -346,27 +354,33 @@ if __name__ == "__main__":
                 label_noise = 0.0,
                 data_mode = "default",
                 n_query = 1,
-                temperature = 0.00,
+                temperature = temperature,
             )
             
-    model_pairs = list(itertools.combinations(models, 2))
+    model_indices = list(range(len(models)))
+    model_index_pairs = list(itertools.combinations(model_indices, 2))
     
-    for model_pair in model_pairs:
+    for model_index_pair in model_index_pairs:
         for dataset in datasets:
             if args.wandb:
-                model1, model2 = sorted(model_pair)
+                idx1, idx2 = sorted(model_index_pair, key=lambda x: models[x])
+                model1, model2 = models[idx1], models[idx2]
+                temperature1, temperature2 = temperatures[idx1], temperatures[idx2]
+                
                 wandb_config = {
                     "model1": model1,
                     "model2": model2,
                     "dataset": dataset,
+                    "temperature1": temperature1,
+                    "temperature2": temperature2,
                 }
                 if not wandb_init(f"{WANDB_INFO['project']}-tree-compare", WANDB_INFO["entity"], wandb_config):
                     continue
                 
             set_seed(234)
             
-            results_dir1 = results_dirs[(model_pair[0], dataset)]
-            results_dir2 = results_dirs[(model_pair[1], dataset)]
+            results_dir1 = results_dirs[(model1, dataset)]
+            results_dir2 = results_dirs[(model2, dataset)]
             
             n_samples = len(pd.read_parquet(f"{results_dir1}/test_default.parquet"))
             
@@ -374,7 +388,7 @@ if __name__ == "__main__":
             walk_similarities = []
             
             print("--------------------------------"*2)
-            print(f"|{model_pair[0]}|{model_pair[1]}|{dataset}|")
+            print(f"|{model1}|{model2}|{dataset}|")
             print("--------------------------------"*2)
             
             sample_indices = args.idx if args.idx is not None else range(n_samples)
@@ -416,8 +430,8 @@ if __name__ == "__main__":
                 current_avg_walk_similarity = np.mean(walk_similarities)
                 pbar.set_description(f'Avg Tree Similarity: {current_avg_tree_similarity:.4f}, Avg Walk Similarity: {current_avg_walk_similarity:.4f}')
                 
-            print(f"Average tree similarity between {model_pair[0]} and {model_pair[1]} on {dataset}: {np.mean(tree_similarities):.2f}")
-            print(f"Average walk similarity between {model_pair[0]} and {model_pair[1]} on {dataset}: {np.mean(walk_similarities):.2f}")
+            print(f"Average tree similarity between {model1}({temperature1}) and {model2}({temperature2}) on {dataset}: {np.mean(tree_similarities):.2f}")
+            print(f"Average walk similarity between {model1}({temperature1}) and {model2}({temperature2}) on {dataset}: {np.mean(walk_similarities):.2f}")
     
             if args.wandb:
                 wandb.log({

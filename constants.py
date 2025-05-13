@@ -317,6 +317,12 @@ supported_llms = {
         "type": "api",
         "api_key": GEMINI_API_KEY,
     },
+    "google/gemini-2.5-flash-preview-04-17": {
+        "template_type": "standard_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": GEMINI_API_KEY,
+    },
     "google/gemini-2.5-pro-preview-03-25": {
         "template_type": "reasoning_api",
         "model_size": 0,
