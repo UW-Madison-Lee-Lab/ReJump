@@ -28,13 +28,19 @@ from collections import Counter
 
 # model = "xai/grok-3-mini-beta"
 # model = "claude/claude-3-7-sonnet-20250219-thinking"
-model = "google/gemini-2.5-pro-preview-03-25"
-llm = LLMAPI(
-    api_key=supported_llms[model]["api_key"],
-    model_name=model,
+model_pro = "google/gemini-2.5-pro-preview-03-25"
+llm_pro = LLMAPI(
+    api_key=supported_llms[model_pro]["api_key"],
+    model_name=model_pro,
     template_type="reasoning_api"
 )
 
+model_flash_parsing = "google/gemini-2.5-flash-preview-04-17"
+llm_flash_for_parsing = LLMAPI(
+    api_key=supported_llms[model_flash_parsing]["api_key"],
+    model_name=model_flash_parsing,
+    template_type="reasoning_api" 
+)
 
 
 def get_tree_prompt(input_str, output_str):
@@ -106,6 +112,54 @@ Each node object must contain: `Problem`, `parent`, `Result`.
 Generate the JSON output based on these instructions.
     """
     
+    
+def get_result_parsing_and_comparison_prompt(result_string, ground_truth_string):
+    return f"""You are an expert AI assistant. Your task is to analyze a 'Result' string from a mathematical reasoning step and compare its final numerical answer to a 'Ground Truth' value.
+
+Instructions:
+1.  Extract the final numerical value(s) from the 'Result' string. 
+    - If multiple numbers are present, focus on the one that seems to be the conclusive answer of that step.
+    - Handle approximations (e.g., "approx 46.0", "is about 3.14").
+    - If the result explicitly states abandonment (e.g., "[Path abandoned]"), extract the numerical value derived *before* abandonment, if any. If no clear numerical value was derived, use "N/A" for the parsed value.
+    - If no specific numerical answer can be clearly identified, use "N/A" for the parsed value.
+
+2.  Compare the extracted numerical value with the 'Ground Truth' value.
+    - The comparison should determine if they are essentially the same, considering potential minor differences in formatting or precision (e.g., "46" vs "46.0", "1.03" vs "1.035" if context implies rounding).
+    - If the parsed value is "N/A", the comparison result should be "NOT_APPLICABLE".
+    - If the ground truth is empty or clearly not a comparable numerical value, and the parsed value is numerical, consider it a "MISMATCH" unless specified otherwise.
+
+3.  Output a single JSON object with two keys:
+    -   `"parsed_value"`: The extracted numerical value as a string (e.g., "46", "3.14", "N/A").
+    -   `"match_status"`: A string indicating the comparison result. Must be one of: "MATCH", "MISMATCH", "NOT_APPLICABLE".
+
+Example:
+Result string: "Using the approximations, $tan x^\circ \\approx \\frac{{1.3270 + 6.3138}}{{1.3270 \\times 6.3138 - 1}} \\approx \\frac{{7.6408}}{{8.381 - 1}} \\approx \\frac{{7.6408}}{{7.381}} \\approx 1.0355$. This implies $x \\approx arctan(1.0355) \\approx 46.0^\circ$. [Path abandoned]"
+Ground Truth string: "46"
+Expected JSON Output: {{"parsed_value": "46.0", "match_status": "MATCH"}}
+
+Result string: "The answer is $y=3$."
+Ground Truth string: "3.0"
+Expected JSON Output: {{"parsed_value": "3", "match_status": "MATCH"}}
+
+Result string: "The calculation leads to $10/2 = 5$. However, this path is incorrect."
+Ground Truth string: "7"
+Expected JSON Output: {{"parsed_value": "5", "match_status": "MISMATCH"}}
+
+Result string: "[Path abandoned] No value obtained."
+Ground Truth string: "10"
+Expected JSON Output: {{"parsed_value": "N/A", "match_status": "NOT_APPLICABLE"}}
+
+---
+Result string to analyze:
+{result_string}
+
+Ground Truth value:
+{ground_truth_string}
+---
+
+JSON Output:"""
+
+
 def get_walk_prompt(input_str, output_str, tree_json):
     return f"""
 You are an AI assistant specialized in analyzing mathematical reasoning processes. Your task is to trace the provided reasoning text against a structured reasoning tree and generate a "walk" representing the trajectory of the thought process.
@@ -511,28 +565,29 @@ def _filter_leaf_visits(full_walk_sequence, walk_steps_list, leaves, depths):
 # **** NEW Function to compute average solution count ****
 def compute_average_solution_count(tree_data, walk_steps_list):
     """
-    Computes the number of leaf nodes in the tree.
+    Computes the number of leaf nodes in the tree and returns their IDs.
 
     Args:
         tree_data (dict): Dict representing tree {node_id: {"parent": parent_id,...}}
         walk_steps_list (list): List of dicts representing steps (unused in this function but kept for consistency).
 
     Returns:
-        int or None: The number of leaf nodes, or None if tree data is invalid.
+        tuple (int or None, set or None): The number of leaf nodes and a set of their IDs,
+                                         or (None, None) if tree data is invalid.
     """
     parents, depths, leaves, children, root_id = _build_tree_info_from_parent_links(tree_data)
 
     if parents is None:
         print("Error: Could not process tree data for solution count.")
-        return None
+        return None, None
 
     if not leaves:
         # This could mean no reachable leaf nodes or an empty tree.
         # Depending on definition, 0 might be more appropriate than None if tree is valid but has no leaves.
         print("Info: No leaf nodes found or tree is empty. Returning 0 solutions.")
-        return 0
+        return 0, set()
 
-    return len(leaves)
+    return len(leaves), leaves
 
 
 # **** Main function updated to use the filtering ****
@@ -609,7 +664,40 @@ def compute_filtered_average_jump_distance(tree_data, walk_steps_list):
     filtered_ajd = sum_distances / num_jumps
     return filtered_ajd
 
-def get_analysis(idx, results, results_dir, overwrite=False):
+def check_leaf_node(
+    sorted_leaf_ids,
+    ground_truth_value, 
+    tree_json
+):
+    for leaf_id in sorted_leaf_ids:
+        if leaf_id in tree_json and "Result" in tree_json[leaf_id]:
+            parsed_value_text = "N/A (processing error)"
+            match_corr = 0.0 # Default to 0.0 for correlation
+            parsing_comparison_prompt = get_result_parsing_and_comparison_prompt(tree_json[leaf_id]["Result"], ground_truth_value)
+            llm_response_raw = llm_flash_for_parsing.generate([{"role": "user", "content": parsing_comparison_prompt}])
+            
+            llm_output_str = llm_response_raw[2].strip() if len(llm_response_raw) > 2 and isinstance(llm_response_raw[2], str) else ""
+            response_json = json.loads(parse_json(llm_output_str))
+            parsed_value_text = response_json.get("parsed_value", "N/A (LLM missing parsed_value)")
+            match_status = response_json.get("match_status", "N/A (LLM missing match_status)")
+            
+            if match_status == "MATCH":
+                match_corr = 1.0
+            elif match_status == "MISMATCH":
+                match_corr = 0.0
+            else:
+                match_corr = 0.0
+        else:
+            parsed_value_text = "N/A (processing error)"
+            match_corr = 0.0
+                
+        tree_json[leaf_id]["parsed_value"] = parsed_value_text
+        tree_json[leaf_id]["match_corr"] = match_corr
+        
+    return tree_json
+
+
+def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint = None):
     result_path = f"{results_dir}/tree_vis_v3/{idx}.json"
     if not os.path.exists(result_path) or overwrite:
         os.makedirs(os.path.dirname(result_path), exist_ok=True)
@@ -617,29 +705,40 @@ def get_analysis(idx, results, results_dir, overwrite=False):
         output_str = results.iloc[idx]["responses"][0]
         corr = compute_score(output_str, results.iloc[idx]["reward_model"]["ground_truth"], "box")
         tree_prompt = get_tree_prompt(input_str, output_str)
-        tree_json = llm.generate([{
+        tree_json = llm_pro.generate([{
             "role": "user",
             "content": tree_prompt
         }])[2]
+        tree_json = parse_json(tree_json)
         
         walk_prompt = get_walk_prompt(input_str, output_str, tree_json)
-        walk_json = llm.generate([{
+        walk_json = llm_pro.generate([{
             "role": "user",
             "content": walk_prompt
         }])[2]
+        walk_json = parse_json(walk_json)
+        
+        solution_count, leaf_node_ids = compute_average_solution_count(tree_json, walk_json)
+        sorted_leaf_ids = sorted(list(leaf_node_ids)) if leaf_node_ids is not None else []
+        if solution_count is not None and solution_count > 1:
+            
+            tree_json = check_leaf_node(
+                sorted_leaf_ids, 
+                output_str,  
+                tree_json
+            )
+                
         json_data = {
-            "tree": parse_json(tree_json),
-            "walk": parse_json(walk_json),
+            "tree": tree_json,
+            "walk": walk_json,
             "corr": corr,
         }
         save_json(json_data, result_path)
     else:
         json_data = load_json(result_path)
-        input_str = results.iloc[idx]["prompt"][0]["content"]
-        output_str = results.iloc[idx]["responses"][0]
-        corr = compute_score(output_str, results.iloc[idx]["reward_model"]["ground_truth"], "box")
-        json_data["corr"] = corr
-        
+        tree_json = json_data["tree"]
+        walk_json = json_data["walk"]
+        corr = json_data["corr"]
     
     # Filter out the specific walk elements before visualization
     if "walk" in json_data and isinstance(json_data["walk"], list):
@@ -654,7 +753,35 @@ def get_analysis(idx, results, results_dir, overwrite=False):
     
     average_solution_count = compute_average_solution_count(json_data["tree"], json_data["walk"])
     print(f"Index {idx}: Solution Count = {average_solution_count}")
+
+    all_samples_leaf_node_parsed_corrs = []
     
+    solution_count, leaf_node_ids = compute_average_solution_count(tree_json, walk_json)
+    
+    if solution_count is not None:
+        sorted_leaf_ids = sorted(list(leaf_node_ids)) if leaf_node_ids is not None else []
+        if solution_count == 1 and sorted_leaf_ids:
+            all_samples_leaf_node_parsed_corrs.append(float(corr))
+
+        elif solution_count > 1 and sorted_leaf_ids:
+            for leaf_id in sorted_leaf_ids:
+                match_corr = tree_json[leaf_id]["match_corr"]
+                all_samples_leaf_node_parsed_corrs.append(float(match_corr))
+                
+                
+        current_sample_success_rate = 0.0 # Default for empty or error cases
+        if all_samples_leaf_node_parsed_corrs: # Check if the list is not empty
+            current_sample_success_rate = sum(c == 1.0 for c in all_samples_leaf_node_parsed_corrs) / len(all_samples_leaf_node_parsed_corrs)
+   
+        current_sample_overthinking_rate = 0.0
+        if all_samples_leaf_node_parsed_corrs:
+            try:
+                first_one_index = all_samples_leaf_node_parsed_corrs.index(1.0)
+                elements_after_first_one = len(all_samples_leaf_node_parsed_corrs) - 1 - first_one_index
+                current_sample_overthinking_rate = elements_after_first_one / len(all_samples_leaf_node_parsed_corrs)
+            except ValueError: # No 1.0 found in the list
+                current_sample_overthinking_rate = 0.0
+        
     # Count arrow types
     calculation_count = 0
     verification_count = 0
@@ -734,7 +861,9 @@ def get_analysis(idx, results, results_dir, overwrite=False):
         "average_verification_rate": average_verification_rate,
         "corr": json_data["corr"],
         "no_calculation_edge": no_calculation_edge_value,
-        "missing_edges_info": ', '.join(missing_calculation_edges_list) if no_calculation_edge_value == 1 else ""
+        "missing_edges_info": ', '.join(missing_calculation_edges_list) if no_calculation_edge_value == 1 else "",
+        "success_rate": current_sample_success_rate,
+        "overthinking_rate": current_sample_overthinking_rate,
     }
 
 if __name__ == "__main__":
@@ -802,6 +931,8 @@ if __name__ == "__main__":
         no_calculation_edge_values = [] # For storing 0 or 1 for each sample
         all_samples_missing_edges_info = [] # For storing detailed string info for samples with missing edges
         no_calculation_edge_one_indices = [] # Initialize list for indices with no_calculation_edge == 1
+        all_samples_success_rates = []
+        all_samples_overthinking_rates = []
         
         for idx in tqdm(idxs):
             attempts, success, overwrite = 0, False, args.overwrite
@@ -829,6 +960,8 @@ if __name__ == "__main__":
             forgetting_rates.append(graph_metric["forgetting_rate"]) # Append forgetting rate
             average_verification_rates_list.append(graph_metric["average_verification_rate"]) # Append average_verification_rate
             corrs.append(graph_metric["corr"])
+            all_samples_success_rates.append(graph_metric["success_rate"])
+            all_samples_overthinking_rates.append(graph_metric["overthinking_rate"])
             
             no_calculation_edge_values.append(graph_metric["no_calculation_edge"])
             if graph_metric["no_calculation_edge"] == 1:
@@ -864,6 +997,8 @@ if __name__ == "__main__":
             "average_verification_rates": average_verification_rates_list,
             "corrs": corrs,
             "no_calculation_edge": no_calculation_edge_values, # Add new metric to dict
+            "success_rates": all_samples_success_rates,
+            "overthinking_rates": all_samples_overthinking_rates,
         }
         
         metric_df = pd.DataFrame(metric_dict)
@@ -901,6 +1036,12 @@ if __name__ == "__main__":
         avg_no_calc_edge = np.mean(metric_df["no_calculation_edge"]) if "no_calculation_edge" in metric_df.columns and not metric_df["no_calculation_edge"].empty else np.nan
         print(f"Proportion of samples with no_calculation_edge=1: {avg_no_calc_edge:.4f}" if avg_no_calc_edge is not None and not np.isnan(avg_no_calc_edge) else "Proportion of samples with no_calculation_edge=1: N/A")
                 
+        avg_success_rate = np.mean(metric_df["success_rates"]) if "success_rates" in metric_df.columns and not metric_df["success_rates"].empty else np.nan
+        print(f"Average Success Rate: {avg_success_rate:.4f}" if avg_success_rate is not None and not np.isnan(avg_success_rate) else "Average Success Rate: N/A")
+        
+        avg_overthinking_rate = np.mean(metric_df["overthinking_rates"]) if "overthinking_rates" in metric_df.columns and not metric_df["overthinking_rates"].empty else np.nan
+        print(f"Average Overthinking Rate: {avg_overthinking_rate:.4f}" if avg_overthinking_rate is not None and not np.isnan(avg_overthinking_rate) else "Average Overthinking Rate: N/A")
+        
         if args.wandb:
             wandb_log_data = {
                 "filtered_ajd": filtered_ajd,
@@ -913,6 +1054,8 @@ if __name__ == "__main__":
                 "overall_average_verification_rate": overall_avg_verification_rate, # Log overall_average_verification_rate
                 "average_correlation": avg_corr,
                 "average_no_calculation_edge": avg_no_calc_edge, # Log new metric
+                "average_success_rate": avg_success_rate,
+                "average_overthinking_rate": avg_overthinking_rate,
             }
             # Filter out NaN values before logging to wandb
             wandb_log_data = {k: v for k, v in wandb_log_data.items() if v is not None and not np.isnan(v)}
@@ -931,7 +1074,9 @@ if __name__ == "__main__":
         "forgetting_rates",
         "average_verification_rates",
         "average_solution_count",
-        "no_calculation_edge"  # Add new feature for model input
+        "no_calculation_edge",
+        "success_rates",
+        "overthinking_rates"
     ]
     target_column = "corrs"
 
