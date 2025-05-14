@@ -323,7 +323,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     #parser.add_argument("--model", type=str, nargs='+', default=["deepseek-ai/deepseek-reasoner", "xai/grok-3-mini-beta", "alibaba/qwen-turbo-2025-04-28-thinking"])
     parser.add_argument("--model", type=str, nargs='+', default=["deepseek-ai/deepseek-reasoner", "xai/grok-3-mini-beta"])
-    parser.add_argument("--temperature", type=float, nargs='+', default=[0.0, 0.5, 1.0])
+    parser.add_argument("--temperature", type=float, nargs='+', default=[0.0])
+    parser.add_argument("--mode", type=str, nargs='+', default=["default"])
     parser.add_argument("--dataset", type=str, nargs='+', default=["math500", "game24"])
     parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--idx", type=int, nargs='+', default=None, help="List of sample indices to process")
@@ -331,7 +332,7 @@ if __name__ == "__main__":
     
     models = args.model
     datasets = args.dataset
-    
+    modes = args.mode
     results_dirs = {}
     
     if len(args.temperature) == 1:
@@ -340,14 +341,26 @@ if __name__ == "__main__":
         if len(args.temperature) != len(models):
             raise ValueError(f"Number of temperatures ({len(args.temperature)}) must match number of models ({len(models)})")
         temperatures = args.temperature
+        
+    if len(args.mode) == 1:
+        modes = [args.mode[0] for _ in models]
+    else:
+        if len(args.mode) != len(models):
+            raise ValueError(f"Number of modes ({len(args.mode)}) must match number of models ({len(models)})")
+        modes = args.mode
     
-    for model, temperature in zip(models, temperatures):
+    for model, temperature, mode in zip(models, temperatures, modes):
         for dataset in datasets:
-            results_dirs[(model, dataset)] = get_result_dir(
+            if mode == "default":
+                template_type = supported_llms[model]["template_type"] 
+            else:
+                template_type = supported_llms[model]["template_type"] + "_" + mode
+                
+            results_dirs[(model, dataset, temperature, mode)] = get_result_dir(
                 dataset_name = dataset,
                 model_name = model,
                 shot = 0,
-                template_type = supported_llms[model]["template_type"],
+                template_type = template_type,
                 response_length = 404,
                 num_samples = -1 if dataset == "math500" else 100,
                 feature_noise = supported_datasets[dataset]["feature_noise"],
@@ -366,21 +379,23 @@ if __name__ == "__main__":
                 idx1, idx2 = sorted(model_index_pair, key=lambda x: models[x])
                 model1, model2 = models[idx1], models[idx2]
                 temperature1, temperature2 = temperatures[idx1], temperatures[idx2]
-                
+                mode1, mode2 = modes[idx1], modes[idx2]
                 wandb_config = {
                     "model1": model1,
                     "model2": model2,
                     "dataset": dataset,
                     "temperature1": temperature1,
                     "temperature2": temperature2,
+                    "mode1": mode1,
+                    "mode2": mode2,
                 }
                 if not wandb_init(f"{WANDB_INFO['project']}-tree-compare", WANDB_INFO["entity"], wandb_config):
                     continue
                 
             set_seed(234)
             
-            results_dir1 = results_dirs[(model1, dataset)]
-            results_dir2 = results_dirs[(model2, dataset)]
+            results_dir1 = results_dirs[(model1, dataset, temperature1, mode1)]
+            results_dir2 = results_dirs[(model2, dataset, temperature2, mode2)]
             
             n_samples = len(pd.read_parquet(f"{results_dir1}/test_default.parquet"))
             

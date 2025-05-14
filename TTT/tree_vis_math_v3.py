@@ -35,6 +35,8 @@ llm = LLMAPI(
     template_type="reasoning_api"
 )
 
+
+
 def get_tree_prompt(input_str, output_str):
     return f"""
 Your task is to analyze a detailed thinking process for solving a math problem (provided below) and convert it into a reasoning tree. This tree must represent the **chronological flow of solving substantive, mathematically well-posed subproblems or distinct attempts**, starting from an initial state and culminating in answering the original question.

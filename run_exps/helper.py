@@ -24,17 +24,17 @@ def gen_dataset(
     else:
         feature_noise = None
         
-        command = f"""
+    command = f"""
 python -m examples.data_preprocess.{dataset_name} \
-    --template_type={template_type} \
-    --num_samples={num_samples} \
-    --n_shot={shot} \
-    --n_query={n_query} \
-    --feature_noise={feature_noise} \
-    --test_ratio={test_ratio} \
-    --label_noise={label_noise} \
-    --data_mode={data_mode}
-            """ 
+--template_type={template_type} \
+--num_samples={num_samples} \
+--n_shot={shot} \
+--n_query={n_query} \
+--feature_noise={feature_noise} \
+--test_ratio={test_ratio} \
+--label_noise={label_noise} \
+--data_mode={data_mode}
+        """ 
     
     if "ricl" in template_type:
         if supported_datasets[dataset_name]["type"] == "regression":

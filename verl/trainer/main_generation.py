@@ -375,7 +375,7 @@ def main(config):
         print(f'strict_pass@{k}: {strict_accuracy: .3f}')
         
         valid_strict_accuracy = accuracy_score(np.ones(valid_prompts.sum()), np.all(y_pred[valid_prompts] == y_true[valid_prompts], axis=1))
-        valid_accuracy = accuracy_score(y_true[valid_prompts].flatten(), y_pred[valid_prompts].flatten())
+        valid_accuracy = accuracy_score(y_true.reshape(total_samples, -1)[valid_prompts].flatten(), y_pred.reshape(total_samples, -1)[valid_prompts].flatten())
         print(f'valid_pass@{k}: {valid_accuracy: .3f}')
         print(f'valid_strict_pass@{k}: {valid_strict_accuracy: .3f}')
         if config.trainer.wandb:

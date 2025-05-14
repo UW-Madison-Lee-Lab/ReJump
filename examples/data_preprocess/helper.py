@@ -662,6 +662,8 @@ def classification_extract_solution(solution_str):
             answers = [int(val.strip()) for val in answer_content.split(',') if val.strip().isdigit()]
         except ValueError:
             answers = []
+        except UnboundLocalError:
+            answers = []
         return answers
     return []
 

@@ -1,12 +1,42 @@
 import json
 from environment import root_dir
-from constants import get_result_dir, supported_datasets
+from constants import get_result_dir, supported_datasets, supported_llms
 import pandas as pd
 from utils import load_json
 import matplotlib.pyplot as plt
 import tiktoken
 import seaborn as sns
 import argparse
+import pdb
+import matplotlib as mpl
+
+model_dict = {
+    "deepseek-ai/deepseek-reasoner": {
+        "label": "DeepSeek-R1",
+        "temperature": 0.00,
+        "n_samples": 500,
+    },
+    "claude/claude-3-7-sonnet-20250219-thinking": {
+        "label": "Claude-3.7-Sonnet",
+        "temperature": 0.00,
+        "n_samples": 500,
+    },
+    "xai/grok-3-mini-beta": {
+        "label": "Grok 3 Mini Beta", 
+        "temperature": 0.00,
+        "n_samples": 500,
+    },
+    "openrouter-microsoft/phi-4-reasoning-plus": {
+        "label": "Phi-4-Reasoning-Plus",
+        "temperature": 1.00,
+        "n_samples": 100,
+    },
+    "openrouter-qwen/qwq-32b": {
+        "label": "QwQ-32B",
+        "temperature": 0.00,
+        "n_samples": 500,
+    },
+}
 
 def normalize(text):
     return ' '.join(text.split())
@@ -47,14 +77,14 @@ def get_df(
         dataset_name = dataset_name,
         model_name = model_name,
         shot = 50,
-        template_type = "reasoning_api",
+        template_type = supported_llms[model_name]["template_type"],
         response_length = response_length,
-        num_samples = 500,
+        num_samples = model_dict[model_name]["n_samples"],
         feature_noise = supported_datasets[dataset_name]["feature_noise"],
         label_noise = supported_datasets[dataset_name]["label_noise"],
         data_mode = "default",
         n_query = 10,
-        temperature = 0.00,
+        temperature = model_dict[model_name]["temperature"],
     )
     model_funcs = load_json(f"{result_dir}/test_default_gemini_analysis_llm_analysis.json")
     model_text = pd.read_parquet(f"{result_dir}/test_default_gemini_analysis.parquet")
@@ -81,23 +111,39 @@ def get_df(
     return df
 
 def draw_acc_vs_token_count(dfs, labels, figure_name):
-    plt.figure(figsize=(10, 6))
-    for df, label in zip(dfs, labels):
+    mpl.rcParams.update(mpl.rcParamsDefault)
+    colors = ['#073B4C','#FFD166','#06D6A0','#118AB2', '#DD3497', '#AE017E', '#7A0177', '#49006A' ]
+    markers = ['o', '<', 's', 'p', 'P', 'X', 'D', 'd', 'v', 'h', 'H', '8', '>', '*', '1', '2', '3', '4', 'x', '+', '|', '_']
+    plt.rc('font', family='serif', serif='times new roman')
+    plt.rc('text', usetex=True)
+    # plt.rcParams['text.usetex'] = True
+    plt.rc('xtick', labelsize=28)
+    plt.rc('ytick', labelsize=28)
+    mpl.rcParams['patch.linewidth']=0.5 #width of the boundary of legend
+    
+    fig, ax = plt.subplots(1, 1)  # Reduced width ratio for correlation column
+    fig.subplots_adjust(left=0.16, bottom=.2, right=0.995, top=.8, wspace=0.15, hspace=0.3)
+    fig.set_size_inches(6, 4) 
+    for i, (df, label) in enumerate(zip(dfs, labels)):
         sns.regplot(
             x="token_count", 
             y="acc", 
             data=df, 
-            label=label,
+            label=model_dict[label]["label"],
             order=2,
             scatter=False,
-            line_kws={'linewidth': 2}
+            line_kws={'linewidth': 2},
+            ax=ax,
+            color=colors[i],
         )
-    plt.xlabel('Token Count')
-    plt.ylabel('Accuracy')
-    plt.title('Accuracy vs Token Count')
-    plt.legend()
-    plt.grid(True, linestyle='--', alpha=0.7)
-    plt.tight_layout()
+    plt.xlabel('Number of Tokens', fontsize=28)
+    plt.ylabel('Accuracy', fontsize=28)
+    plt.legend(
+        fontsize=10, 
+        bbox_to_anchor=(1, 1.3), 
+        ncol=3,
+    )
+    plt.grid(True, linestyle='-', alpha=0.7)
     plt.savefig(f'{root_dir}/figures/{figure_name}.pdf')
     
 if __name__ == "__main__":
@@ -115,4 +161,4 @@ if __name__ == "__main__":
         dfs.append(df)
         labels.append(model_name)
         model_str += f"{model_name.replace('/', '-')}_"
-    draw_acc_vs_token_count(dfs, labels, f"{args.dataset_name}_{model_str}_acc_vs_token_count")
+    draw_acc_vs_token_count(dfs, labels, f"{args.dataset_name}")
