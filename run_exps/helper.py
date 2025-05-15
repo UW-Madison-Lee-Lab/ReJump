@@ -214,6 +214,7 @@ def inference(
     train_step=0,
     wandb=2,
     api_workers=16,
+    replicate_id=0,
 ):
     dataset_dir = get_dataset_dir(
         dataset_name=dataset_name,
@@ -238,6 +239,7 @@ def inference(
         train_step=train_step,
         n_query=n_query,
         temperature=temperature,
+        replicate_id=replicate_id,
     )
     output_file = get_dataset_filename(split="test", data_mode=data_mode)
     return f"""

@@ -14,17 +14,16 @@ from verl.utils.llm_api import LLMAPI
 from constants import supported_llms
 import wandb
 from environment import WANDB_INFO
+from environment import root_dir
 
 import numpy as np
 from collections import deque
-# Note: The following import might need to be moved to the top of the file
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score
 
 from verl.utils.reward_score.math500 import compute_score
 import xgboost as xgb
 from sklearn.model_selection import train_test_split
 from collections import Counter
+from sklearn.linear_model import LogisticRegression
 
 # model = "xai/grok-3-mini-beta"
 # model = "claude/claude-3-7-sonnet-20250219-thinking"
@@ -677,7 +676,7 @@ def check_leaf_node(
             llm_response_raw = llm_flash_for_parsing.generate([{"role": "user", "content": parsing_comparison_prompt}])
             
             llm_output_str = llm_response_raw[2].strip() if len(llm_response_raw) > 2 and isinstance(llm_response_raw[2], str) else ""
-            response_json = json.loads(parse_json(llm_output_str))
+            response_json = parse_json(llm_output_str)
             parsed_value_text = response_json.get("parsed_value", "N/A (LLM missing parsed_value)")
             match_status = response_json.get("match_status", "N/A (LLM missing match_status)")
             
@@ -739,6 +738,10 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint = N
         tree_json = json_data["tree"]
         walk_json = json_data["walk"]
         corr = json_data["corr"]
+        
+    if corr_constraint is not None:
+        if corr != corr_constraint:
+            return None
     
     # Filter out the specific walk elements before visualization
     if "walk" in json_data and isinstance(json_data["walk"], list):
@@ -750,9 +753,6 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint = N
     vis_path = visualize_tree_walk(json_data["tree"], json_data["walk"], filename=f"{results_dir}/tree_vis_v3/{idx}", format="pdf")
     filtered_ajd = compute_filtered_average_jump_distance(json_data["tree"], json_data["walk"])
     print(f"Index {idx}: Filtered AJD = {filtered_ajd}")
-    
-    average_solution_count = compute_average_solution_count(json_data["tree"], json_data["walk"])
-    print(f"Index {idx}: Solution Count = {average_solution_count}")
 
     all_samples_leaf_node_parsed_corrs = []
     
@@ -765,9 +765,11 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint = N
 
         elif solution_count > 1 and sorted_leaf_ids:
             for leaf_id in sorted_leaf_ids:
-                match_corr = tree_json[leaf_id]["match_corr"]
-                all_samples_leaf_node_parsed_corrs.append(float(match_corr))
-                
+                if "match_corr" in tree_json[leaf_id]:
+                    match_corr = tree_json[leaf_id]["match_corr"]
+                    all_samples_leaf_node_parsed_corrs.append(float(match_corr))
+                else:
+                    all_samples_leaf_node_parsed_corrs.append(0.00)
                 
         current_sample_success_rate = 0.0 # Default for empty or error cases
         if all_samples_leaf_node_parsed_corrs: # Check if the list is not empty
@@ -781,6 +783,10 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint = N
                 current_sample_overthinking_rate = elements_after_first_one / len(all_samples_leaf_node_parsed_corrs)
             except ValueError: # No 1.0 found in the list
                 current_sample_overthinking_rate = 0.0
+                
+    else:
+        current_sample_success_rate = 0.0
+        current_sample_overthinking_rate = 0.0
         
     # Count arrow types
     calculation_count = 0
@@ -847,12 +853,11 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint = N
     print(f"Index {idx}: no_calculation_edge = {no_calculation_edge_value}")
     if no_calculation_edge_value == 1:
         print(f"Index {idx}: Missing calculation edges: {', '.join(missing_calculation_edges_list)}")
-    # ---- END NEW ----
 
     return {
         "graph": vis_path,
         "filtered_ajd": filtered_ajd,
-        "average_solution_count": average_solution_count,
+        "average_solution_count": solution_count,
         "calculation_count": calculation_count,
         "verification_count": verification_count,
         "backtracking_count": backtracking_count,
@@ -875,18 +880,27 @@ if __name__ == "__main__":
     parser.add_argument("--num_samples", type=int, default=-1)
     parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--mode", type=str, default="default", choices=["default", "ricl_1", "ricl_2", "ricl_3", "ricl_4", "ricl_5", "ricl_6", "ricl_7", "ricl_8", "ricl_9", "ricl_10"])
-    parser.add_argument("--temperature", type=float, default=0.00)
+    parser.add_argument("--temperature", type=float, nargs='+', default=[0.00])
+    parser.add_argument("--corr_constraint", type=lambda x: None if x == "None" else int(x), default=None, choices=[None, 0, 1])
     args = parser.parse_args()
     
+    models = args.model_name
+    if len(args.temperature) == 1:
+        temperatures = [args.temperature[0] for _ in models]
+    else:
+        if len(args.temperature) != len(models):
+            raise ValueError(f"Number of temperatures ({len(args.temperature)}) must match number of models ({len(models)})")
+        temperatures = args.temperature
+    
     all_metrics = {}
-    for model_name in args.model_name:
+    for model_name, temperature in zip(models, temperatures):
         if args.wandb:
             wandb_config = {
                 "dataset_name": args.dataset_name,
                 "model_name": model_name,
                 "num_samples": args.num_samples,
                 "mode": args.mode,
-                "temperature": args.temperature,
+                "temperature": temperature,
             }
             project_name = f"{WANDB_INFO['project']}-tree-vis-v3"
             
@@ -908,7 +922,7 @@ if __name__ == "__main__":
             label_noise = 0.0,
             data_mode = "default",
             n_query = 1,
-            temperature = args.temperature,
+            temperature = temperature,
         )
         results = pd.read_parquet(f"{results_dir}/test_default.parquet")
         
@@ -935,11 +949,15 @@ if __name__ == "__main__":
         all_samples_overthinking_rates = []
         
         for idx in tqdm(idxs):
-            attempts, success, overwrite = 0, False, args.overwrite
+            attempts, success, overwrite, skip = 0, False, args.overwrite, False
             while attempts < 5 and not success:
                 try:
-                    graph_metric = get_analysis(idx, results, results_dir, overwrite)
+                    graph_metric = get_analysis(idx, results, results_dir, overwrite, args.corr_constraint)
                     success = True
+                    if args.corr_constraint is not None:
+                        if graph_metric is None:
+                            skip = True
+
                 except KeyboardInterrupt:
                     raise KeyboardInterrupt
                 except pdb.bdb.BdbQuit:
@@ -950,6 +968,8 @@ if __name__ == "__main__":
                     attempts += 1
                     overwrite = True
                     continue
+                
+            if skip: continue 
             
             filtered_ajds.append(graph_metric["filtered_ajd"])
             average_solution_counts.append(graph_metric["average_solution_count"]) # Append average solution count
@@ -1074,14 +1094,14 @@ if __name__ == "__main__":
         "forgetting_rates",
         "average_verification_rates",
         "average_solution_count",
-        "no_calculation_edge",
         "success_rates",
         "overthinking_rates"
     ]
     target_column = "corrs"
 
+    all_metrics_df = pd.DataFrame(all_metrics)
     # Prepare X and y, dropping rows with NaN in any feature or target
-    valid_rows = metric_df[feature_columns + [target_column]].dropna()
+    valid_rows = all_metrics_df[feature_columns + [target_column]].dropna()
     X = valid_rows[feature_columns].values
     y = valid_rows[target_column].values
 
@@ -1096,7 +1116,6 @@ if __name__ == "__main__":
         accuracy = np.mean(y_pred == y_test)
         print(f"Classifier Accuracy: {accuracy:.4f}")
 
-        # INSERT_YOUR_CODE
         # Check the accuracy of a majority classifier (predicts the most common class)
         if len(y_test) > 0:
             majority_class = Counter(y_train).most_common(1)[0][0]
@@ -1105,12 +1124,41 @@ if __name__ == "__main__":
             print(f"Majority Classifier Accuracy: {majority_accuracy:.4f}")
         else:
             print("Not enough test data to compute majority classifier accuracy.")
+            majority_accuracy = None
+
         # Check feature importances
         importances = model.feature_importances_
         # Optionally, print sorted feature importances
         sorted_features = sorted(zip(feature_columns, importances), key=lambda x: x[1], reverse=True)
         print("Features ranked by importance:")
+        feature_importance_dict = {}
         for name, importance in sorted_features:
             print(f"  {name}: {importance:.4f}")
+            feature_importance_dict[name] = float(importance)
+
+
+        # Compose the output dictionary
+        summary = {
+            "classifier_accuracy": float(accuracy),
+            "majority_classifier_accuracy": float(majority_accuracy) if majority_accuracy is not None else None,
+            "feature_importances": feature_importance_dict,
+            "sorted_feature_importances": [
+                {"feature": name, "importance": float(importance)}
+                for name, importance in sorted_features
+            ],
+        }
+
+        # Compose the output filename
+        corr_constraint_str = str(args.corr_constraint) if args.corr_constraint is not None else "None"
+        dataset_name_str = str(args.dataset_name)
+        output_dir =f"{root_dir}/results"
+        os.makedirs(output_dir, exist_ok=True)
+        output_path = os.path.join(
+            output_dir,
+            f"success_fail_summary_{corr_constraint_str}_{dataset_name_str}.json"
+        )
+
+        save_json(summary, output_path)
+        print(f"Saved summary to {output_path}")
     else:
         print("Not enough valid data to check feature importance.")

@@ -13,14 +13,17 @@ import pdb
 from verl.utils.llm_api import LLMAPI
 from constants import supported_llms
 import wandb
-from environment import WANDB_INFO
+from environment import WANDB_INFO, root_dir
 
 import numpy as np
 from collections import deque
 # Note: The following import might need to be moved to the top of the file
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split
+from collections import Counter
+import xgboost as xgb
 from verl.utils.reward_score.game24 import compare_answer
+from sklearn.linear_model import LogisticRegression
+
 
 # model = "xai/grok-3-mini-beta"
 # model = "claude/claude-3-7-sonnet-20250219-thinking"
@@ -585,15 +588,18 @@ def compute_filtered_average_jump_distance(tree_data, walk_steps_list):
     filtered_ajd = sum_distances / num_jumps
     return filtered_ajd
 
-def get_analysis(idx, results, results_dir, overwrite=False):
+def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint=None):
     result_path = f"{results_dir}/tree_vis_v3/{idx}.json"
     if not os.path.exists(result_path) or overwrite:
         os.makedirs(os.path.dirname(result_path), exist_ok=True)
         input_str = results.iloc[idx]["prompt"][0]["content"]
         output_str = results.iloc[idx]["responses"][0]
-        model_answer = results.iloc[idx]["answers"][0]
-        if "<answer>" in model_answer: model_answer = model_answer.split("<answer>")[1].split("</answer>")[0]
-        corr = compare_answer(model_answer)
+        if "<answer>" in output_str:
+            # Find all <answer></answer> pairs
+            answer_matches = re.findall(r'<answer>(.*?)</answer>', output_str, re.DOTALL)
+            if answer_matches:
+                output_str = answer_matches[-1]  # Use the first match
+        corr = compare_answer(output_str)
         tree_prompt = get_tree_prompt(input_str, output_str)
         tree_json = llm.generate([{
             "role": "user",
@@ -613,15 +619,11 @@ def get_analysis(idx, results, results_dir, overwrite=False):
         save_json(json_data, result_path)
     else:
         json_data = load_json(result_path)
-        input_str = results.iloc[idx]["prompt"][0]["content"]
-        output_str = results.iloc[idx]["responses"][0]
-        if "<answer>" in output_str:
-            # Find all <answer></answer> pairs
-            answer_matches = re.findall(r'<answer>(.*?)</answer>', output_str, re.DOTALL)
-            if answer_matches:
-                output_str = answer_matches[-1]  # Use the first match
-        corr = compare_answer(output_str)
-        json_data["corr"] = corr
+        
+    if corr_constraint is not None:
+        if json_data["corr"] != corr_constraint:
+            return None
+        
 
     vis_path = visualize_tree_walk(json_data["tree"], json_data["walk"], filename=f"{results_dir}/tree_vis_v3/{idx}", format="pdf")
     filtered_ajd = compute_filtered_average_jump_distance(json_data["tree"], json_data["walk"])
@@ -761,161 +763,280 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--idx", type=int, nargs='+', default=[])
     parser.add_argument("--dataset_name", type=str, default="game24", choices=["game24"])
-    parser.add_argument("--model_name", type=str, default="deepseek-ai/deepseek-reasoner")
+    parser.add_argument("--model_name", type=str, nargs='+', default=["deepseek-ai/deepseek-reasoner"])
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--num_samples", type=int, default=100)
-    parser.add_argument("--temperature", type=float, default=0.00)
+    parser.add_argument("--temperature", type=float, nargs='+', default=[0.00])
     parser.add_argument("--mode", type=str, default="default", choices=["default", "ricl_1", "ricl_2", "ricl_3", "ricl_4", "ricl_5", "ricl_6", "ricl_7", "ricl_8", "ricl_9", "ricl_10"])
     parser.add_argument("--wandb", action="store_true")
+    parser.add_argument("--corr_constraint", type=lambda x: None if x == "None" else int(x), default=None, choices=[None, 0, 1])
     args = parser.parse_args()
     
-    if args.wandb:
-        wandb_config = {
-            "dataset_name": args.dataset_name,
-            "model_name": args.model_name,
-            "num_samples": args.num_samples,
-            "temperature": args.temperature,
-            "mode": args.mode,
-        }
-        project_name = f"{WANDB_INFO['project']}-tree-vis-v3"
+    if len(args.temperature) == 1:
+        temperatures = [args.temperature[0] for _ in args.model_name]
+    else:
+        if len(args.temperature) != len(args.model_name):
+            raise ValueError(f"Number of temperatures ({len(args.temperature)}) must match number of models ({len(args.model_name)})")
+        temperatures = args.temperature
         
-        if not wandb_init(project_name, WANDB_INFO["entity"], wandb_config):
-            exit()
+    all_metrics = {}
+    for model_name, temperature in zip(args.model_name, temperatures):
+        if args.wandb:
+            wandb_config = {
+                "dataset_name": args.dataset_name,
+                "model_name": model_name,
+                "num_samples": args.num_samples,
+                "temperature": temperature,
+                "mode": args.mode,
+            }
+            project_name = f"{WANDB_INFO['project']}-tree-vis-v3"
             
-    if args.mode == "default":
-        template_type = supported_llms[args.model_name]["template_type"]
-    else:
-        template_type = f"{supported_llms[args.model_name]['template_type']}_{args.mode}"
-    results_dir = get_result_dir(
-        dataset_name = args.dataset_name,
-        model_name = args.model_name,
-        shot = 0,
-        template_type = template_type,
-        response_length = 404,
-        num_samples = args.num_samples,
-        feature_noise = supported_datasets[args.dataset_name]["feature_noise"],
-        label_noise = 0.0,
-        data_mode = "default",
-        n_query = 1,
-        temperature = args.temperature,
-    )
-    results = pd.read_parquet(f"{results_dir}/test_default.parquet")
-    
-    if len(args.idx) == 0:
-        idxs = range(len(results))
-    else:
-        idxs = args.idx
-    
-    filtered_ajds = []
-    average_solution_counts = [] # Initialize list for average solution counts
-    calculation_arrow_counts = []
-    verification_arrow_counts = []
-    backtracking_arrow_counts = []
-    total_node_counts = [] # Initialize list for total node counts
-    forgetting_rates = [] # Initialize list for forgetting rates
-    average_verification_rates_list = [] # Initialize list for average_verification_rate
-    corrs = []
-    success_rates_list = [] # Initialize list for success rates
-    overthinking_rates_list = [] # Initialize list for overthinking rates
-
-    for idx in tqdm(idxs):
-        attempts, success, overwrite = 0, False, args.overwrite
-        while attempts < 5 and not success:
-            try:
-                graph_metric = get_analysis(idx, results, results_dir, overwrite)
-                success = True
-            except KeyboardInterrupt:
-                raise KeyboardInterrupt
-            except pdb.bdb.BdbQuit:
-                raise pdb.bdb.BdbQuit
-            except Exception as e:
-                print(f"Error: {type(e)} {e}")
-                print(f"Attempt {attempts} failed")
-                attempts += 1
-                overwrite = True
-                continue
-        
-        filtered_ajds.append(graph_metric["filtered_ajd"])
-        average_solution_counts.append(graph_metric["average_solution_count"]) # Append average solution count
-        calculation_arrow_counts.append(graph_metric["calculation_count"])
-        verification_arrow_counts.append(graph_metric["verification_count"])
-        backtracking_arrow_counts.append(graph_metric["backtracking_count"])
-        total_node_counts.append(graph_metric["total_node_count"]) # Append total node count
-        forgetting_rates.append(graph_metric["forgetting_rate"]) # Append forgetting rate
-        average_verification_rates_list.append(graph_metric["average_verification_rate"]) # Append average_verification_rate
-        corrs.append(graph_metric["corr"])  
-        if graph_metric.get("success_rate") is not None:
-            success_rates_list.append(graph_metric["success_rate"])
+            if not wandb_init(project_name, WANDB_INFO["entity"], wandb_config):
+                exit()
+                
+        if args.mode == "default":
+            template_type = supported_llms[model_name]["template_type"]
         else:
-            success_rates_list.append(0.0) # Default if None, though it should always be float
+            template_type = f"{supported_llms[model_name]['template_type']}_{args.mode}"
+        results_dir = get_result_dir(
+            dataset_name = args.dataset_name,
+            model_name = model_name,
+            shot = 0,
+            template_type = template_type,
+            response_length = 404,
+            num_samples = args.num_samples,
+            feature_noise = supported_datasets[args.dataset_name]["feature_noise"],
+            label_noise = 0.0,
+            data_mode = "default",
+            n_query = 1,
+            temperature = temperature,
+        )
+        results = pd.read_parquet(f"{results_dir}/test_default.parquet")
         
-        if graph_metric.get("overthinking_rate") is not None:
-            overthinking_rates_list.append(graph_metric["overthinking_rate"])
+        if len(args.idx) == 0:
+            idxs = range(len(results))
         else:
-            overthinking_rates_list.append(0.0) # Default if None
-
-    metric_dict = {
-        "filtered_ajd": filtered_ajds,
-        "average_solution_count": average_solution_counts,
-        "calculation_arrow_counts": calculation_arrow_counts,
-        "verification_arrow_counts": verification_arrow_counts,
-        "backtracking_arrow_counts": backtracking_arrow_counts,
-        "total_node_counts": total_node_counts,
-        "forgetting_rates": forgetting_rates,
-        "average_verification_rates": average_verification_rates_list,
-        "corrs": corrs,
-        "success_rates": success_rates_list,
-        "overthinking_rates": overthinking_rates_list, # Added to metric_dict
-    }
-    
-    metric_df = pd.DataFrame(metric_dict)
-    metric_df = metric_df.dropna(how='any')
-
-    filtered_ajd = np.mean(metric_df["filtered_ajd"])
-    print(f"Filtered AJD: {filtered_ajd}")
-    
-    avg_sol_count = np.mean(metric_df["average_solution_count"])
-    print(f"Average Solution Count: {avg_sol_count}") # Print average solution count
-    
-    avg_calc_arrows = np.mean(metric_df["calculation_arrow_counts"])
-    avg_ver_arrows = np.mean(metric_df["verification_arrow_counts"])
-    avg_back_arrows = np.mean(metric_df["backtracking_arrow_counts"])
-
-    print(f"Average Calculation Arrows: {avg_calc_arrows}")
-    print(f"Average Verification Arrows: {avg_ver_arrows}")
-    print(f"Average Backtracking Arrows: {avg_back_arrows}")
+            idxs = args.idx
         
-    avg_total_nodes = np.mean(metric_df["total_node_counts"])
-    print(f"Average Total Node Count: {avg_total_nodes}") # Print average total_node_count
-    
-    avg_forgetting_rate = np.mean(metric_df["forgetting_rates"])
-    print(f"Average Forgetting Rate: {avg_forgetting_rate}") # Print average forgetting_rate
-    
-    overall_avg_verification_rate = np.mean(metric_df["average_verification_rates"])
-    print(f"Average Verification Rate: {overall_avg_verification_rate:.4f}" if overall_avg_verification_rate is not None else "Average Verification Rate: None")
+        filtered_ajds = []
+        average_solution_counts = [] # Initialize list for average solution counts
+        calculation_arrow_counts = []
+        verification_arrow_counts = []
+        backtracking_arrow_counts = []
+        total_node_counts = [] # Initialize list for total node counts
+        forgetting_rates = [] # Initialize list for forgetting rates
+        average_verification_rates_list = [] # Initialize list for average_verification_rate
+        corrs = []
+        success_rates_list = [] # Initialize list for success rates
+        overthinking_rates_list = [] # Initialize list for overthinking rates
+
+        for idx in tqdm(idxs):
+            attempts, success, overwrite, skip = 0, False, args.overwrite, False
+            while attempts < 5 and not success:
+                try:
+                    graph_metric = get_analysis(idx, results, results_dir, overwrite, args.corr_constraint)
+                    success = True
+                    if args.corr_constraint is not None:
+                        if graph_metric is None:
+                            skip = True
+                except KeyboardInterrupt:
+                    raise KeyboardInterrupt
+                except pdb.bdb.BdbQuit:
+                    raise pdb.bdb.BdbQuit
+                except Exception as e:
+                    print(f"Error: {type(e)} {e}")
+                    print(f"Attempt {attempts} failed")
+                    attempts += 1
+                    overwrite = True
+                    continue
+            
+            if skip: continue
+            
+            filtered_ajds.append(graph_metric["filtered_ajd"])
+            average_solution_counts.append(graph_metric["average_solution_count"]) # Append average solution count
+            calculation_arrow_counts.append(graph_metric["calculation_count"])
+            verification_arrow_counts.append(graph_metric["verification_count"])
+            backtracking_arrow_counts.append(graph_metric["backtracking_count"])
+            total_node_counts.append(graph_metric["total_node_count"]) # Append total node count
+            forgetting_rates.append(graph_metric["forgetting_rate"]) # Append forgetting rate
+            average_verification_rates_list.append(graph_metric["average_verification_rate"]) # Append average_verification_rate
+            corrs.append(graph_metric["corr"])  
+            if graph_metric.get("success_rate") is not None:
+                success_rates_list.append(graph_metric["success_rate"])
+            else:
+                success_rates_list.append(0.0) # Default if None, though it should always be float
+            
+            if graph_metric.get("overthinking_rate") is not None:
+                overthinking_rates_list.append(graph_metric["overthinking_rate"])
+            else:
+                overthinking_rates_list.append(0.0) # Default if None
+
+        metric_dict = {
+            "filtered_ajd": filtered_ajds,
+            "average_solution_count": average_solution_counts,
+            "calculation_arrow_counts": calculation_arrow_counts,
+            "verification_arrow_counts": verification_arrow_counts,
+            "backtracking_arrow_counts": backtracking_arrow_counts,
+            "total_node_counts": total_node_counts,
+            "forgetting_rates": forgetting_rates,
+            "average_verification_rates": average_verification_rates_list,
+            "corrs": corrs,
+            "success_rates": success_rates_list,
+            "overthinking_rates": overthinking_rates_list, # Added to metric_dict
+        }
         
-    avg_corr = np.mean(metric_df["corrs"])
-    print(f"Average Correlation: {avg_corr}")
-    
-    avg_success_rate = np.mean(metric_df["success_rates"]) if "success_rates" in metric_df.columns and not metric_df["success_rates"].empty else 0.0
-    print(f"Average Success Rate: {avg_success_rate:.4f}")
-    
-    avg_overthinking_rate = np.mean(metric_df["overthinking_rates"]) if "overthinking_rates" in metric_df.columns and not metric_df["overthinking_rates"].empty else 0.0
-    print(f"Average Overthinking Rate: {avg_overthinking_rate:.4f}")
-    
-    
-    if args.wandb:
-        wandb.log({
-            "filtered_ajd": filtered_ajd,
-            "average_solution_count": avg_sol_count, # Log average solution count
-            "average_calculation_arrows": avg_calc_arrows,
-            "average_verification_arrows": avg_ver_arrows,
-            "average_backtracking_arrows": avg_back_arrows,
-            "average_total_node_count": avg_total_nodes, # Log average total_node_count
-            "average_forgetting_rate": avg_forgetting_rate, # Log average forgetting_rate
-            "overall_average_verification_rate": overall_avg_verification_rate, # Log overall_average_verification_rate
-            "average_correlation": avg_corr,
-            "average_success_rate": avg_success_rate,
-            "average_overthinking_rate": avg_overthinking_rate, # Log average overthinking rate
-        })
-        wandb.finish()
+        metric_df = pd.DataFrame(metric_dict)
+        metric_df = metric_df.dropna(how='any')
+
+        filtered_ajd = np.mean(metric_df["filtered_ajd"])
+        print(f"Filtered AJD: {filtered_ajd}")
+        
+        avg_sol_count = np.mean(metric_df["average_solution_count"])
+        print(f"Average Solution Count: {avg_sol_count}") # Print average solution count
+        
+        avg_calc_arrows = np.mean(metric_df["calculation_arrow_counts"])
+        avg_ver_arrows = np.mean(metric_df["verification_arrow_counts"])
+        avg_back_arrows = np.mean(metric_df["backtracking_arrow_counts"])
+
+        print(f"Average Calculation Arrows: {avg_calc_arrows}")
+        print(f"Average Verification Arrows: {avg_ver_arrows}")
+        print(f"Average Backtracking Arrows: {avg_back_arrows}")
+            
+        avg_total_nodes = np.mean(metric_df["total_node_counts"])
+        print(f"Average Total Node Count: {avg_total_nodes}") # Print average total_node_count
+        
+        avg_forgetting_rate = np.mean(metric_df["forgetting_rates"])
+        print(f"Average Forgetting Rate: {avg_forgetting_rate}") # Print average forgetting_rate
+        
+        overall_avg_verification_rate = np.mean(metric_df["average_verification_rates"])
+        print(f"Average Verification Rate: {overall_avg_verification_rate:.4f}" if overall_avg_verification_rate is not None else "Average Verification Rate: None")
+            
+        avg_corr = np.mean(metric_df["corrs"])
+        print(f"Average Correlation: {avg_corr}")
+        
+        avg_success_rate = np.mean(metric_df["success_rates"]) if "success_rates" in metric_df.columns and not metric_df["success_rates"].empty else 0.0
+        print(f"Average Success Rate: {avg_success_rate:.4f}")
+        
+        avg_overthinking_rate = np.mean(metric_df["overthinking_rates"]) if "overthinking_rates" in metric_df.columns and not metric_df["overthinking_rates"].empty else 0.0
+        print(f"Average Overthinking Rate: {avg_overthinking_rate:.4f}")
+        
+        
+        if args.wandb:
+            wandb.log({
+                "filtered_ajd": filtered_ajd,
+                "average_solution_count": avg_sol_count, # Log average solution count
+                "average_calculation_arrows": avg_calc_arrows,
+                "average_verification_arrows": avg_ver_arrows,
+                "average_backtracking_arrows": avg_back_arrows,
+                "average_total_node_count": avg_total_nodes, # Log average total_node_count
+                "average_forgetting_rate": avg_forgetting_rate, # Log average forgetting_rate
+                "overall_average_verification_rate": overall_avg_verification_rate, # Log overall_average_verification_rate
+                "average_correlation": avg_corr,
+                "average_success_rate": avg_success_rate,
+                "average_overthinking_rate": avg_overthinking_rate, # Log average overthinking rate
+            })
+            wandb.finish()
+            
+        for metric in metric_dict:
+            if not metric in all_metrics:
+                all_metrics[metric] = []
+            all_metrics[metric].extend(metric_dict[metric])
+            
+    # Check the importance of each feature using XGBoost regressor
+    feature_columns = [
+        "filtered_ajd",
+        "forgetting_rates",
+        "average_verification_rates",
+        "average_solution_count",
+        "success_rates",
+        "overthinking_rates"
+    ]
+    target_column = "corrs"
+
+    all_metrics_df = pd.DataFrame(all_metrics)
+    # Prepare X and y, dropping rows with NaN in any feature or target
+    valid_rows = all_metrics_df[feature_columns + [target_column]].dropna()
+    X = valid_rows[feature_columns].values
+    y = valid_rows[target_column].values
+
+    if len(X) > 0:
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        # Since 'corr' is a binary variable, use a classifier instead of regressor
+        model = xgb.XGBClassifier(n_estimators=100, random_state=42, use_label_encoder=False, eval_metric='logloss')
+        model.fit(X_train, y_train)
+
+        y_pred = model.predict(X_test)
+        accuracy = np.mean(y_pred == y_test)
+        print(f"Classifier Accuracy: {accuracy:.4f}")
+
+        # Check the accuracy of a majority classifier (predicts the most common class)
+        if len(y_test) > 0:
+            majority_class = Counter(y_train).most_common(1)[0][0]
+            majority_pred = np.full_like(y_test, fill_value=majority_class)
+            majority_accuracy = np.mean(majority_pred == y_test)
+            print(f"Majority Classifier Accuracy: {majority_accuracy:.4f}")
+        else:
+            print("Not enough test data to compute majority classifier accuracy.")
+            majority_accuracy = None
+
+        # Check feature importances
+        importances = model.feature_importances_
+        # Optionally, print sorted feature importances
+        sorted_features = sorted(zip(feature_columns, importances), key=lambda x: x[1], reverse=True)
+        print("Features ranked by importance:")
+        feature_importance_dict = {}
+        for name, importance in sorted_features:
+            print(f"  {name}: {importance:.4f}")
+            feature_importance_dict[name] = float(importance)
+
+        # Also try to use logistic regression to fit and check the coefficient
+
+
+
+        # Fit logistic regression on the same data
+        logreg = LogisticRegression(max_iter=1000, random_state=42)
+        logreg.fit(X_train, y_train)
+
+        logreg_y_pred = logreg.predict(X_test)
+        logreg_accuracy = np.mean(logreg_y_pred == y_test)
+        print(f"Logistic Regression Accuracy: {logreg_accuracy:.4f}")
+
+        # Print logistic regression coefficients for each feature
+        print("Logistic Regression coefficients (feature: coefficient):")
+        for name, coef in zip(feature_columns, logreg.coef_[0]):
+            print(f"  {name}: {coef:.4f}")
+
+
+
+        # Compose the output dictionary
+        summary = {
+            "xgboost_classifier_accuracy": float(accuracy),
+            "majority_classifier_accuracy": float(majority_accuracy) if majority_accuracy is not None else None,
+            "feature_importances": feature_importance_dict,
+            "sorted_feature_importances": [
+                {"feature": name, "importance": float(importance)}
+                for name, importance in sorted_features
+            ],
+            "logistic_regression_accuracy": float(logreg_accuracy),
+            "logistic_regression_coefficients": [{
+                    "feature": name,
+                    "coefficient": float(coef)
+                } for name, coef in zip(feature_columns, logreg.coef_[0])
+            ]
+        }
+
+        # Compose the output filename
+        corr_constraint_str = str(args.corr_constraint) if args.corr_constraint is not None else "None"
+        dataset_name_str = str(args.dataset_name)
+        output_dir =f"{root_dir}/results"
+        os.makedirs(output_dir, exist_ok=True)
+        output_path = os.path.join(
+            output_dir,
+            f"success_fail_summary_{corr_constraint_str}_{dataset_name_str}.json"
+        )
+
+        save_json(summary, output_path)
+        print(f"Saved summary to {output_path}")
+    else:
+        print("Not enough valid data to check feature importance.")
+
