@@ -32,7 +32,7 @@ parser.add_argument("--exp_name", type=str, default="")
 parser.add_argument("--test_ratio", type=float, default=1)
 parser.add_argument("--temperature", type=float, nargs="+", default=[0.0])
 parser.add_argument("--replicate_id", type=int, default=0)
-parser.add_argument("--additional_instruction_path", type=str, default=None)
+parser.add_argument("--additional_instruction_path", type=str, default="NO_ADDITIONAL_INSTRUCTION")
 args = parser.parse_args()
 
 if args.load_train_step:
