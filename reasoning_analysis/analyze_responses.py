@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import nltk
+nltk.download('punkt_tab')
 import pandas as pd
 import os
 import json
@@ -12,6 +14,8 @@ from pathlib import Path
 from tqdm import tqdm
 from typing import Dict, Any, Optional, Union, List
 import concurrent.futures
+import nltk
+from nltk.tokenize import sent_tokenize
 
 # Import from llm_apis module
 from llm_apis import ResponseAnalyzer, get_available_llm_types
@@ -179,51 +183,17 @@ def read_instruction_file(file_path: str) -> str:
 #     return '\n'.join(processed_lines), reasoning_dict
 
 def process_reasoning(input_str: str) -> tuple[str, dict]:
-
     if not input_str:
         return "", {}
-        
-    parts = re.split(r'([.?!])', input_str)
-    
-    sentences = []
-    current_sentence = ""
-    for part in parts:
-        # Skip empty parts that can result from the split
-        if not part: 
-            continue
-        
-        # Append the current part (either text or punctuation)
-        current_sentence += part
-        
-        # If the part is a punctuation mark, the sentence is complete
-        if part in ['.', '?', '!']:
-            sentence_strip = current_sentence.strip()
-            if sentence_strip: # Avoid adding empty strings if there's only whitespace
-                 sentences.append(sentence_strip)
-            # Reset for the next sentence
-            current_sentence = ""
 
-    # Add any remaining part if the input doesn't end with punctuation
-    remaining_strip = current_sentence.strip()
-    if remaining_strip:
-        sentences.append(remaining_strip)
-
-    # Filter out potentially empty strings again (e.g., from consecutive delimiters)
-    sentences = [s for s in sentences if s]
+    # 使用 nltk 的 sent_tokenize 分割句子
+    sentences = sent_tokenize(input_str)
 
     processed_lines = []
     reasoning_dict = {}
     for i, sentence in enumerate(sentences):
-        step_key = i # Use integer index as key
+        step_key = i  # Use integer index as key
         processed_lines.append(f"[Step {i}]: {sentence}")
-        #reasoning_dict[step_key] = {
-        #     'sentence': sentence_text,
-        #     'sentence_tokens': sentence_tokens,
-        #     'logprobs_list': sentence_logprobs,
-        #     'avg_logprob': sum(sentence_logprobs) / n_tokens,
-        #     'avg_prob': np.exp(sum(sentence_logprobs) / n_tokens),
-        #     'n_tokens': n_tokens
-        # }
         reasoning_dict[step_key] = {
             "sentence": sentence,
             "n_tokens": None,
@@ -232,7 +202,7 @@ def process_reasoning(input_str: str) -> tuple[str, dict]:
             "logprobs_list": None,
             "sentence_tokens": None
         }
-        
+
     # Return the formatted string and the dictionary
     return '\n'.join(processed_lines), reasoning_dict
 
@@ -403,10 +373,14 @@ def process_row(args, input_file_path: str):
         #     total_input = responses
         # else:
         #     raise NotImplementedError(f"Field of interests {field_of_interests} not implemented")
-        
+        # import pdb; pdb.set_trace()
         if field_of_interests == 'cognitive_process_graph':
-            reasonings_str, reasoning_dict = process_reasoning_with_probs(row['probs'][0], input_file_path)
-            total_input = 'Input: ' + input_prompt + '\n' + 'Reasoning: ' + reasonings_str
+            if 'probs' in row:
+                reasonings_str, reasoning_dict = process_reasoning_with_probs(row['probs'][0], input_file_path)
+                total_input = 'Input: ' + input_prompt + '\n' + 'Reasoning: ' + reasonings_str
+            else:
+                reasonings_str, reasoning_dict = process_reasoning(row['responses'][0])
+                total_input = 'Input: ' + input_prompt + '\n' + 'Reasoning: ' + reasonings_str
         elif field_of_interests == 'tree':
             total_input = responses
             reasoning_dict = {}
@@ -477,10 +451,10 @@ def process_file(
         batch_size = min(batch_size, 5)
     
     # Filter out rows with empty logprobs or tokens before processing
-    if field_of_interests == 'cognitive_process_graph':
-        df = filter_invalid_rows(df)
-    else:
-        pass
+    # if field_of_interests == 'cognitive_process_graph':
+    #     df = filter_invalid_rows(df)
+    # else:
+    #     pass
 
     # If DataFrame becomes empty after filtering, exit early
     if df.empty:

@@ -62,8 +62,9 @@ def run_tree_analysis(base_dir):
     instruction_file_regression = "/home/szhang967/liftr/reasoning_analysis/regression-fitting_model_extraction_prompt.txt"
     
     model_name_list = [
-        "multi-query-results/xai-grok-3-mini-beta",
-        'multi-query-results/openrouter-qwen-qwq-32b'
+        # "multi-query-results/xai-grok-3-mini-beta",
+        # 'multi-query-results/openrouter-qwen-qwq-32b',
+        'multi-query-results/openrouter-microsoft-phi-4-reasoning-plus'
     ]
     
     # Process all test_default.parquet files
@@ -102,7 +103,7 @@ def run_tree_analysis(base_dir):
                     # "--debug"
                 ]
                 try:
-                    # subprocess.run(cmd, check=True)
+                    subprocess.run(cmd, check=True)
                     print(f"Successfully processed {input_file}")
                 except subprocess.CalledProcessError as e:
                     print(f"Error processing {input_file}: {e}")

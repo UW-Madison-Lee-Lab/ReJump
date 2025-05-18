@@ -148,20 +148,22 @@ def create_vectors_and_matrices(ordered_node_types: OrderedDict, metrics: Dict[s
             source_prob = transition.get("source_avg_prob")
             target_prob = transition.get("target_avg_prob")
             
-            if (source_type in ordered_node_types and target_type in ordered_node_types and 
-                source_prob is not None and target_prob is not None):
+            if (source_type in ordered_node_types and target_type in ordered_node_types 
+                # and source_prob is not None and target_prob is not None
+                ):
                 source_idx = ordered_node_types[source_type]
                 target_idx = ordered_node_types[target_type]
-                
-                source_prob_matrix[source_idx, target_idx] += source_prob
-                target_prob_matrix[source_idx, target_idx] += target_prob
-                source_to_target_prob_difference_matrix[source_idx, target_idx] += (source_prob - target_prob)
                 transition_counts[source_idx, target_idx] += 1
+                
+                if source_prob is not None and target_prob is not None:
+                    source_prob_matrix[source_idx, target_idx] += source_prob
+                    target_prob_matrix[source_idx, target_idx] += target_prob
+                    source_to_target_prob_difference_matrix[source_idx, target_idx] += (source_prob - target_prob)
         
         # Calculate averages only for cells with counts > 0
         nonzero_mask = transition_counts > 0
         result['transition_counts'] = transition_counts
-        if np.any(nonzero_mask):  # 确保至少有一个非零元素
+        if np.any(nonzero_mask) and np.any(source_prob_matrix) and np.any(target_prob_matrix) and np.any(source_to_target_prob_difference_matrix):  # 确保至少有一个非零元素
             source_prob_matrix[nonzero_mask] /= transition_counts[nonzero_mask]
             target_prob_matrix[nonzero_mask] /= transition_counts[nonzero_mask]
             source_to_target_prob_difference_matrix[nonzero_mask] /= transition_counts[nonzero_mask]
@@ -242,14 +244,20 @@ def get_model_name(file_path: str) -> str:
         return "Qwen2.5-7B-Instruct"
     elif "deepseek-ai-DeepSeek-R1-Distill-Qwen-7B" in file_path:
         return "R1-Distill-Qwen-7B"
-    elif "xai-grok-3-mini-beta":
+    elif "xai-grok-3-mini-beta" in file_path:
         return "grok-3-mini-beta"
+    elif "deepseek-ai-deepseek-chat" in file_path:
+        return "deepseek-V3"
+    elif "deepseek-ai-deepseek-reasoner" in file_path:
+        return "deepseek-R1"
     else:
         return file_path
     
 def create_node_type_counts_chart(file_paths: List[str], all_vectors_matrices: List[Dict[str, np.ndarray]], 
                                  ordered_node_types: OrderedDict, output_dir: Path, normalize: bool = False,
-                                 data_key: str = "node_type_counts") -> str:
+                                 data_key: str = "node_type_counts",
+                                 average_model_group: dict = {"Base": ["Qwen2.5-7B-Instruct", "Llama-3.1-8B-Instruct"], "Distilled": ["R1-Distill-Llama-8B", "R1-Distill-Qwen-7B"]},
+                                 average_model: bool = False) -> str:
     """
     Create a bar chart comparing node metrics across all models.
     
@@ -260,14 +268,17 @@ def create_node_type_counts_chart(file_paths: List[str], all_vectors_matrices: L
         output_dir: Directory to save the chart
         normalize: Whether to normalize counts as proportions
         data_key: The key for the data to plot (node_type_counts or node_avg_prob_sum)
+        average_model_group: Dictionary of model groups and their models
+        average_model: Whether to average data across models in the same group
         
     Returns:
         Path to the saved chart file
     """
     # Extract file names for legend
     #fileter file_paths and all_vectors_matrices to only include models in model_name_list
-    file_paths, all_vectors_matrices = filter_file_paths(file_paths, all_vectors_matrices, ["R1-Distill-Llama-8B", "Llama-3.1-8B-Instruct", "Qwen2.5-7B-Instruct", "R1-Distill-Qwen-7B"])
-
+    file_paths, all_vectors_matrices = filter_file_paths(file_paths, all_vectors_matrices, ["Llama-3.1-8B-Instruct", "R1-Distill-Llama-8B", 
+                                                                                            "Qwen2.5-7B-Instruct", "R1-Distill-Qwen-7B",
+                                                                                            "deepseek-V3", "deepseek-R1"])
 
     file_names = [get_model_name(path) for path in file_paths]
     
@@ -282,7 +293,20 @@ def create_node_type_counts_chart(file_paths: List[str], all_vectors_matrices: L
                 if total > 0:
                     values = values / total
             data[file_name] = values
-    
+
+    # 如果需要分组平均
+    if average_model:
+        grouped_data = {}
+        for group_name, model_list in average_model_group.items():
+            group_values = []
+            for model in model_list:
+                if model in data:
+                    group_values.append(data[model])
+            if group_values:
+                grouped_data[group_name] = np.mean(group_values, axis=0)
+        data = grouped_data
+        file_names = list(data.keys())
+
     if not data:
         print(f"No {data_key} data available for plotting")
         return ""
@@ -353,7 +377,7 @@ def create_node_type_counts_chart(file_paths: List[str], all_vectors_matrices: L
     ax.set_xticklabels(node_types, rotation=45, ha='right', fontsize=8)
     
     # Add legend with smaller font
-    ax.legend(fontsize=8, loc='best')
+    ax.legend(fontsize=8, loc='center left', bbox_to_anchor=(1.01, 0.5))
     
     # Adjust layout to be compact
     plt.tight_layout()
@@ -374,7 +398,7 @@ def filter_file_paths(file_paths: List[str], all_vectors_matrices: List[Dict[str
         if get_model_name(path) in model_names:
             filtered_paths.append(path)
             filtered_matrices.append(all_vectors_matrices[i])
-    
+    # import pdb; pdb.set_trace()
     return filtered_paths, filtered_matrices
 
 def create_node_prob_by_model_chart(file_paths: List[str], all_vectors_matrices: List[Dict[str, np.ndarray]], 
@@ -629,24 +653,31 @@ def plot_confidence_node_type_transition(file_paths, all_vectors_matrices, order
                 values = [bin_target_props[i][j] for i in range(len(bin_labels))]
                 bars = ax.bar(x + (j - len(other_node_types)/2 + 0.5)*bar_width, 
                        values, width=bar_width, label=nt)
-                
-                # Add value labels on top of bars
-                for i, bar in enumerate(bars):
-                    height = bar.get_height()
-                    if height > 0.05:  # Only label bars with significant values
-                        ax.text(bar.get_x() + bar.get_width()/2., height + 0.01,
-                                f'{height:.2f}', ha='center', va='bottom', 
-                                fontsize=7)
+                #  # Add value labels on top of bars
+                # for i, bar in enumerate(bars):
+                #     height = bar.get_height()
+                #     if height > 0.05:  # Only label bars with significant values
+                #         ax.text(bar.get_x() + bar.get_width()/2., height + 0.01,
+                #                 f'{height:.2f}', ha='center', va='bottom', 
+                #                 fontsize=7)
+                # 只在 Assertion 节点标注 value
+                if nt == "Assertion":
+                    for i, bar in enumerate(bars):
+                        height = bar.get_height()
+                        if height > 0.05:  # Only label bars with significant values
+                            ax.text(bar.get_x() + bar.get_width()/2., height + 0.01,
+                                    f'{height*100:.0f}%', ha='center', va='bottom', 
+                                    fontsize=7)
             
             # Set labels and title
             ax.set_xticks(x)
             ax.set_xticklabels(bin_labels, rotation=30)
-            ax.set_xlabel('Source Node Confidence Bin')
+            ax.set_xlabel('Source Node Confidence')
             ax.set_ylabel('Proportion')
             ax.set_title(f'Target Distribution from {source_type} ({model_name})')
             
             # Add legend with smaller font
-            ax.legend(title='Target Node Type', fontsize=7, title_fontsize=8)
+            ax.legend(title='Target Node', fontsize=7, title_fontsize=8)
             
             # Adjust layout to be compact
             plt.tight_layout()
@@ -681,7 +712,11 @@ def save_detailed_analysis(file_paths: List[str], all_vectors_matrices: List[Dic
     # 创建输出文件
     output_file = output_dir / f"cpg_analysis.txt"
     
-    file_paths, all_vectors_matrices = filter_file_paths(file_paths, all_vectors_matrices, ["qwq-32b", "R1-Distill-Llama-8B", "Llama-3.1-8B-Instruct", "Qwen2.5-7B-Instruct", "R1-Distill-Qwen-7B"])
+    file_paths, all_vectors_matrices = filter_file_paths(file_paths, all_vectors_matrices, ["qwq-32b", 
+                                                                                            "R1-Distill-Llama-8B", "Llama-3.1-8B-Instruct", 
+                                                                                            "Qwen2.5-7B-Instruct", "R1-Distill-Qwen-7B",
+                                                                                            "deepseek-V3", "deepseek-R1"])
+    # import pdb; pdb.set_trace()
 
     # 创建节点类型计数比较图 (按节点类型分组)
     chart_file = create_node_type_counts_chart(file_paths, all_vectors_matrices, ordered_node_types, output_dir, 
@@ -693,7 +728,7 @@ def save_detailed_analysis(file_paths: List[str], all_vectors_matrices: List[Dic
     
     # 创建节点平均概率比较图 (按节点类型分组)
     prob_chart_file = create_node_type_counts_chart(file_paths, all_vectors_matrices, ordered_node_types, output_dir,
-                                                  normalize=False, data_key="node_avg_prob_sum")
+                                                  normalize=False, data_key="node_avg_prob_sum", average_model=True)
     
     # 创建节点平均概率比较图 (按模型分组)
     prob_by_model_chart_file = create_node_prob_by_model_chart(file_paths, all_vectors_matrices, ordered_node_types, output_dir,

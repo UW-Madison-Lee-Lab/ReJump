@@ -24,8 +24,8 @@ from pathlib import Path
 #concvert the above info into a list with the name as comments
 gemini_api_key_list = [
     "AIzaSyBgM3S40tAiRJ5J1f-jx8xgecBmbelnPXg",
-    # "AIzaSyDIAq1UMSGx1-svNob46Rt616JF0UHW3VY",
-    # "AIzaSyCCnSBSjD1CgtighzPQyx03HZWvrVSWTHM",
+    "AIzaSyDIAq1UMSGx1-svNob46Rt616JF0UHW3VY",
+    "AIzaSyCCnSBSjD1CgtighzPQyx03HZWvrVSWTHM",
     "AIzaSyBUhgp-FBViNj8VTxM3Tw8gXJsARgyx-dc",
     "AIzaSyD8PQnKv6AYN_oUVmlNKG8dviEr6mO_J_0",
     "AIzaSyARTR4pSoM8hmIIMEg85OMHD1T9KgaGwV4",
@@ -87,7 +87,9 @@ def run_logical_graph_analysis(base_dir):
         # "results_temperature_0/Qwen-Qwen2.5-3B-Instruct",
 
         # 'results_temperature_0/openrouter-microsoft-phi-4',
-        "results_temperature_0/xai-grok-3-mini-beta"
+        # "results_temperature_0/xai-grok-3-mini-beta",
+        "results_temperature_0/deepseek-ai-deepseek-reasoner",
+        "results_temperature_0/deepseek-ai-deepseek-chat",
     ]
     
     # Process all test_default.parquet files
