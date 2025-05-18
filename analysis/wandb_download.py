@@ -8,7 +8,7 @@ from environment import WANDB_INFO
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--task", type=str, default="evaluation", choices=["evaluation", "tree-vis", "tree-compare", "generation"])
+parser.add_argument("--task", type=str, default="evaluation", choices=["evaluation", "tree-vis-v3", "tree-compare", "generation"])
 args = parser.parse_args()
 
 # Project is specified by <entity/project-name>

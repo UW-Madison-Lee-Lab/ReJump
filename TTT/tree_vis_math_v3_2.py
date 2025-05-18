@@ -14,33 +14,26 @@ from verl.utils.llm_api import LLMAPI
 from constants import supported_llms
 import wandb
 from environment import WANDB_INFO
-from environment import root_dir
 
 import numpy as np
 from collections import deque
+# Note: The following import might need to be moved to the top of the file
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score
 
 from verl.utils.reward_score.math500 import compute_score
 import xgboost as xgb
 from sklearn.model_selection import train_test_split
 from collections import Counter
-from sklearn.linear_model import LogisticRegression
 
 # model = "xai/grok-3-mini-beta"
 # model = "claude/claude-3-7-sonnet-20250219-thinking"
-model_pro = "google/gemini-2.5-pro-preview-03-25"
-llm_pro = LLMAPI(
-    api_key=supported_llms[model_pro]["api_key"],
-    model_name=model_pro,
+model = "google/gemini-2.5-pro-preview-03-25"
+llm = LLMAPI(
+    api_key=supported_llms[model]["api_key"],
+    model_name=model,
     template_type="reasoning_api"
 )
-
-model_flash_parsing = "google/gemini-2.5-flash-preview-04-17"
-llm_flash_for_parsing = LLMAPI(
-    api_key=supported_llms[model_flash_parsing]["api_key"],
-    model_name=model_flash_parsing,
-    template_type="reasoning_api" 
-)
-
 
 def get_tree_prompt(input_str, output_str):
     return f"""
@@ -111,54 +104,6 @@ Each node object must contain: `Problem`, `parent`, `Result`.
 Generate the JSON output based on these instructions.
     """
     
-    
-def get_result_parsing_and_comparison_prompt(result_string, ground_truth_string):
-    return f"""You are an expert AI assistant. Your task is to analyze a 'Result' string from a mathematical reasoning step and compare its final numerical answer to a 'Ground Truth' value.
-
-Instructions:
-1.  Extract the final numerical value(s) from the 'Result' string. 
-    - If multiple numbers are present, focus on the one that seems to be the conclusive answer of that step.
-    - Handle approximations (e.g., "approx 46.0", "is about 3.14").
-    - If the result explicitly states abandonment (e.g., "[Path abandoned]"), extract the numerical value derived *before* abandonment, if any. If no clear numerical value was derived, use "N/A" for the parsed value.
-    - If no specific numerical answer can be clearly identified, use "N/A" for the parsed value.
-
-2.  Compare the extracted numerical value with the 'Ground Truth' value.
-    - The comparison should determine if they are essentially the same, considering potential minor differences in formatting or precision (e.g., "46" vs "46.0", "1.03" vs "1.035" if context implies rounding).
-    - If the parsed value is "N/A", the comparison result should be "NOT_APPLICABLE".
-    - If the ground truth is empty or clearly not a comparable numerical value, and the parsed value is numerical, consider it a "MISMATCH" unless specified otherwise.
-
-3.  Output a single JSON object with two keys:
-    -   `"parsed_value"`: The extracted numerical value as a string (e.g., "46", "3.14", "N/A").
-    -   `"match_status"`: A string indicating the comparison result. Must be one of: "MATCH", "MISMATCH", "NOT_APPLICABLE".
-
-Example:
-Result string: "Using the approximations, $tan x^\circ \\approx \\frac{{1.3270 + 6.3138}}{{1.3270 \\times 6.3138 - 1}} \\approx \\frac{{7.6408}}{{8.381 - 1}} \\approx \\frac{{7.6408}}{{7.381}} \\approx 1.0355$. This implies $x \\approx arctan(1.0355) \\approx 46.0^\circ$. [Path abandoned]"
-Ground Truth string: "46"
-Expected JSON Output: {{"parsed_value": "46.0", "match_status": "MATCH"}}
-
-Result string: "The answer is $y=3$."
-Ground Truth string: "3.0"
-Expected JSON Output: {{"parsed_value": "3", "match_status": "MATCH"}}
-
-Result string: "The calculation leads to $10/2 = 5$. However, this path is incorrect."
-Ground Truth string: "7"
-Expected JSON Output: {{"parsed_value": "5", "match_status": "MISMATCH"}}
-
-Result string: "[Path abandoned] No value obtained."
-Ground Truth string: "10"
-Expected JSON Output: {{"parsed_value": "N/A", "match_status": "NOT_APPLICABLE"}}
-
----
-Result string to analyze:
-{result_string}
-
-Ground Truth value:
-{ground_truth_string}
----
-
-JSON Output:"""
-
-
 def get_walk_prompt(input_str, output_str, tree_json):
     return f"""
 You are an AI assistant specialized in analyzing mathematical reasoning processes. Your task is to trace the provided reasoning text against a structured reasoning tree and generate a "walk" representing the trajectory of the thought process.
@@ -384,16 +329,22 @@ def visualize_tree_walk(tree_data, walk_data, filename="tree_walk_visualization_
 
 # Helper function to calculate distance (remains the same)
 def _get_distance(node1_id, node2_id, parents, depths):
-    """Calculates the distance (number of edges) between two nodes in a tree."""
+    """Calculates the distance (number of edges) between two nodes in a tree.
+    Returns a tuple: (distance_from_node1_to_lca, distance_from_lca_to_node2, total_distance).
+    Returns (None, None, float('inf')) if distance cannot be calculated.
+    Returns (0, 0, 0) if node1_id == node2_id.
+    """
     if node1_id not in depths or node2_id not in depths:
-        return float('inf')
+        return None, None, float('inf') # Error case
     if node1_id == node2_id:
-        return 0
+        return 0, 0, 0 # Distance from a node to itself
+    
     path1_ancestors = {}
     curr = node1_id
     while curr is not None:
         path1_ancestors[curr] = depths[curr]
         curr = parents.get(curr)
+    
     lca = None
     curr = node2_id
     while curr is not None:
@@ -401,10 +352,15 @@ def _get_distance(node1_id, node2_id, parents, depths):
             lca = curr
             break
         curr = parents.get(curr)
+    
     if lca is None:
-         return float('inf')
-    distance = depths[node1_id] + depths[node2_id] - 2 * depths[lca]
-    return distance
+         return None, None, float('inf') # LCA not found, implies nodes might be in disconnected parts if both in depths
+    
+    dist_node1_to_lca = depths[node1_id] - depths[lca]
+    dist_lca_to_node2 = depths[node2_id] - depths[lca]
+    total_distance = dist_node1_to_lca + dist_lca_to_node2 # This is equivalent to depths[node1_id] + depths[node2_id] - 2 * depths[lca]
+    
+    return dist_node1_to_lca, dist_lca_to_node2, total_distance
 
 # Helper to build tree info (remains the same)
 def _build_tree_info_from_parent_links(tree_data):
@@ -564,29 +520,28 @@ def _filter_leaf_visits(full_walk_sequence, walk_steps_list, leaves, depths):
 # **** NEW Function to compute average solution count ****
 def compute_average_solution_count(tree_data, walk_steps_list):
     """
-    Computes the number of leaf nodes in the tree and returns their IDs.
+    Computes the number of leaf nodes in the tree.
 
     Args:
         tree_data (dict): Dict representing tree {node_id: {"parent": parent_id,...}}
         walk_steps_list (list): List of dicts representing steps (unused in this function but kept for consistency).
 
     Returns:
-        tuple (int or None, set or None): The number of leaf nodes and a set of their IDs,
-                                         or (None, None) if tree data is invalid.
+        int or None: The number of leaf nodes, or None if tree data is invalid.
     """
     parents, depths, leaves, children, root_id = _build_tree_info_from_parent_links(tree_data)
 
     if parents is None:
         print("Error: Could not process tree data for solution count.")
-        return None, None
+        return None
 
     if not leaves:
         # This could mean no reachable leaf nodes or an empty tree.
         # Depending on definition, 0 might be more appropriate than None if tree is valid but has no leaves.
         print("Info: No leaf nodes found or tree is empty. Returning 0 solutions.")
-        return 0, set()
+        return 0
 
-    return len(leaves), leaves
+    return len(leaves)
 
 
 # **** Main function updated to use the filtering ****
@@ -595,108 +550,144 @@ def compute_filtered_average_jump_distance(tree_data, walk_steps_list):
     Computes the Average Jump Distance (AJD) based on a *filtered* sequence
     of leaf visits, where visits to the same leaf are ignored if all
     intermediate steps were 'verification'.
+    Also prepares a list of jump distances for display, including a conceptual
+    jump from the root to the first filtered leaf.
 
     Args:
         tree_data (dict): Dict representing tree {node_id: {"parent": parent_id,...}}
         walk_steps_list (list): List of dicts representing steps [{'from': 'n1', 'to': 'n2', 'category': 'cat'}, ...]
 
     Returns:
-        float or None: The computed filtered AJD, or None if undefined.
+        tuple (float or None, list, list or None, list or None):
+            - The computed filtered AJD (based on inter-leaf jumps only).
+            - A list of individual jump distance dicts for display.
+              The first element may represent root-to-first-leaf.
+            - The original full walk sequence.
+            - The filtered leaf visit sequence.
+        Returns (None, [], None, None) if AJD cannot be computed due to major errors.
+        Returns (0.0, display_jumps_list, full_walk_seq, filtered_leaf_seq) if no inter-leaf jumps.
     """
 
     # --- Step 1: Build tree information ---
     parents, depths, leaves, children, root_id = _build_tree_info_from_parent_links(tree_data)
+    display_individual_jump_distances = [] # For display, including root jump
+
     if parents is None:
         print("Error: Could not process tree data.")
-        return None
-    if not leaves:
-        print("Warning: No leaf nodes found reachable from root. Filtered AJD is undefined.")
-        return None
-
+        return None, [], None, None
+    
     # --- Step 2: Reconstruct the full walk sequence ---
     full_walk_sequence = _reconstruct_walk_sequence(walk_steps_list)
     if full_walk_sequence is None:
         print("Error: Could not reconstruct walk sequence.")
-        return None
+        return None, display_individual_jump_distances, None, None # display_individual_jump_distances is empty
     if not full_walk_sequence:
          print("Info: Walk sequence is empty.")
-         return None
+         return None, display_individual_jump_distances, [], []
+
+    if not leaves: # No leaves in the tree itself
+        print("Warning: No leaf nodes found in the tree. Filtered AJD is undefined.")
+        # Add root jump info if root exists, even if no leaves in filtered_leaf_sequence later
+        if root_id:
+            # This case implies filtered_leaf_sequence will be empty. We add a conceptual root marker.
+            # Or, if filtered_leaf_sequence might have non-leaf nodes (not current design), this is more complex.
+            # Assuming filtered_leaf_sequence contains only valid leaves from the 'leaves' set.
+            # If no leaves, no first_leaf to jump to. So, can't form the root jump as specified.
+            pass # display_individual_jump_distances remains empty
+        return None, display_individual_jump_distances, full_walk_sequence, []
 
     # --- Step 3: Filter the leaf visits based on the verification rule ---
     print("Original full walk sequence:", full_walk_sequence) # Debug
     filtered_leaf_sequence = _filter_leaf_visits(full_walk_sequence, walk_steps_list, leaves, depths)
     print("Filtered leaf visit sequence:", filtered_leaf_sequence) # Debug
 
-    # --- Step 4: Calculate average jump distance on the filtered sequence ---
+    # --- Add conceptual jump from root to the first filtered leaf for display ---
+    if root_id and filtered_leaf_sequence: # Check if filtered_leaf_sequence is not empty
+        first_leaf = filtered_leaf_sequence[0]
+        # _get_distance returns (dist_root_to_lca, dist_lca_to_first_leaf, total_dist_root_to_first_leaf)
+        # When node1 is root, dist_root_to_lca = 0, dist_lca_to_first_leaf = total_dist_root_to_first_leaf
+        _, _, dist_root_to_first_leaf = _get_distance(root_id, first_leaf, parents, depths)
+        if dist_root_to_first_leaf != float('inf'):
+            root_jump_info = {"From_Root": "None", "Root_To": dist_root_to_first_leaf, "JD": "None"}
+        else:
+            root_jump_info = {"From_Root": "Error", "Root_To": "Error", "JD": "Error"}
+        display_individual_jump_distances.append(root_jump_info)
+    elif not filtered_leaf_sequence and root_id: # No filtered leaves, but root exists
+        # Optionally, add a marker that no leaves were reached from root for display.
+        # For now, display_individual_jump_distances will be empty if filtered_leaf_sequence is empty.
+        pass 
+
+    # --- Step 4: Calculate average jump distance on the filtered sequence (inter-leaf jumps) ---
     M_filtered = len(filtered_leaf_sequence)
+    actual_num_jumps = M_filtered - 1
+    filtered_ajd = 0.0
 
-    if M_filtered < 2:
-        return 0
+    if actual_num_jumps < 1: # If M_filtered is 0 or 1, no inter-leaf jumps
+        # display_individual_jump_distances might have 0 or 1 element (the root jump)
+        return 0.0, display_individual_jump_distances, full_walk_sequence, filtered_leaf_sequence
 
-    sum_distances = 0
-    jumps_with_errors = 0
-    num_jumps = M_filtered - 1
+    sum_distances_for_ajd = 0
+    jumps_with_errors_for_ajd = 0
 
-    for i in range(num_jumps):
+    for i in range(actual_num_jumps):
         u = filtered_leaf_sequence[i]
         v = filtered_leaf_sequence[i+1]
 
-        distance = _get_distance(u, v, parents, depths)
+        dist_u_lca, dist_lca_v, total_jd = _get_distance(u, v, parents, depths)
 
-        if distance == float('inf'):
-             print(f"Warning: Skipping jump ({u} -> {v}) in filtered sequence due to distance calculation error.")
-             jumps_with_errors += 1
-             # Skip this jump's contribution
+        if total_jd == float('inf'):
+             print(f"Warning: Skipping jump ({u} -> {v}) for AJD calculation due to distance error (total_jd is inf).")
+             jumps_with_errors_for_ajd += 1
+             # Still add an error marker to display list for this jump if desired, or skip
+             display_individual_jump_distances.append({
+                 "from_leaf_to_lca": "Error", 
+                 "lca_to_to_leaf": "Error", 
+                 "JD": "Error", 
+                 "note": f"Error calculating jump {u}->{v}"
+             })
              continue
-        sum_distances += distance
-
-    if jumps_with_errors > 0:
-         print(f"Warning: {jumps_with_errors} jumps in the filtered sequence could not be calculated. Result may be inaccurate.")
-         # Return None if strict error handling is needed for any failed jump
-         # return None
-
-    # Calculate the average based on the number of jumps in the filtered sequence
-    if num_jumps == 0: # Should be caught by M_filtered < 2, but safety
-        return None
-
-    # Average the sum of successfully calculated distances over the total number of jumps attempted in filtered sequence
-    filtered_ajd = sum_distances / num_jumps
-    return filtered_ajd
-
-def check_leaf_node(
-    sorted_leaf_ids,
-    ground_truth_value, 
-    tree_json
-):
-    for leaf_id in sorted_leaf_ids:
-        if leaf_id in tree_json and "Result" in tree_json[leaf_id]:
-            parsed_value_text = "N/A (processing error)"
-            match_corr = 0.0 # Default to 0.0 for correlation
-            parsing_comparison_prompt = get_result_parsing_and_comparison_prompt(tree_json[leaf_id]["Result"], ground_truth_value)
-            llm_response_raw = llm_flash_for_parsing.generate([{"role": "user", "content": parsing_comparison_prompt}])
+        if dist_u_lca is None or dist_lca_v is None: # Should be caught by total_jd == inf
+            print(f"Warning: Skipping jump ({u} -> {v}) for AJD calculation due to component distance error.")
+            jumps_with_errors_for_ajd +=1
+            display_individual_jump_distances.append({
+                "from_leaf_to_lca": "Error", 
+                "lca_to_to_leaf": "Error", 
+                "JD": "Error", 
+                "note": f"Component error calculating jump {u}->{v}"
+            })
+            continue
             
-            llm_output_str = llm_response_raw[2].strip() if len(llm_response_raw) > 2 and isinstance(llm_response_raw[2], str) else ""
-            response_json = parse_json(llm_output_str)
-            parsed_value_text = response_json.get("parsed_value", "N/A (LLM missing parsed_value)")
-            match_status = response_json.get("match_status", "N/A (LLM missing match_status)")
-            
-            if match_status == "MATCH":
-                match_corr = 1.0
-            elif match_status == "MISMATCH":
-                match_corr = 0.0
-            else:
-                match_corr = 0.0
-        else:
-            parsed_value_text = "N/A (processing error)"
-            match_corr = 0.0
-                
-        tree_json[leaf_id]["parsed_value"] = parsed_value_text
-        tree_json[leaf_id]["match_corr"] = match_corr
-        
-    return tree_json
+        sum_distances_for_ajd += total_jd
+        display_individual_jump_distances.append({
+            "from_leaf_to_lca": dist_u_lca,
+            "lca_to_to_leaf": dist_lca_v,
+            "JD": total_jd
+        })
 
+    if jumps_with_errors_for_ajd > 0:
+         print(f"Warning: {jumps_with_errors_for_ajd} inter-leaf jumps could not be calculated for AJD. AJD may be inaccurate.")
 
-def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint = None):
+    # Calculate AJD based on successfully calculated inter-leaf jumps
+    # Number of jumps attempted for AJD is actual_num_jumps.
+    # Number of successful jumps for AJD is actual_num_jumps - jumps_with_errors_for_ajd.
+    
+    # If all inter-leaf jumps errored, but there were attempts (actual_num_jumps > 0)
+    if actual_num_jumps > 0 and (actual_num_jumps - jumps_with_errors_for_ajd == 0):
+        filtered_ajd = 0.0 # Or None, or handle as error. Current: 0 if all fail.
+    elif actual_num_jumps > 0 : # Some successful inter-leaf jumps
+        # Average over successful jumps or over attempted jumps?
+        # Current code averages sum_distances_for_ajd / actual_num_jumps. This means errored jumps effectively count as 0 distance if sum_distances_for_ajd wasn't updated.
+        # If we only want to average successful jumps:
+        # num_successful_jumps = actual_num_jumps - jumps_with_errors_for_ajd
+        # if num_successful_jumps > 0: filtered_ajd = sum_distances_for_ajd / num_successful_jumps else: filtered_ajd = 0.0
+        # Let's stick to original averaging logic: sum of successful distances / total number of inter-leaf segments
+        filtered_ajd = sum_distances_for_ajd / actual_num_jumps
+    else: # No inter-leaf jumps (actual_num_jumps == 0), AJD is 0
+        filtered_ajd = 0.0
+    
+    return filtered_ajd, display_individual_jump_distances, full_walk_sequence, filtered_leaf_sequence
+
+def get_analysis(idx, results, results_dir, overwrite=False):
     result_path = f"{results_dir}/tree_vis_v3/{idx}.json"
     if not os.path.exists(result_path) or overwrite:
         os.makedirs(os.path.dirname(result_path), exist_ok=True)
@@ -704,44 +695,29 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint = N
         output_str = results.iloc[idx]["responses"][0]
         corr = compute_score(output_str, results.iloc[idx]["reward_model"]["ground_truth"], "box")
         tree_prompt = get_tree_prompt(input_str, output_str)
-        tree_json = llm_pro.generate([{
+        tree_json = llm.generate([{
             "role": "user",
             "content": tree_prompt
         }])[2]
-        tree_json = parse_json(tree_json)
         
         walk_prompt = get_walk_prompt(input_str, output_str, tree_json)
-        walk_json = llm_pro.generate([{
+        walk_json = llm.generate([{
             "role": "user",
             "content": walk_prompt
         }])[2]
-        walk_json = parse_json(walk_json)
-        
-        solution_count, leaf_node_ids = compute_average_solution_count(tree_json, walk_json)
-        sorted_leaf_ids = sorted(list(leaf_node_ids)) if leaf_node_ids is not None else []
-        if solution_count is not None and solution_count > 1:
-            
-            tree_json = check_leaf_node(
-                sorted_leaf_ids, 
-                output_str,  
-                tree_json
-            )
-                
         json_data = {
-            "tree": tree_json,
-            "walk": walk_json,
+            "tree": parse_json(tree_json),
+            "walk": parse_json(walk_json),
             "corr": corr,
         }
         save_json(json_data, result_path)
     else:
         json_data = load_json(result_path)
-        tree_json = json_data["tree"]
-        walk_json = json_data["walk"]
-        corr = json_data["corr"]
+        input_str = results.iloc[idx]["prompt"][0]["content"]
+        output_str = results.iloc[idx]["responses"][0]
+        corr = compute_score(output_str, results.iloc[idx]["reward_model"]["ground_truth"], "box")
+        json_data["corr"] = corr
         
-    if corr_constraint is not None:
-        if corr != corr_constraint:
-            return None
     
     # Filter out the specific walk elements before visualization
     if "walk" in json_data and isinstance(json_data["walk"], list):
@@ -751,43 +727,24 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint = N
         ]
 
     vis_path = visualize_tree_walk(json_data["tree"], json_data["walk"], filename=f"{results_dir}/tree_vis_v3/{idx}", format="pdf")
-    filtered_ajd = compute_filtered_average_jump_distance(json_data["tree"], json_data["walk"])
+    filtered_ajd, display_jds_list, original_walk_seq, filtered_leaf_seq = compute_filtered_average_jump_distance(json_data["tree"], json_data["walk"])
     print(f"Index {idx}: Filtered AJD = {filtered_ajd}")
-
-    all_samples_leaf_node_parsed_corrs = []
     
-    solution_count, leaf_node_ids = compute_average_solution_count(tree_json, walk_json)
-    
-    if solution_count is not None:
-        sorted_leaf_ids = sorted(list(leaf_node_ids)) if leaf_node_ids is not None else []
-        if solution_count == 1 and sorted_leaf_ids:
-            all_samples_leaf_node_parsed_corrs.append(float(corr))
-
-        elif solution_count > 1 and sorted_leaf_ids:
-            for leaf_id in sorted_leaf_ids:
-                if "match_corr" in tree_json[leaf_id]:
-                    match_corr = tree_json[leaf_id]["match_corr"]
-                    all_samples_leaf_node_parsed_corrs.append(float(match_corr))
-                else:
-                    all_samples_leaf_node_parsed_corrs.append(0.00)
-                
-        current_sample_success_rate = 0.0 # Default for empty or error cases
-        if all_samples_leaf_node_parsed_corrs: # Check if the list is not empty
-            current_sample_success_rate = sum(c == 1.0 for c in all_samples_leaf_node_parsed_corrs) / len(all_samples_leaf_node_parsed_corrs)
-   
-        current_sample_overthinking_rate = 0.0
-        if all_samples_leaf_node_parsed_corrs:
-            try:
-                first_one_index = all_samples_leaf_node_parsed_corrs.index(1.0)
-                elements_after_first_one = len(all_samples_leaf_node_parsed_corrs) - 1 - first_one_index
-                current_sample_overthinking_rate = elements_after_first_one / len(all_samples_leaf_node_parsed_corrs)
-            except ValueError: # No 1.0 found in the list
-                current_sample_overthinking_rate = 0.0
-                
+    print(f"Index {idx}: Individual Jump Distances (Display Format):")
+    if display_jds_list:
+        for jd_info in display_jds_list:
+            if "From_Root" in jd_info: # Check for the root jump marker
+                print(f"  - From_Root: {jd_info.get('From_Root')}, Root_To: {jd_info.get('Root_To')}, JD: {jd_info.get('JD')}")
+            elif "note" in jd_info: # Check for error marker from inter-leaf jump calculation
+                print(f"  - From_LCA: Error, LCA_To: Error, JD: Error (Note: {jd_info.get('note')})")
+            else: # Standard inter-leaf jump
+                print(f"  - From_LCA: {jd_info.get('from_leaf_to_lca')}, LCA_To: {jd_info.get('lca_to_to_leaf')}, JD: {jd_info.get('JD')}")
     else:
-        current_sample_success_rate = 0.0
-        current_sample_overthinking_rate = 0.0
-        
+        print("  - No jump distances to display.")
+    
+    average_solution_count = compute_average_solution_count(json_data["tree"], json_data["walk"])
+    print(f"Index {idx}: Solution Count = {average_solution_count}")
+    
     # Count arrow types
     calculation_count = 0
     verification_count = 0
@@ -853,11 +810,13 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint = N
     print(f"Index {idx}: no_calculation_edge = {no_calculation_edge_value}")
     if no_calculation_edge_value == 1:
         print(f"Index {idx}: Missing calculation edges: {', '.join(missing_calculation_edges_list)}")
+    # ---- END NEW ----
 
     return {
         "graph": vis_path,
         "filtered_ajd": filtered_ajd,
-        "average_solution_count": solution_count,
+        "individual_jump_distances": display_jds_list, # This now correctly refers to the display list
+        "average_solution_count": average_solution_count,
         "calculation_count": calculation_count,
         "verification_count": verification_count,
         "backtracking_count": backtracking_count,
@@ -867,8 +826,8 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint = N
         "corr": json_data["corr"],
         "no_calculation_edge": no_calculation_edge_value,
         "missing_edges_info": ', '.join(missing_calculation_edges_list) if no_calculation_edge_value == 1 else "",
-        "success_rate": current_sample_success_rate,
-        "overthinking_rate": current_sample_overthinking_rate,
+        "original_full_walk_sequence": original_walk_seq, # Add original walk sequence
+        "filtered_leaf_visit_sequence": filtered_leaf_seq, # Add filtered leaf sequence
     }
 
 if __name__ == "__main__":
@@ -880,27 +839,20 @@ if __name__ == "__main__":
     parser.add_argument("--num_samples", type=int, default=-1)
     parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--mode", type=str, default="default", choices=["default", "ricl_1", "ricl_2", "ricl_3", "ricl_4", "ricl_5", "ricl_6", "ricl_7", "ricl_8", "ricl_9", "ricl_10"])
-    parser.add_argument("--temperature", type=float, nargs='+', default=[0.00])
-    parser.add_argument("--corr_constraint", type=lambda x: None if x == "None" else int(x), default=None, choices=[None, 0, 1])
+    parser.add_argument("--temperature", type=float, default=0.00)
     args = parser.parse_args()
     
-    models = args.model_name
-    if len(args.temperature) == 1:
-        temperatures = [args.temperature[0] for _ in models]
-    else:
-        if len(args.temperature) != len(models):
-            raise ValueError(f"Number of temperatures ({len(args.temperature)}) must match number of models ({len(models)})")
-        temperatures = args.temperature
-    
     all_metrics = {}
-    for model_name, temperature in zip(models, temperatures):
+    collected_jds_for_final_print = [] # NEW: Initialize list to collect JDs across all models and samples
+
+    for model_name in args.model_name:
         if args.wandb:
             wandb_config = {
                 "dataset_name": args.dataset_name,
                 "model_name": model_name,
                 "num_samples": args.num_samples,
                 "mode": args.mode,
-                "temperature": temperature,
+                "temperature": args.temperature,
             }
             project_name = f"{WANDB_INFO['project']}-tree-vis-v3"
             
@@ -922,7 +874,7 @@ if __name__ == "__main__":
             label_noise = 0.0,
             data_mode = "default",
             n_query = 1,
-            temperature = temperature,
+            temperature = args.temperature,
         )
         results = pd.read_parquet(f"{results_dir}/test_default.parquet")
         
@@ -945,19 +897,13 @@ if __name__ == "__main__":
         no_calculation_edge_values = [] # For storing 0 or 1 for each sample
         all_samples_missing_edges_info = [] # For storing detailed string info for samples with missing edges
         no_calculation_edge_one_indices = [] # Initialize list for indices with no_calculation_edge == 1
-        all_samples_success_rates = []
-        all_samples_overthinking_rates = []
         
         for idx in tqdm(idxs):
-            attempts, success, overwrite, skip = 0, False, args.overwrite, False
+            attempts, success, overwrite = 0, False, args.overwrite
             while attempts < 5 and not success:
                 try:
-                    graph_metric = get_analysis(idx, results, results_dir, overwrite, args.corr_constraint)
+                    graph_metric = get_analysis(idx, results, results_dir, overwrite)
                     success = True
-                    if args.corr_constraint is not None:
-                        if graph_metric is None:
-                            skip = True
-
                 except KeyboardInterrupt:
                     raise KeyboardInterrupt
                 except pdb.bdb.BdbQuit:
@@ -968,8 +914,6 @@ if __name__ == "__main__":
                     attempts += 1
                     overwrite = True
                     continue
-                
-            if skip: continue 
             
             filtered_ajds.append(graph_metric["filtered_ajd"])
             average_solution_counts.append(graph_metric["average_solution_count"]) # Append average solution count
@@ -980,8 +924,6 @@ if __name__ == "__main__":
             forgetting_rates.append(graph_metric["forgetting_rate"]) # Append forgetting rate
             average_verification_rates_list.append(graph_metric["average_verification_rate"]) # Append average_verification_rate
             corrs.append(graph_metric["corr"])
-            all_samples_success_rates.append(graph_metric["success_rate"])
-            all_samples_overthinking_rates.append(graph_metric["overthinking_rate"])
             
             no_calculation_edge_values.append(graph_metric["no_calculation_edge"])
             if graph_metric["no_calculation_edge"] == 1:
@@ -992,6 +934,21 @@ if __name__ == "__main__":
             
             if graph_metric["filtered_ajd"] is None: # Check if filtered_ajd is None
                 none_ajd_indices.append(idx) # Add index to the list
+
+            # NEW: Collect individual jump distances, AJD, and walk sequences for final printing
+            if ("individual_jump_distances" in graph_metric and 
+                "filtered_ajd" in graph_metric and
+                "original_full_walk_sequence" in graph_metric and # Check for new key
+                "filtered_leaf_visit_sequence" in graph_metric and # Check for new key
+                "individual_jump_distances" in graph_metric):  # Ensure this key exists for collected_jds_for_final_print
+                collected_jds_for_final_print.append((
+                    model_name, 
+                    idx, 
+                    graph_metric["individual_jump_distances"], # This is the display list
+                    graph_metric["filtered_ajd"], 
+                    graph_metric["original_full_walk_sequence"], 
+                    graph_metric["filtered_leaf_visit_sequence"]
+                ))
         
         # Print indices with forgetting_rate == 1
         print(f"Indices with forgetting_rate == 1: --idx {' '.join(map(str, forgetting_rate_one_indices))}")     
@@ -1017,8 +974,6 @@ if __name__ == "__main__":
             "average_verification_rates": average_verification_rates_list,
             "corrs": corrs,
             "no_calculation_edge": no_calculation_edge_values, # Add new metric to dict
-            "success_rates": all_samples_success_rates,
-            "overthinking_rates": all_samples_overthinking_rates,
         }
         
         metric_df = pd.DataFrame(metric_dict)
@@ -1056,12 +1011,6 @@ if __name__ == "__main__":
         avg_no_calc_edge = np.mean(metric_df["no_calculation_edge"]) if "no_calculation_edge" in metric_df.columns and not metric_df["no_calculation_edge"].empty else np.nan
         print(f"Proportion of samples with no_calculation_edge=1: {avg_no_calc_edge:.4f}" if avg_no_calc_edge is not None and not np.isnan(avg_no_calc_edge) else "Proportion of samples with no_calculation_edge=1: N/A")
                 
-        avg_success_rate = np.mean(metric_df["success_rates"]) if "success_rates" in metric_df.columns and not metric_df["success_rates"].empty else np.nan
-        print(f"Average Success Rate: {avg_success_rate:.4f}" if avg_success_rate is not None and not np.isnan(avg_success_rate) else "Average Success Rate: N/A")
-        
-        avg_overthinking_rate = np.mean(metric_df["overthinking_rates"]) if "overthinking_rates" in metric_df.columns and not metric_df["overthinking_rates"].empty else np.nan
-        print(f"Average Overthinking Rate: {avg_overthinking_rate:.4f}" if avg_overthinking_rate is not None and not np.isnan(avg_overthinking_rate) else "Average Overthinking Rate: N/A")
-        
         if args.wandb:
             wandb_log_data = {
                 "filtered_ajd": filtered_ajd,
@@ -1074,8 +1023,6 @@ if __name__ == "__main__":
                 "overall_average_verification_rate": overall_avg_verification_rate, # Log overall_average_verification_rate
                 "average_correlation": avg_corr,
                 "average_no_calculation_edge": avg_no_calc_edge, # Log new metric
-                "average_success_rate": avg_success_rate,
-                "average_overthinking_rate": avg_overthinking_rate,
             }
             # Filter out NaN values before logging to wandb
             wandb_log_data = {k: v for k, v in wandb_log_data.items() if v is not None and not np.isnan(v)}
@@ -1087,6 +1034,34 @@ if __name__ == "__main__":
                 all_metrics[metric] = []
             all_metrics[metric].extend(metric_dict[metric])
             
+    # NEW LOCATION for printing collected JDs
+    # Print all collected individual jump distances (length >= 0, as first entry can be root jump)
+    print("\n--- Collected Individual Jump Distances (length >= 0, as first entry can be root jump) ---")
+    # Adjusted condition for printing, as the display_jds_collected might contain only the root jump
+    # The original request was "length >= 2" for the *inter-leaf* jumps.
+    # Now, we print if display_jds_collected is not empty, and then iterate through it.
+    # The old jds_list_collected (which was for inter-leaf jumps) is no longer directly used for the len check.
+
+    found_any_jds_to_print = False
+    for model_name_collected, sample_idx_collected, display_jds_collected_list, filtered_ajd_collected, original_walk_seq_collected, filtered_leaf_seq_collected in collected_jds_for_final_print:
+        # Print if there's anything to display for this sample (e.g., at least the root jump or any inter-leaf jumps)
+        if display_jds_collected_list: # Check if the list itself is not empty
+            print(f"Model: {model_name_collected}, Sample Index: {sample_idx_collected}, Filtered AJD: {filtered_ajd_collected}")
+            print(f"  Original full walk sequence: {original_walk_seq_collected}")
+            print(f"  Filtered leaf visit sequence: {filtered_leaf_seq_collected}")
+            print(f"  Individual Jump Distances (Display Format):")
+            for jd_info in display_jds_collected_list:
+                if "From_Root" in jd_info:
+                    print(f"    - From_Root: {jd_info.get('From_Root')}, Root_To: {jd_info.get('Root_To')}, JD: {jd_info.get('JD')}")
+                elif "note" in jd_info:
+                    print(f"    - From_LCA: Error, LCA_To: Error, JD: Error (Note: {jd_info.get('note')})")    
+                else:
+                    print(f"    - From_LCA: {jd_info.get('from_leaf_to_lca')}, LCA_To: {jd_info.get('lca_to_to_leaf')}, JD: {jd_info.get('JD')}")
+            found_any_jds_to_print = True
+            print("---") # Add a separator between samples for clarity
+            
+    if not found_any_jds_to_print:
+        print("No individual jump distances to display across all samples and models.")
 
     # Check the importance of each feature using XGBoost regressor
     feature_columns = [
@@ -1094,14 +1069,12 @@ if __name__ == "__main__":
         "forgetting_rates",
         "average_verification_rates",
         "average_solution_count",
-        "success_rates",
-        "overthinking_rates"
+        "no_calculation_edge"  # Add new feature for model input
     ]
     target_column = "corrs"
 
-    all_metrics_df = pd.DataFrame(all_metrics)
     # Prepare X and y, dropping rows with NaN in any feature or target
-    valid_rows = all_metrics_df[feature_columns + [target_column]].dropna()
+    valid_rows = metric_df[feature_columns + [target_column]].dropna()
     X = valid_rows[feature_columns].values
     y = valid_rows[target_column].values
 
@@ -1116,6 +1089,7 @@ if __name__ == "__main__":
         accuracy = np.mean(y_pred == y_test)
         print(f"Classifier Accuracy: {accuracy:.4f}")
 
+        # INSERT_YOUR_CODE
         # Check the accuracy of a majority classifier (predicts the most common class)
         if len(y_test) > 0:
             majority_class = Counter(y_train).most_common(1)[0][0]
@@ -1124,41 +1098,12 @@ if __name__ == "__main__":
             print(f"Majority Classifier Accuracy: {majority_accuracy:.4f}")
         else:
             print("Not enough test data to compute majority classifier accuracy.")
-            majority_accuracy = None
-
         # Check feature importances
         importances = model.feature_importances_
         # Optionally, print sorted feature importances
         sorted_features = sorted(zip(feature_columns, importances), key=lambda x: x[1], reverse=True)
         print("Features ranked by importance:")
-        feature_importance_dict = {}
         for name, importance in sorted_features:
             print(f"  {name}: {importance:.4f}")
-            feature_importance_dict[name] = float(importance)
-
-
-        # Compose the output dictionary
-        summary = {
-            "classifier_accuracy": float(accuracy),
-            "majority_classifier_accuracy": float(majority_accuracy) if majority_accuracy is not None else None,
-            "feature_importances": feature_importance_dict,
-            "sorted_feature_importances": [
-                {"feature": name, "importance": float(importance)}
-                for name, importance in sorted_features
-            ],
-        }
-
-        # Compose the output filename
-        corr_constraint_str = str(args.corr_constraint) if args.corr_constraint is not None else "None"
-        dataset_name_str = str(args.dataset_name)
-        output_dir =f"{root_dir}/results"
-        os.makedirs(output_dir, exist_ok=True)
-        output_path = os.path.join(
-            output_dir,
-            f"success_fail_summary_{corr_constraint_str}_{dataset_name_str}.json"
-        )
-
-        save_json(summary, output_path)
-        print(f"Saved summary to {output_path}")
     else:
         print("Not enough valid data to check feature importance.")

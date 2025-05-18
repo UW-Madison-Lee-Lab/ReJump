@@ -24,17 +24,17 @@ def gen_dataset(
     else:
         feature_noise = None
         
-        command = f"""
+    command = f"""
 python -m examples.data_preprocess.{dataset_name} \
-    --template_type={template_type} \
-    --num_samples={num_samples} \
-    --n_shot={shot} \
-    --n_query={n_query} \
-    --feature_noise={feature_noise} \
-    --test_ratio={test_ratio} \
-    --label_noise={label_noise} \
-    --data_mode={data_mode}
-            """ 
+--template_type={template_type} \
+--num_samples={num_samples} \
+--n_shot={shot} \
+--n_query={n_query} \
+--feature_noise={feature_noise} \
+--test_ratio={test_ratio} \
+--label_noise={label_noise} \
+--data_mode={data_mode}
+        """ 
     
     if "ricl" in template_type:
         if supported_datasets[dataset_name]["type"] == "regression":
@@ -214,6 +214,7 @@ def inference(
     train_step=0,
     wandb=2,
     api_workers=16,
+    replicate_id=0,
 ):
     dataset_dir = get_dataset_dir(
         dataset_name=dataset_name,
@@ -238,6 +239,7 @@ def inference(
         train_step=train_step,
         n_query=n_query,
         temperature=temperature,
+        replicate_id=replicate_id,
     )
     output_file = get_dataset_filename(split="test", data_mode=data_mode)
     return f"""

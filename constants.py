@@ -90,21 +90,24 @@ def get_result_dir(
     data_mode = "default",
     n_query=1,
     temperature =0,
+    replicate_id = 0,
 ):
-    return os.path.join(root_dir, 'results', get_model_name(dataset_name, model_name, shot, template_type, response_length, num_samples, feature_noise, label_noise, data_mode, n_query=n_query), f"temperature_{temperature:.2f}", f"global_step_{train_step}")
+    return os.path.join(root_dir, 'results', get_model_name(dataset_name, model_name, shot, template_type, response_length, num_samples, feature_noise, label_noise, data_mode, n_query=n_query), f"temperature_{temperature:.2f}", f"replicate_{replicate_id}", f"global_step_{train_step}")
 def get_configs_via_result_dir(result_dir):
     # Extract model name from the result directory path using regex
-    pattern = r".*results[/\\](.+)[/\\]temperature_(.+)[/\\]global_step_(\d+)$"
+    pattern = r".*results[/\\](.+)[/\\]temperature_(.+)[/\\]replicate_(.+)[/\\]global_step_(\d+)$"
     match = re.match(pattern, result_dir)
     if match:
         model_name = match.group(1)  # The full model name with all parameters
         temperature = match.group(2)
-        steps = match.group(3)      # The training step number
+        replicate_id = match.group(3)
+        steps = match.group(4)      # The training step number
     else:
         raise ValueError(f"Invalid result directory structure: {result_dir}")
     configs = get_configs_via_model_name(model_name)
     configs["train_step"] = int(steps)
     configs["temperature"] = float(temperature)
+    configs["replicate_id"] = int(replicate_id)
     return configs
 
     
@@ -317,6 +320,12 @@ supported_llms = {
         "type": "api",
         "api_key": GEMINI_API_KEY,
     },
+    "google/gemini-2.5-flash-preview-04-17": {
+        "template_type": "standard_api",
+        "model_size": 0,
+        "type": "api",
+        "api_key": GEMINI_API_KEY,
+    },
     "google/gemini-2.5-pro-preview-03-25": {
         "template_type": "reasoning_api",
         "model_size": 0,
@@ -384,7 +393,7 @@ supported_llms = {
         "api_key": ALIBABA_API_KEY,
     },
     "alibaba/qwen2.5-14b-instruct": {
-        "template_type": "reasoning_api",
+        "template_type": "standard_api",
         "model_size": 0,
         "type": "api",
         "api_key": ALIBABA_API_KEY,
@@ -396,7 +405,7 @@ supported_llms = {
         "api_key": XAI_API_KEY,
     },
     "openrouter-microsoft/phi-4-reasoning-plus": {
-        "template_type": "reasoning_api",
+        "template_type": "standard_api",
         "model_size": 0,
         "type": "api",
         "api_key": OPENROUTER_API_KEY,

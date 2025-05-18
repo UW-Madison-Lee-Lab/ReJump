@@ -6,7 +6,7 @@ def compute_score(solution_str, ground_truth):
     return compare_answer(answer)
 
 def compare_answer(model_answer):
-    if model_answer and "=" in model_answer:
+    if model_answer:
         try:
             if eval(model_answer.replace('×', '*').split("=")[0].strip()) == 24:
                 return 1

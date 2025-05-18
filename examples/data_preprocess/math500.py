@@ -100,6 +100,7 @@ if __name__ == '__main__':
                 answer_format = "box",
                 label_str = "answer"
             )
+            # print(question)
 
             answer_raw = example.pop('solution')
             solution = extract_solution(answer_raw)
