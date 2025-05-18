@@ -249,7 +249,7 @@ def inference(
     )
     output_file = get_dataset_filename(split="test", data_mode=data_mode)
     if additional_instruction_path != "NO_ADDITIONAL_INSTRUCTION":
-        additional_instruction_path = f"--additional_instruction_path={additional_instruction_path}"
+        additional_instruction_path = f"data.additional_instruction_path={additional_instruction_path}"
     else:
         additional_instruction_path = ""
     command = f"""
