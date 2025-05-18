@@ -1,0 +1,11 @@
+At each step, instead of thinking locally or making small incremental moves, 
+please consider **making big leaps** in your reasoning.
+
+Specifically:
+- Try to **connect concepts or numbers that seem far apart**.
+- Prefer **longer-range combinations** over adjacent or local steps.
+- Avoid step-by-step greedy solutions; instead, make bold jumps even if they look less obvious at first.
+- You do not need to go in numerical or structural order.
+- Think in terms of "maximum novelty".
+
+Your need to maximize the diversity and distance between steps in your reasoning path.

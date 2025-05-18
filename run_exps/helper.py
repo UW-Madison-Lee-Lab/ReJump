@@ -14,6 +14,7 @@ def gen_dataset(
     data_mode="default",
     test_ratio=1,
     response_length=3046,
+    additional_instruction_path=None,
 ):
     if dataset_name == "blobs":
         feature_noise = 1.0 if feature_noise is None else feature_noise
@@ -33,7 +34,8 @@ python -m examples.data_preprocess.{dataset_name} \
 --feature_noise={feature_noise} \
 --test_ratio={test_ratio} \
 --label_noise={label_noise} \
---data_mode={data_mode}
+--data_mode={data_mode} \
+--additional_instruction_path={additional_instruction_path}
         """ 
     
     if "ricl" in template_type:
@@ -215,6 +217,7 @@ def inference(
     wandb=2,
     api_workers=16,
     replicate_id=0,
+    additional_instruction_path=None,
 ):
     dataset_dir = get_dataset_dir(
         dataset_name=dataset_name,
@@ -262,5 +265,6 @@ python -m verl.trainer.main_generation \
     rollout.gpu_memory_utilization=0.8 \
     trainer.wandb={wandb} \
     rollout.n=1 \
-    rollout.api_workers={api_workers}
+    rollout.api_workers={api_workers} \
+    data.additional_instruction_path={additional_instruction_path}
     """

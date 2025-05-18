@@ -32,6 +32,7 @@ parser.add_argument("--exp_name", type=str, default="")
 parser.add_argument("--test_ratio", type=float, default=1)
 parser.add_argument("--temperature", type=float, nargs="+", default=[0.0])
 parser.add_argument("--replicate_id", type=int, default=0)
+parser.add_argument("--additional_instruction_path", type=str, default=None)
 args = parser.parse_args()
 
 if args.load_train_step:
@@ -95,7 +96,8 @@ for dataset in dataset_list:
                                 label_noise=args.label_noise,
                                 data_mode=args.data_mode,
                                 test_ratio=args.test_ratio,
-                                response_length=response_length
+                                response_length=response_length,
+                                additional_instruction_path=args.additional_instruction_path,
                             )
                             command_list.append(gen_command)
                             if args.train:
@@ -148,7 +150,8 @@ for dataset in dataset_list:
                                     wandb=args.wandb,
                                     train_step=args.load_train_step,
                                     api_workers=args.api_workers,
-                                    temperature=temperature
+                                    temperature=temperature,
+                                    additional_instruction_path=args.additional_instruction_path,
                                 )
                                 command_list.append(inference_command)
 

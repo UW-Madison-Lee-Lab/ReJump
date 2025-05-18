@@ -1,0 +1,5 @@
+Avoid greedy or incremental decisions.
+
+Instead, prioritize steps that change the overall direction or strategy — not just the local result.
+
+Make choices that lead to greater variety and bigger structural moves across the reasoning space.
