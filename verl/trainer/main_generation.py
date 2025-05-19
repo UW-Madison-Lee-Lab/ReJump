@@ -204,7 +204,8 @@ def main(config):
                 batch_idx=batch_idx,
                 wandb=wandb if config.trainer.wandb else None,
                 ground_truths=batch_ground_truths,
-                data_sources=batch_data_sources
+                data_sources=batch_data_sources,
+                max_prompt_length=max_prompt_length,
             )
             
             # Debug: Print all samples' input, output, ground truth, and reward

@@ -85,6 +85,7 @@ def get_df(
         data_mode = "default",
         n_query = 10,
         temperature = model_dict[model_name]["temperature"],
+        replicate_id = 0,
     )
     model_funcs = load_json(f"{result_dir}/test_default_gemini_analysis_llm_analysis.json")
     model_text = pd.read_parquet(f"{result_dir}/test_default_gemini_analysis.parquet")

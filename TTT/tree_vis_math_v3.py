@@ -882,6 +882,7 @@ if __name__ == "__main__":
     parser.add_argument("--mode", type=str, default="default", choices=["default", "ricl_1", "ricl_2", "ricl_3", "ricl_4", "ricl_5", "ricl_6", "ricl_7", "ricl_8", "ricl_9", "ricl_10"])
     parser.add_argument("--temperature", type=float, nargs='+', default=[0.00])
     parser.add_argument("--corr_constraint", type=lambda x: None if x == "None" else int(x), default=None, choices=[None, 0, 1])
+    parser.add_argument("--replicate_id", type=int, default=0)
     args = parser.parse_args()
     
     models = args.model_name
@@ -901,6 +902,7 @@ if __name__ == "__main__":
                 "num_samples": args.num_samples,
                 "mode": args.mode,
                 "temperature": temperature,
+                "replicate_id": args.replicate_id,
             }
             project_name = f"{WANDB_INFO['project']}-tree-vis-v3"
             
@@ -923,6 +925,7 @@ if __name__ == "__main__":
             data_mode = "default",
             n_query = 1,
             temperature = temperature,
+            replicate_id = args.replicate_id,
         )
         results = pd.read_parquet(f"{results_dir}/test_default.parquet")
         
@@ -1094,7 +1097,7 @@ if __name__ == "__main__":
         "forgetting_rates",
         "average_verification_rates",
         "average_solution_count",
-        "success_rates",
+        # "success_rates",
         "overthinking_rates"
     ]
     target_column = "corrs"

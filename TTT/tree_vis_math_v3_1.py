@@ -967,6 +967,7 @@ if __name__ == "__main__":
             data_mode = "default",
             n_query = 1,
             temperature = args.temperature,
+            replicate_id = 0,
         )
         results = pd.read_parquet(f"{results_dir}/test_default.parquet")
         

@@ -644,6 +644,7 @@ if __name__ == "__main__":
         data_mode = "default",
         n_query = 10,
         temperature = 0.00,
+        replicate_id = 0,
     )
     results = pd.read_parquet(f"{result_dir}/test_default.parquet")
     model_funcs = load_json(f"{result_dir}/test_default_gemini_analysis_llm_analysis.json")

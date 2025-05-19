@@ -148,7 +148,8 @@ for dataset in dataset_list:
                                     wandb=args.wandb,
                                     train_step=args.load_train_step,
                                     api_workers=args.api_workers,
-                                    temperature=temperature
+                                    temperature=temperature,
+                                    replicate_id=args.replicate_id
                                 )
                                 command_list.append(inference_command)
 

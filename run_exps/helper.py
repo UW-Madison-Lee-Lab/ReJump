@@ -74,6 +74,7 @@ python -m examples.data_preprocess.{dataset_name} \
                 data_mode=data_mode,
                 n_query=n_query,
                 temperature=0.00,
+                replicate_id=0,
             )
             result_paths.append(f"{result_path}/test_{data_mode}.parquet")
         
@@ -150,6 +151,7 @@ def rl_train(
         train_step=0,
         n_query=n_query,
         temperature=0.00,
+        replicate_id=0,
     )
     output_file = get_dataset_filename(split="test", data_mode=data_mode)
     return f"""

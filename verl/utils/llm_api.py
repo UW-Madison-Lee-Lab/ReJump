@@ -174,7 +174,7 @@ class LLMAPI:
                     response = self.client.messages.create(
                         model=self.model,
                         system = "You are a helpful data analysis assistant.",
-                        max_tokens=max(1064, max_tokens),
+                        max_tokens=max(1064, min(max_tokens, 60_000)),
                         messages=messages,
                         thinking=thinking
                     )
@@ -318,16 +318,33 @@ class LLMAPI:
                 print(f"RateLimitError: {e}")
                 time.sleep(timeout)
                 
+            except anthropic.APITimeoutError as e:
+                print(f"APITimeoutError: {e}")
+                time.sleep(timeout)
+                
+            except KeyboardInterrupt:
+                raise KeyboardInterrupt
             except Exception as e:
                 print(type(e), e)
                 pdb.set_trace()
+
                 
             print(f"Failed to generate response after {attempt} attempts, max_retries: {max_retries}")
             
         raise Exception("Failed to generate response")
 
 
-    def process_batch(self, batch_chat_lst: List[Dict[str, str]], n_samples: int = 1, config=None, batch_idx: int = 0, wandb=None, ground_truths=None, data_sources=None) -> List[List[str]]:
+    def process_batch(
+        self, 
+        batch_chat_lst: List[Dict[str, str]], 
+        n_samples: int = 1, 
+        config=None, 
+        batch_idx: int = 0, 
+        wandb=None, 
+        ground_truths=None, 
+        data_sources=None,
+        max_prompt_length=None,
+    ) -> List[List[str]]:
         """Process a batch of chat messages in parallel using threading."""
         batch_output_lst = [[] for _ in range(n_samples)]
         
@@ -337,7 +354,7 @@ class LLMAPI:
             
             response_content, reasoning_content, answer_content = self.generate(
                 messages=chat,
-                max_tokens=config.rollout.response_length,
+                max_tokens=max_prompt_length,
                 temperature=config.rollout.temperature if config else 0.7,
                 data_source=data_sources[sample_idx],
             )

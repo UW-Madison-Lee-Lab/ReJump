@@ -368,6 +368,7 @@ if __name__ == "__main__":
                 data_mode = "default",
                 n_query = 1,
                 temperature = temperature,
+                replicate_id = 0,
             )
             
     model_indices = list(range(len(models)))
