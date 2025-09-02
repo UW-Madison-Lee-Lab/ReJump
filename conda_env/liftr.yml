@@ -276,4 +276,3 @@ dependencies:
       - zipp==3.21.0
       - zss==1.2.0
       - zstandard==0.23.0
-prefix: /data/yzeng58/anaconda3/envs/liftr
