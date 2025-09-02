@@ -36,10 +36,12 @@ Empty.
 # Contents
 
 - [Step 1: Set Up Environment](#step-1-set-up-environment)
-- [Step 2: Download Dataset](#step-2-download-dataset)
-- [Step 3: Select MLLMs](#step-3-select-mllms)
-  - [Supported Models](#supported-models)
-  - [Feature Your Own Model](#feature-your-own-model)
+- [Step 2: Collect LLM Responses on MATH500 and Game of 24](#step-2-collect-llm-responses-on-math500-and-game-of-24)
+  - [MATH500](#math500)
+  - [Game of 24](#game-of-24)
+- [Step 3: Perform Reasoning Analysis via ReWOT](#step-3-perform-reasoning-analysis-via-rewot)
+  - [MATH500](#math500)
+  - [Game of 24](#game-of-24)
 
 # Step 1: Set Up Environment
 
