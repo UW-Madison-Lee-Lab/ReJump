@@ -153,7 +153,7 @@ class LLMAPI:
     ) -> str:
         max_retries = 1000  # Increased retry count
         if max_retries <= 0: raise ValueError("max_retries must be greater than 0")
-        timeout = 120  # Increased timeout to 120 seconds
+        timeout = 3600  # Increased timeout to 120 seconds
         
         # Ensure messages is a list
         if not isinstance(messages, list):
@@ -322,8 +322,6 @@ class LLMAPI:
                 print(f"APITimeoutError: {e}")
                 time.sleep(timeout)
                 
-            except KeyboardInterrupt:
-                raise KeyboardInterrupt
             except Exception as e:
                 print(type(e), e)
                 pdb.set_trace()

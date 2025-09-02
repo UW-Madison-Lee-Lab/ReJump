@@ -23,7 +23,7 @@ from verl.utils.reward_score.math500 import compute_score
 import xgboost as xgb
 from sklearn.model_selection import train_test_split
 from collections import Counter
-from sklearn.linear_model import LogisticRegression
+from sklearn.cluster import KMeans
 
 # model = "xai/grok-3-mini-beta"
 # model = "claude/claude-3-7-sonnet-20250219-thinking"
@@ -1097,7 +1097,7 @@ if __name__ == "__main__":
         "forgetting_rates",
         "average_verification_rates",
         "average_solution_count",
-        # "success_rates",
+        "success_rates",
         "overthinking_rates"
     ]
     target_column = "corrs"
@@ -1139,6 +1139,44 @@ if __name__ == "__main__":
             print(f"  {name}: {importance:.4f}")
             feature_importance_dict[name] = float(importance)
 
+        # Perform K-means clustering on all samples
+        X_incorr, y_incorr = X[y == 0], y[y == 0]
+        if len(X_incorr) > 1:  # K-means requires at least 2 samples
+            # Normalize features for K-means clustering
+            from sklearn.preprocessing import StandardScaler
+            scaler = StandardScaler()
+            X_incorr_normalized = scaler.fit_transform(X_incorr)
+            
+            print("Feature normalization applied for K-means clustering")
+            print("Original feature ranges:")
+            for i, feature_name in enumerate(feature_columns):
+                feature_min, feature_max = X_incorr[:, i].min(), X_incorr[:, i].max()
+                print(f"  {feature_name}: [{feature_min:.4f}, {feature_max:.4f}]")
+            
+            # Directly use k=2 for clustering
+            k = 3
+            kmeans = KMeans(n_clusters=k, random_state=42)
+            kmeans.fit(X_incorr_normalized)  # Use normalized data
+            cluster_labels = kmeans.labels_
+            print(f"K-means clustering on normalized data with k={k} completed.")
+            print(f"Number of clusters: {kmeans.n_clusters}")
+            print(f"Cluster sizes: {np.bincount(cluster_labels)}")
+            
+            # Analyze feature means per cluster (using original scale for interpretability)
+            print("Feature means per cluster (original scale):")
+            for cluster in range(kmeans.n_clusters):
+                cluster_indices = np.where(cluster_labels == cluster)[0]
+                cluster_data = X_incorr[cluster_indices]  # Use original data for interpretation
+                if len(cluster_data) > 0:
+                    cluster_means = np.mean(cluster_data, axis=0)
+                    cluster_corrs = y_incorr[cluster_indices]
+                    avg_corrs = np.mean(cluster_corrs) if len(cluster_corrs) > 0 else 0
+                    print(f"  Cluster {cluster} (size: {len(cluster_data)}):")
+                    for feature_name, mean_value in zip(feature_columns, cluster_means):
+                        print(f"    {feature_name}: {mean_value:.4f}")
+                    print(f"    Average corrs: {avg_corrs:.4f}")
+        else:
+            print("Not enough samples for K-means clustering (minimum 2 required).")
 
         # Compose the output dictionary
         summary = {

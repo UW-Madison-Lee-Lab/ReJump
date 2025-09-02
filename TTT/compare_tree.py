@@ -328,11 +328,13 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", type=str, nargs='+', default=["math500", "game24"])
     parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--idx", type=int, nargs='+', default=None, help="List of sample indices to process")
+    parser.add_argument("--analysis_model", type=str, nargs='+', default=["google/gemini-2.5-pro-preview-03-25"])
     args = parser.parse_args()
     
     models = args.model
     datasets = args.dataset
     modes = args.mode
+    analysis_model = args.analysis_model
     results_dirs = {}
     
     if len(args.temperature) == 1:
@@ -348,15 +350,22 @@ if __name__ == "__main__":
         if len(args.mode) != len(models):
             raise ValueError(f"Number of modes ({len(args.mode)}) must match number of models ({len(models)})")
         modes = args.mode
+        
+    if len(args.analysis_model) == 1:
+        analysis_models = [args.analysis_model[0] for _ in models]
+    else:
+        if len(args.analysis_model) != len(models):
+            raise ValueError(f"Number of analysis models ({len(args.analysis_model)}) must match number of models ({len(models)})")
+        analysis_models = args.analysis_model
     
-    for model, temperature, mode in zip(models, temperatures, modes):
+    for model, temperature, mode, analysis_model in zip(models, temperatures, modes, analysis_models):
         for dataset in datasets:
             if mode == "default":
                 template_type = supported_llms[model]["template_type"] 
             else:
                 template_type = supported_llms[model]["template_type"] + "_" + mode
                 
-            results_dirs[(model, dataset, temperature, mode)] = get_result_dir(
+            results_dirs[(model, dataset, temperature, mode, analysis_model)] = get_result_dir(
                 dataset_name = dataset,
                 model_name = model,
                 shot = 0,
@@ -381,6 +390,7 @@ if __name__ == "__main__":
                 model1, model2 = models[idx1], models[idx2]
                 temperature1, temperature2 = temperatures[idx1], temperatures[idx2]
                 mode1, mode2 = modes[idx1], modes[idx2]
+                analysis_model1, analysis_model2 = analysis_models[idx1], analysis_models[idx2]
                 wandb_config = {
                     "model1": model1,
                     "model2": model2,
@@ -389,14 +399,16 @@ if __name__ == "__main__":
                     "temperature2": temperature2,
                     "mode1": mode1,
                     "mode2": mode2,
+                    "analysis_model1": analysis_model1,
+                    "analysis_model2": analysis_model2,
                 }
                 if not wandb_init(f"{WANDB_INFO['project']}-tree-compare", WANDB_INFO["entity"], wandb_config):
                     continue
                 
             set_seed(234)
             
-            results_dir1 = results_dirs[(model1, dataset, temperature1, mode1)]
-            results_dir2 = results_dirs[(model2, dataset, temperature2, mode2)]
+            results_dir1 = results_dirs[(model1, dataset, temperature1, mode1, analysis_model1)]
+            results_dir2 = results_dirs[(model2, dataset, temperature2, mode2, analysis_model2)]
             
             n_samples = len(pd.read_parquet(f"{results_dir1}/test_default.parquet"))
             
@@ -404,15 +416,15 @@ if __name__ == "__main__":
             walk_similarities = []
             
             print("--------------------------------"*2)
-            print(f"|{model1}|{model2}|{dataset}|")
+            print(f"|{model1}|{model2}|{dataset}|{analysis_model1}|{analysis_model2}|")
             print("--------------------------------"*2)
             
             sample_indices = args.idx if args.idx is not None else range(n_samples)
             
             pbar = tqdm(sample_indices)
             for i in pbar:
-                flow_dict1 = load_json(f"{results_dir1}/tree_vis_v3/{i}.json")
-                flow_dict2 = load_json(f"{results_dir2}/tree_vis_v3/{i}.json")
+                flow_dict1 = load_json(f"{results_dir1}/tree_vis_{analysis_model1}/{i}.json")
+                flow_dict2 = load_json(f"{results_dir2}/tree_vis_{analysis_model2}/{i}.json")
                 
                 if flow_dict1 is None or flow_dict2 is None:
                     print(f"Debug: Failed to load JSON for sample {i}. Skipping.")

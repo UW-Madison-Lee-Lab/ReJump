@@ -9,6 +9,7 @@ from omegaconf import DictConfig
 import re
 import wandb
 
+
 def set_seed(seed):
     np.random.seed(seed)
     random.seed(seed)

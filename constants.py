@@ -422,6 +422,12 @@ supported_llms = {
         "type": "api",
         "api_key": OPENROUTER_API_KEY,
     },
+    "synthetic/synthetic": {
+        "template_type": "reasoning_api",
+        "model_size": 0,
+        "type": "synthetic",
+        "api_key": None,
+    },
 }
 
 supported_datasets = {

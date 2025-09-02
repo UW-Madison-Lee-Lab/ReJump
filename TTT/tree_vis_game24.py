@@ -9,6 +9,7 @@ from tqdm import tqdm
 from constants import get_result_dir, supported_datasets
 from utils import save_json, load_json, wandb_init
 import pdb
+import random
 
 from verl.utils.llm_api import LLMAPI
 from constants import supported_llms
@@ -23,16 +24,7 @@ from collections import Counter
 import xgboost as xgb
 from verl.utils.reward_score.game24 import compare_answer
 from sklearn.linear_model import LogisticRegression
-
-
-# model = "xai/grok-3-mini-beta"
-# model = "claude/claude-3-7-sonnet-20250219-thinking"
-model = "google/gemini-2.5-pro-preview-03-25"
-llm = LLMAPI(
-    api_key=supported_llms[model]["api_key"],
-    model_name=model,
-    template_type="reasoning_api"
-)
+from sklearn.cluster import KMeans
 
 def get_tree_prompt(input_str, output_str):
     return f"""
@@ -589,7 +581,7 @@ def compute_filtered_average_jump_distance(tree_data, walk_steps_list):
     return filtered_ajd
 
 def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint=None):
-    result_path = f"{results_dir}/tree_vis_v3/{idx}.json"
+    result_path = f"{results_dir}/tree_vis_{analysis_model}/{idx}.json"
     if not os.path.exists(result_path) or overwrite:
         os.makedirs(os.path.dirname(result_path), exist_ok=True)
         input_str = results.iloc[idx]["prompt"][0]["content"]
@@ -598,8 +590,8 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint=Non
             # Find all <answer></answer> pairs
             answer_matches = re.findall(r'<answer>(.*?)</answer>', output_str, re.DOTALL)
             if answer_matches:
-                output_str = answer_matches[-1]  # Use the first match
-        corr = compare_answer(output_str)
+                answer_str = answer_matches[-1]  # Use the first match
+        corr = compare_answer(answer_str)
         tree_prompt = get_tree_prompt(input_str, output_str)
         tree_json = llm.generate([{
             "role": "user",
@@ -619,13 +611,21 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint=Non
         save_json(json_data, result_path)
     else:
         json_data = load_json(result_path)
+        output_str = results.iloc[idx]["responses"][0]
+        if "<answer>" in output_str:
+            # Find all <answer></answer> pairs
+            answer_matches = re.findall(r'<answer>(.*?)</answer>', output_str, re.DOTALL)
+            if answer_matches:
+                answer_str = answer_matches[-1]  # Use the first match
+        corr = compare_answer(answer_str)
+        json_data["corr"] = corr
         
     if corr_constraint is not None:
         if json_data["corr"] != corr_constraint:
             return None
         
 
-    vis_path = visualize_tree_walk(json_data["tree"], json_data["walk"], filename=f"{results_dir}/tree_vis_v3/{idx}", format="pdf")
+    vis_path = visualize_tree_walk(json_data["tree"], json_data["walk"], filename=f"{results_dir}/tree_vis_{analysis_model}/{idx}", format="pdf")
     filtered_ajd = compute_filtered_average_jump_distance(json_data["tree"], json_data["walk"])
     print(f"Index {idx}: Filtered AJD = {filtered_ajd}")
     
@@ -747,6 +747,7 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint=Non
     return {
         "graph": vis_path,
         "filtered_ajd": filtered_ajd,
+        "answer": answer_str,
         "average_solution_count": average_solution_count,
         "calculation_count": calculation_count,
         "verification_count": verification_count,
@@ -767,11 +768,23 @@ if __name__ == "__main__":
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--num_samples", type=int, default=100)
     parser.add_argument("--temperature", type=float, nargs='+', default=[0.00])
-    parser.add_argument("--mode", type=str, default="default", choices=["default", "ricl_1", "ricl_2", "ricl_3", "ricl_4", "ricl_5", "ricl_6", "ricl_7", "ricl_8", "ricl_9", "ricl_10"])
+    parser.add_argument("--mode", type=str, default="default", choices=["default", "ricl_1", "ricl_2", "ricl_3", "ricl_4", "ricl_5", "ricl_6", "ricl_7", "ricl_8", "ricl_9", "ricl_10", "instructiona", "instructionb", "instructionc", "instructiond"])
     parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--corr_constraint", type=lambda x: None if x == "None" else int(x), default=None, choices=[None, 0, 1])
     parser.add_argument("--replicate_id", type=int, default=0)
+    parser.add_argument("--analysis_model", type=str, default="google/gemini-2.5-pro-preview-03-25")
     args = parser.parse_args()
+    
+    # model = "xai/grok-3-mini-beta"
+    # analysis_model = "claude/claude-3-7-sonnet-20250219-thinking"
+    # model = "google/gemini-2.5-pro-preview-03-25"
+    
+    analysis_model = args.analysis_model
+    llm = LLMAPI(
+        api_key=supported_llms[analysis_model]["api_key"],
+        model_name=analysis_model,
+        template_type="reasoning_api"
+    )
     
     if len(args.temperature) == 1:
         temperatures = [args.temperature[0] for _ in args.model_name]
@@ -790,16 +803,24 @@ if __name__ == "__main__":
                 "temperature": temperature,
                 "mode": args.mode,
                 "replicate_id": args.replicate_id,
+                "analysis_model": analysis_model,
             }
             project_name = f"{WANDB_INFO['project']}-tree-vis-v3"
             
             if not wandb_init(project_name, WANDB_INFO["entity"], wandb_config):
                 exit()
                 
-        if args.mode == "default":
-            template_type = supported_llms[model_name]["template_type"]
-        else:
+            
+        if "ricl" in args.mode:
             template_type = f"{supported_llms[model_name]['template_type']}_{args.mode}"
+        else: 
+            template_type = supported_llms[model_name]["template_type"]
+            
+        if "instruction" in args.mode:
+            data_mode = args.mode
+        else:
+            data_mode = "default"
+
         results_dir = get_result_dir(
             dataset_name = args.dataset_name,
             model_name = model_name,
@@ -809,7 +830,7 @@ if __name__ == "__main__":
             num_samples = args.num_samples,
             feature_noise = supported_datasets[args.dataset_name]["feature_noise"],
             label_noise = 0.0,
-            data_mode = "default",
+            data_mode = data_mode,
             n_query = 1,
             temperature = temperature,
             replicate_id = args.replicate_id,
@@ -817,11 +838,13 @@ if __name__ == "__main__":
         results = pd.read_parquet(f"{results_dir}/test_default.parquet")
         
         if len(args.idx) == 0:
-            idxs = range(len(results))
+            idxs = list(range(len(results)))
+            random.shuffle(idxs)
         else:
             idxs = args.idx
         
         filtered_ajds = []
+        answers = []
         average_solution_counts = [] # Initialize list for average solution counts
         calculation_arrow_counts = []
         verification_arrow_counts = []
@@ -856,6 +879,7 @@ if __name__ == "__main__":
             if skip: continue
             
             filtered_ajds.append(graph_metric["filtered_ajd"])
+            answers.append(graph_metric["answer"])
             average_solution_counts.append(graph_metric["average_solution_count"]) # Append average solution count
             calculation_arrow_counts.append(graph_metric["calculation_count"])
             verification_arrow_counts.append(graph_metric["verification_count"])
@@ -876,6 +900,7 @@ if __name__ == "__main__":
 
         metric_dict = {
             "filtered_ajd": filtered_ajds,
+            "answers": answers,
             "average_solution_count": average_solution_counts,
             "calculation_arrow_counts": calculation_arrow_counts,
             "verification_arrow_counts": verification_arrow_counts,
@@ -890,6 +915,7 @@ if __name__ == "__main__":
         
         metric_df = pd.DataFrame(metric_dict)
         metric_df = metric_df.dropna(how='any')
+        metric_df.to_csv(f"{results_dir}/tree_vis_{analysis_model}/metric_df.csv")
 
         filtered_ajd = np.mean(metric_df["filtered_ajd"])
         print(f"Filtered AJD: {filtered_ajd}")
@@ -992,23 +1018,44 @@ if __name__ == "__main__":
             print(f"  {name}: {importance:.4f}")
             feature_importance_dict[name] = float(importance)
 
-        # Also try to use logistic regression to fit and check the coefficient
-
-
-
-        # Fit logistic regression on the same data
-        logreg = LogisticRegression(max_iter=1000, random_state=42)
-        logreg.fit(X_train, y_train)
-
-        logreg_y_pred = logreg.predict(X_test)
-        logreg_accuracy = np.mean(logreg_y_pred == y_test)
-        print(f"Logistic Regression Accuracy: {logreg_accuracy:.4f}")
-
-        # Print logistic regression coefficients for each feature
-        print("Logistic Regression coefficients (feature: coefficient):")
-        for name, coef in zip(feature_columns, logreg.coef_[0]):
-            print(f"  {name}: {coef:.4f}")
-
+        # Perform K-means clustering on all samples
+        X_incorr, y_incorr = X[y == 0], y[y == 0]
+        if len(X_incorr) > 1:  # K-means requires at least 2 samples
+            # Normalize features for K-means clustering
+            from sklearn.preprocessing import StandardScaler
+            scaler = StandardScaler()
+            X_incorr_normalized = scaler.fit_transform(X_incorr)
+            
+            print("Feature normalization applied for K-means clustering")
+            print("Original feature ranges:")
+            for i, feature_name in enumerate(feature_columns):
+                feature_min, feature_max = X_incorr[:, i].min(), X_incorr[:, i].max()
+                print(f"  {feature_name}: [{feature_min:.4f}, {feature_max:.4f}]")
+            
+            # Directly use k=2 for clustering
+            k = 3
+            kmeans = KMeans(n_clusters=k, random_state=42)
+            kmeans.fit(X_incorr_normalized)  # Use normalized data
+            cluster_labels = kmeans.labels_
+            print(f"K-means clustering on normalized data with k={k} completed.")
+            print(f"Number of clusters: {kmeans.n_clusters}")
+            print(f"Cluster sizes: {np.bincount(cluster_labels)}")
+            
+            # Analyze feature means per cluster (using original scale for interpretability)
+            print("Feature means per cluster (original scale):")
+            for cluster in range(kmeans.n_clusters):
+                cluster_indices = np.where(cluster_labels == cluster)[0]
+                cluster_data = X_incorr[cluster_indices]  # Use original data for interpretation
+                if len(cluster_data) > 0:
+                    cluster_means = np.mean(cluster_data, axis=0)
+                    cluster_corrs = y_incorr[cluster_indices]
+                    avg_corrs = np.mean(cluster_corrs) if len(cluster_corrs) > 0 else 0
+                    print(f"  Cluster {cluster} (size: {len(cluster_data)}):")
+                    for feature_name, mean_value in zip(feature_columns, cluster_means):
+                        print(f"    {feature_name}: {mean_value:.4f}")
+                    print(f"    Average corrs: {avg_corrs:.4f}")
+        else:
+            print("Not enough samples for K-means clustering (minimum 2 required).")
 
 
         # Compose the output dictionary
@@ -1020,12 +1067,6 @@ if __name__ == "__main__":
                 {"feature": name, "importance": float(importance)}
                 for name, importance in sorted_features
             ],
-            "logistic_regression_accuracy": float(logreg_accuracy),
-            "logistic_regression_coefficients": [{
-                    "feature": name,
-                    "coefficient": float(coef)
-                } for name, coef in zip(feature_columns, logreg.coef_[0])
-            ]
         }
 
         # Compose the output filename
