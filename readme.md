@@ -17,11 +17,11 @@
       <a href="https://kangwooklee.com/aboutme/" target="_blank">Kangwook Lee</a><sup>1</sup>,
   </p>
   <p>
-  <sup>*</sup>Equal Contribution,
-    <sup>1</sup>University of Wisconsin-Madison, <sup>2</sup>FuriosaAI,
-    <sup>3</sup>Seoul National University,
+  <sup>*</sup>Equal Contribution
+    <sup>1</sup>University of Wisconsin-Madison <sup>2</sup>FuriosaAI
+    <sup>3</sup>Seoul National University
     
-   </p>
+   <!-- </p>
     </h4>
 <p align="center">
     <a href="https://github.com/yzeng58/memeGen/releases">
@@ -33,12 +33,12 @@
     <a href="https://huggingface.co/datasets/yzeng58/CoBSAT">
         <img alt="Hugging Face" src="https://img.shields.io/badge/dataset-CoBSAT-orange">
     </a>
-</p>
+</p> -->
 
-**Abstract**: Large Language Models (LLMs) have been studied for humor-related tasks like joke understanding and generation, yet meme evaluation—a highly shared form of humor—remains largely unexplored. This work presents the first comprehensive benchmark for evaluating LLMs' meme humor capabilities, covering dataset creation, benchmarking, performance improvement, and extending to meme generation. We present two datasets, MemeFF-Basic and MemeFF-Advanced, to assess humor evaluation across different difficulty levels. We benchmark LLMs on our datasets and find that while they perform well on Meme-Basic, their performance drops significantly on Meme-Advanced, with reasoning providing little to no improvement. To address this, we propose MemeSage, an agent-based approach inspired by humor theory. In this framework, LLMs function as agents that, for each meme, answer multiple-choice questions derived from humor theory. The responses, encoded as structured features, are then fed into a lightweight machine learning model (e.g., XGBoost), to produce the final prediction. By explicitly embedding humor theory as a guiding structure, this method enhances evaluation through a form of guided reasoning, resulting in substantial improvements in meme evaluation performance. Lastly, we also benchmark LLMs in meme generation, and explore how MemeSage can be used to enhance the quality of generated outputs.
+**Abstract**: Large Language Models (LLMs) typically reason via Chain-of-Thought (CoT) prompting or explicit training. Though many LLMs achieve similar accuracy on challenging tasks, such as math theorem proving and programming, it is unclear whether their reasoning "algorithms" also are similar to each other or not. To explore this, we propose ReWOT (Reasoning Walk On Tree), a framework converting reasoning traces into (i) a hierarchical tree of intermediate problem-solving steps and (ii) a sequential reasoning walk that captures execution order and behaviors like verification, backtracking, and calculation. ReWOT enables visualization and quantitative analysis of LLM reasoning, examining properties like exploration–exploitation balance, overthinking, and verification tendencies. We apply ReWOT to analyze state-of-the-art LRMs (i.e., LLMs explicitly trained to generate long-form CoTs) and find that models with similar final accuracy can exhibit distinct reasoning behaviors. We further compare distilled LRMs with their teachers, CoT-prompted LLMs with LRMs, and investigate how decoding strategies and reasoning examples influence reasoning behavior. Finally, we show that ReWOT can enhance reasoning quality through data selection, as well as test-time strategies including Best-of-N and prompt selection.
 
 
-<img width="903" alt="image" src="imgs/memesage.jpg">
+<img width="903" alt="image" src="imgs/rewot_demo.jpg">
 
 # News  🚀
 
