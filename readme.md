@@ -21,8 +21,8 @@
     <sup>1</sup>University of Wisconsin-Madison <sup>2</sup>FuriosaAI
     <sup>3</sup>Seoul National University
     
-   <!-- </p>
-    </h4>
+</p>
+     <!--   </h4>
 <p align="center">
     <a href="https://github.com/yzeng58/memeGen/releases">
         <img alt="GitHub release" src="https://img.shields.io/github/release/UW-Madison-Lee-Lab/CoBSAT.svg">
