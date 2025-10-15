@@ -14,7 +14,7 @@
       <a href="https://jungtaek.github.io/" target="_blank">Jungtaek Kim</a><sup>1</sup>, 
       Hyung Il Koo<sup>2</sup>, 
       <a href="https://papail.io/" target="_blank">Dimitris Papailiopoulos</a><sup>1</sup>, 
-      <a href="https://kangwooklee.com/aboutme/" target="_blank">Kangwook Lee</a><sup>1</sup>,
+      <a href="https://kangwooklee.com/aboutme/" target="_blank">Kangwook Lee</a><sup>1</sup>
   </p>
   <p>
   <sup>*</sup>Equal Contribution
