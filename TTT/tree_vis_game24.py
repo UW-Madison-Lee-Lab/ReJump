@@ -22,9 +22,64 @@ from collections import deque
 from sklearn.model_selection import train_test_split
 from collections import Counter
 import xgboost as xgb
-from verl.utils.reward_score.game24 import compare_answer
+# compare_answer will be imported dynamically based on dataset_name
 from sklearn.linear_model import LogisticRegression
 from sklearn.cluster import KMeans
+
+def get_tree_prompt_sudoku(input_str, output_str):
+    return f"""
+Given the problem statement and reasoning process below. Your task is to analyze a detailed thinking process for solving a Sudoku puzzle (provided below) and convert it into a reasoning tree. **Do not try to solve the problem yourself, fully use the given reasoning process and just convert it!**
+
+---
+**BEGIN ORIGINAL PROBLEM STATEMENT**
+---
+{input_str}
+---
+**END ORIGINAL PROBLEM STATEMENT**
+---
+
+---
+**BEGIN INPUT REASONING PROCESS**
+---
+{output_str}
+---
+**END INPUT REASONING PROCESS**
+---
+
+Here are some instructions:
+
+**Node Object Structure:**
+
+Each node object must contain: `Problem`, `parent`, `Result`.
+
+1. **`Problem` (String):** A description of the current state of the Sudoku grid or the specific cell(s) being filled.
+
+* **`node1` (Root):** Must describe the initial Sudoku puzzle state with empty cells marked as 0. For example, "Initial grid: 0204\\n3401\\n0012\\n2043"
+
+* **Non-leaf Nodes:** Each node describes a partial solution being explored. For example, "Filled row 2, column 3 with 2" or "Considering values for row 1, column 1". Give all these nodes index numbers to keep tracking (after node1).
+
+* **Leaf node:** **This node represents a complete or attempted complete solution of the Sudoku grid.** For example, "Complete grid: 1234\\n3421\\n4312\\n2143". Use an index number for each one (after node1).
+
+Pay attention that the problem statement of each node should be unique. If two nodes have the same description (i.e., the same partial grid state), merge them into one.
+
+2. **`parent` (String):**
+
+* **`node1` (root):** Must be None.
+
+* **Other nodes:** Must be the previous partial solution that the current node builds on. Use the index number to indicate the index of its parent node.
+
+3. **`Result` (String):**
+
+* **`root`:** None.
+
+* **Intermediate Nodes:** None.
+
+* **Leaf node:** Must be the **complete solution grid**. For example, "1234\\n3421\\n4312\\n2143".
+
+Please generate a single JSON output. This output must be a **single JSON object** where keys are unique node IDs (e.g., "node1", "node2", corresponding to the index numbers assigned to track the nodes) and values are the node objects (containing 'Problem', 'parent', 'Result') as detailed above.
+
+    """
+
 
 def get_tree_prompt(input_str, output_str):
     return f"""
@@ -80,6 +135,57 @@ Please generate a single JSON output. This output must be a **single JSON object
 
     """
     
+def get_walk_prompt_sudoku(input_str, output_str, tree_json):
+    return f"""
+You are an AI assistant specialized in analyzing Sudoku solving reasoning processes. Your task is to trace the provided reasoning text against a structured reasoning tree and generate a "walk" representing the trajectory of the thought process.
+
+**Inputs:**
+
+1.  **Problem Description:**
+    ```
+    {input_str}
+    ```
+2.  **Reasoning Text:** A step-by-step textual explanation of how the Sudoku puzzle was solved, including potential errors, corrections, explorations of different cell values, and verifications.
+    ```text
+    {output_str}
+    ```
+3.  **Reasoning Tree:** A JSON object representing the structured steps and dependencies of the solution(s). Each key is a node ID, and the value contains information about that step, including its parent node and specifically a "Problem" field describing the state or action at that node.
+    ```json
+    {tree_json}
+    ```
+
+**Task:**
+
+Analyze the `Reasoning Text` to determine the sequence in which the solver mentally visited or considered the steps represented by the nodes in the `Reasoning Tree`. Identify the transitions between these nodes and categorize each transition.
+
+**Output Format:**
+
+Generate a JSON list of dictionaries, where each dictionary represents a single step in the reasoning walk. Each dictionary must have the following keys:
+
+* `from`: The ID (string) of the node the reasoning is moving *from*.
+* `to`: The ID (string) of the node the reasoning is moving *to*.
+* `category`: A string indicating the type of transition. Must be one of:
+    * `calculation/derivation`: Represents forward progress in the reasoning, filling in cells or making logical deductions.
+    * `backtracking`: Represents realizing an error and returning to a previous state to try a different value.
+    * `verification`: Represents checking or confirming filled cells by re-checking row/column/box constraints.
+
+**Instructions:**
+
+1.  Read the `Reasoning Text` carefully, paying attention to the flow, changes in direction, cell filling decisions, and verification steps.
+2.  Map segments of the `Reasoning Text` to the corresponding nodes in the `Reasoning Tree`.
+3.  Identify the sequence of nodes visited based on the flow of the `Reasoning Text`.
+4.  For each transition, determine the appropriate `category` based on the definitions above.
+5.  The walk should reflect the *actual* path taken in the `Reasoning Text`, including explorations of incorrect values and subsequent backtracking.
+6.  Ensure the output is strictly the JSON list as specified, with no additional explanatory text.
+7.  The output MUST be perfectly valid JSON, parseable by standard libraries.
+8.  The walk must always start at node1: The first transition in your output should always be `"from": "node1"`, `"to": ...`.
+
+**Final Output Request:**
+
+Now, analyze the provided inputs and generate the reasoning walk as a JSON list. Output *only* the JSON list.
+    """
+
+
 def get_walk_prompt(input_str, output_str, tree_json):
     return f"""
 You are an AI assistant specialized in analyzing mathematical reasoning processes. Your task is to trace the provided reasoning text against a structured reasoning tree and generate a "walk" representing the trajectory of the thought process.
@@ -580,7 +686,7 @@ def compute_filtered_average_jump_distance(tree_data, walk_steps_list):
     filtered_ajd = sum_distances / num_jumps
     return filtered_ajd
 
-def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint=None):
+def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint=None, dataset_name="game24"):
     result_path = f"{results_dir}/tree_vis_{analysis_model}/{idx}.json"
     if not os.path.exists(result_path) or overwrite:
         os.makedirs(os.path.dirname(result_path), exist_ok=True)
@@ -591,14 +697,32 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint=Non
             answer_matches = re.findall(r'<answer>(.*?)</answer>', output_str, re.DOTALL)
             if answer_matches:
                 answer_str = answer_matches[-1]  # Use the first match
-        corr = compare_answer(answer_str)
-        tree_prompt = get_tree_prompt(input_str, output_str)
+        # Call compare_answer based on dataset type
+        if dataset_name == "game24":
+            corr = compare_answer(answer_str)
+        elif dataset_name == "sudoku":
+            # For sudoku, compare_answer signature is different
+            # We need ground_truth, but we'll just check format here
+            corr = compare_answer(answer_str, results.iloc[idx]["reward_model"]["ground_truth"]["label"][0])
+        else:
+            corr = compare_answer(answer_str)
+        
+        # Choose prompt based on dataset type
+        if dataset_name == "sudoku":
+            tree_prompt = get_tree_prompt_sudoku(input_str, output_str)
+        else:
+            tree_prompt = get_tree_prompt(input_str, output_str)
+        
         tree_json = llm.generate([{
             "role": "user",
             "content": tree_prompt
         }])[2]
         
-        walk_prompt = get_walk_prompt(input_str, output_str, tree_json)
+        # Choose walk prompt based on dataset type
+        if dataset_name == "sudoku":
+            walk_prompt = get_walk_prompt_sudoku(input_str, output_str, tree_json)
+        else:
+            walk_prompt = get_walk_prompt(input_str, output_str, tree_json)
         walk_json = llm.generate([{
             "role": "user",
             "content": walk_prompt
@@ -617,7 +741,13 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint=Non
             answer_matches = re.findall(r'<answer>(.*?)</answer>', output_str, re.DOTALL)
             if answer_matches:
                 answer_str = answer_matches[-1]  # Use the first match
-        corr = compare_answer(answer_str)
+        # Call compare_answer based on dataset type
+        if dataset_name == "game24":
+            corr = compare_answer(answer_str)
+        elif dataset_name == "sudoku":
+            corr = compare_answer(answer_str, results.iloc[idx]["reward_model"]["ground_truth"]["label"][0])
+        else:
+            corr = compare_answer(answer_str)
         json_data["corr"] = corr
         
     if corr_constraint is not None:
@@ -707,10 +837,19 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint=Non
                             expression_from_leaf_problem = leaf_node_info.get("Problem")
 
                             if expression_from_leaf_problem is not None:
-                                # Add "=24" to the expression string from the Problem field
-                                # so that the compare_answer function can evaluate it correctly.
-                                expression_to_evaluate = str(expression_from_leaf_problem) + "=24"
-                                is_correct_for_leaf = compare_answer(expression_to_evaluate)
+                                # Evaluate based on dataset type
+                                if dataset_name == "game24":
+                                    # Add "=24" to the expression string from the Problem field
+                                    # so that the compare_answer function can evaluate it correctly.
+                                    expression_to_evaluate = str(expression_from_leaf_problem) + "=24"
+                                    is_correct_for_leaf = compare_answer(expression_to_evaluate)
+                                elif dataset_name == "sudoku":
+                                    # For sudoku, compare with ground truth
+                                    ground_truth = results.iloc[idx]["reward_model"]["ground_truth"]["label"][0]
+                                    is_correct_for_leaf = compare_answer(str(expression_from_leaf_problem), ground_truth)
+                                else:
+                                    expression_to_evaluate = str(expression_from_leaf_problem)
+                                    is_correct_for_leaf = compare_answer(expression_to_evaluate)
                                 print(f"  Leaf Node {node_id}: Problem='{expression_from_leaf_problem}', compare_answer output={is_correct_for_leaf}")
                                 if is_correct_for_leaf == 1: # Count successful ones
                                     num_successful_filtered_leaves_for_sr += 1
@@ -763,7 +902,7 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint=Non
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--idx", type=int, nargs='+', default=[])
-    parser.add_argument("--dataset_name", type=str, default="game24", choices=["game24"])
+    parser.add_argument("--dataset_name", type=str, default="game24", choices=["game24", "sudoku"])
     parser.add_argument("--model_name", type=str, nargs='+', default=["deepseek-ai/deepseek-reasoner"])
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--num_samples", type=int, default=100)
@@ -773,7 +912,16 @@ if __name__ == "__main__":
     parser.add_argument("--corr_constraint", type=lambda x: None if x == "None" else int(x), default=None, choices=[None, 0, 1])
     parser.add_argument("--replicate_id", type=int, default=0)
     parser.add_argument("--analysis_model", type=str, default="google/gemini-2.5-pro-preview-03-25")
+    parser.add_argument("--response_length", type=int, default=404, help="Response length used in model generation")
     args = parser.parse_args()
+    
+    # Dynamically import compare_answer based on dataset_name
+    if args.dataset_name == "game24":
+        from verl.utils.reward_score.game24 import compare_answer
+    elif args.dataset_name == "sudoku":
+        from verl.utils.reward_score.sudoku import compare_answer
+    else:
+        raise ValueError(f"Unsupported dataset: {args.dataset_name}")
     
     # model = "xai/grok-3-mini-beta"
     # analysis_model = "claude/claude-3-7-sonnet-20250219-thinking"
@@ -826,7 +974,7 @@ if __name__ == "__main__":
             model_name = model_name,
             shot = 0,
             template_type = template_type,
-            response_length = 404,
+            response_length = args.response_length,
             num_samples = args.num_samples,
             feature_noise = supported_datasets[args.dataset_name]["feature_noise"],
             label_noise = 0.0,
@@ -860,7 +1008,7 @@ if __name__ == "__main__":
             attempts, success, overwrite, skip = 0, False, args.overwrite, False
             while attempts < 5 and not success:
                 try:
-                    graph_metric = get_analysis(idx, results, results_dir, overwrite, args.corr_constraint)
+                    graph_metric = get_analysis(idx, results, results_dir, overwrite, args.corr_constraint, args.dataset_name)
                     success = True
                     if args.corr_constraint is not None:
                         if graph_metric is None:
