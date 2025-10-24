@@ -71,7 +71,7 @@ if __name__ == '__main__':
 
     # Load the sudoku dataset from jsonl file
     sudoku_file = os.path.join(
-        root_dir, "examples/data_preprocess/sudoku_4x4_10.jsonl"
+        root_dir, "examples/data_preprocess/sudoku_5x5_108.jsonl"
     )
 
     with open(sudoku_file, 'r') as f:
@@ -110,11 +110,32 @@ if __name__ == '__main__':
             puzzle = example['input']
             solution = example['output']
 
+            # Detect grid size from the puzzle
+            lines = puzzle.strip().split('\n')
+            grid_size = len(lines)  # Number of rows = grid size
+            
+            # Generate example solution for the detected size
+            if grid_size == 4:
+                solution_example = "Answer: 1234\\n2143\\n3412\\n4321"
+            elif grid_size == 5:
+                solution_example = "Answer: 12345\\n23451\\n34512\\n45123\\n51234"
+            elif grid_size == 6:
+                solution_example = "Answer: 123456\\n234561\\n345612\\n456123\\n561234\\n612345"
+            elif grid_size == 9:
+                solution_example = "Answer: 123456789\\n234567891\\n345678912\\n456789123\\n567891234\\n678912345\\n789123456\\n891234567\\n912345678"
+            else:
+                # Generic example
+                solution_example = f"Answer: <{grid_size}x{grid_size} grid>"
+
             # Create a formatted representation of the puzzle
             question_raw = f'''
-Solve the following 4x4 Sudoku puzzle. Fill in the missing numbers \
-(represented by 0) so that each row, each column, and each 2x2 box \
-contains all the numbers from 1 to 4 exactly once.
+Solve the following {grid_size}x{grid_size} Latin Square puzzle. Fill in the missing numbers \
+(represented by 0) using only the numbers from 1 to {grid_size}, so that:
+- Each row contains all the numbers from 1 to {grid_size} exactly once
+- Each column contains all the numbers from 1 to {grid_size} exactly once
+
+In other words, every cell must contain a number between 1 and {grid_size}, and no number can \
+repeat in the same row or column.
 
 Puzzle:
 {puzzle}
@@ -128,7 +149,7 @@ Please format your final answer as: Answer: <your solution grid>
             question = make_other_prefix(
                 question=question_raw,
                 template_type=args.template_type,
-                solution_example="Answer: 1234\\n2143\\n3412\\n4321",
+                solution_example=solution_example,
                 answer_format="tags",
                 label_str="the complete solution grid"
             )

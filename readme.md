@@ -137,6 +137,21 @@ python -m run_exps.create_exps \
 bash run_exps/auto/run_all_<exp_name>.sh
 ```
 
+## Sudoku (5*5 Latin Square)
+```
+python -m run_exps.create_exps \
+--dataset sudoku \
+--model <model_name> \
+--mode reasoning \
+--shot 0 \
+--n_samples 100 \
+--n_query 1 \
+--exp_name <exp_name> \
+--temperature <temperature>
+
+bash run_exps/auto/run_all_<exp_name>.sh
+```
+
 # Step 3: Perform Reasoning Analysis via ReJump
 
 ## MATH500
@@ -153,6 +168,16 @@ python -m TTT.tree_vis_math_v3 \
 ```bash
 python -m TTT.tree_vis_game24 \
 --dataset game24 \
+--model_name <model_name> \
+--temperature <temperature> \
+--num_samples 100 \
+--wandb
+```
+
+## Sudoku (5*5 Latin Square)
+```bash
+python -m TTT.tree_vis_game24 \
+--dataset sudoku \
 --model_name <model_name> \
 --temperature <temperature> \
 --num_samples 100 \

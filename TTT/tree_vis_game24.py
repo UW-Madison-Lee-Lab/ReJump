@@ -27,8 +27,33 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.cluster import KMeans
 
 def get_tree_prompt_sudoku(input_str, output_str):
+    # Detect grid size from input_str to provide relevant examples
+    try:
+        # Try to extract grid from input_str
+        lines = [line.strip() for line in input_str.split('\n') if line.strip() and not line.startswith('Solve') and not line.startswith('Puzzle:')]
+        puzzle_lines = [l for l in lines if any(c.isdigit() for c in l)]
+        if puzzle_lines:
+            grid_size = len(puzzle_lines)
+            if grid_size == 4:
+                initial_example = "Initial grid: 0204\\n3401\\n0012\\n2043"
+                complete_example = "Complete grid: 1234\\n3421\\n4312\\n2143"
+            elif grid_size == 9:
+                initial_example = "Initial grid: 530070000\\n600195000\\n098000060\\n..."
+                complete_example = "Complete grid: 534678912\\n672195348\\n198342567\\n..."
+            else:
+                initial_example = f"Initial grid: <{grid_size}x{grid_size} grid with 0s for empty cells>"
+                complete_example = f"Complete grid: <{grid_size}x{grid_size} solved grid>"
+        else:
+            # Fallback to generic
+            initial_example = "Initial grid: <NxN grid with 0s for empty cells>"
+            complete_example = "Complete grid: <NxN solved grid>"
+    except:
+        # Fallback to generic
+        initial_example = "Initial grid: <NxN grid with 0s for empty cells>"
+        complete_example = "Complete grid: <NxN solved grid>"
+    
     return f"""
-Given the problem statement and reasoning process below. Your task is to analyze a detailed thinking process for solving a Sudoku puzzle (provided below) and convert it into a reasoning tree. **Do not try to solve the problem yourself, fully use the given reasoning process and just convert it!**
+Given the problem statement and reasoning process below. Your task is to analyze a detailed thinking process for solving a Latin Square puzzle (provided below) and convert it into a reasoning tree. **Do not try to solve the problem yourself, fully use the given reasoning process and just convert it!**
 
 ---
 **BEGIN ORIGINAL PROBLEM STATEMENT**
@@ -52,13 +77,23 @@ Here are some instructions:
 
 Each node object must contain: `Problem`, `parent`, `Result`.
 
-1. **`Problem` (String):** A description of the current state of the Sudoku grid or the specific cell(s) being filled.
+1. **`Problem` (String):** A description of the current state of the Latin Square grid or the specific cell(s) being filled.
 
-* **`node1` (Root):** Must describe the initial Sudoku puzzle state with empty cells marked as 0. For example, "Initial grid: 0204\\n3401\\n0012\\n2043"
+* **`node1` (Root):** Must describe the initial puzzle state with empty cells marked as 0. For example, "{initial_example}"
 
-* **Non-leaf Nodes:** Each node describes a partial solution being explored. For example, "Filled row 2, column 3 with 2" or "Considering values for row 1, column 1". Give all these nodes index numbers to keep tracking (after node1).
+* **Non-leaf Nodes (Intermediate Nodes):** Each node describes **filling exactly ONE cell** in the grid. 
+  - **CRITICAL**: Each intermediate node should only represent filling a SINGLE number in a SINGLE cell.
+  - **Keep descriptions CONCISE**: Only describe the action itself (which cell, which number). Do NOT include the entire grid state or all previously filled cells.
+  - **CORRECT Examples**: 
+    - "Filled row 2, column 3 with 2"
+    - "Trying row 1, column 1 with value 4"
+  - **WRONG Examples**: 
+    - "Filled row 1 col 1 with 3 and row 1 col 2 with 4" (TWO cells - should be split)
+    - "Grid now has [1,1]=3, [1,2]=4, [2,1]=2, trying [2,2]=1" (includes too much context - just say "Trying row 2, column 2 with 1")
+  - If the reasoning fills multiple cells, create separate nodes for each cell filling operation.
+  - Give all these nodes index numbers to keep tracking (after node1).
 
-* **Leaf node:** **This node represents a complete or attempted complete solution of the Sudoku grid.** For example, "Complete grid: 1234\\n3421\\n4312\\n2143". Use an index number for each one (after node1).
+* **Leaf node:** **This node represents a complete or attempted complete solution of the Latin Square grid.** For example, "{complete_example}". Use an index number for each one (after node1).
 
 Pay attention that the problem statement of each node should be unique. If two nodes have the same description (i.e., the same partial grid state), merge them into one.
 
@@ -74,7 +109,7 @@ Pay attention that the problem statement of each node should be unique. If two n
 
 * **Intermediate Nodes:** None.
 
-* **Leaf node:** Must be the **complete solution grid**. For example, "1234\\n3421\\n4312\\n2143".
+* **Leaf node:** Must be the **complete solution grid**. For example, the final solved grid.
 
 Please generate a single JSON output. This output must be a **single JSON object** where keys are unique node IDs (e.g., "node1", "node2", corresponding to the index numbers assigned to track the nodes) and values are the node objects (containing 'Problem', 'parent', 'Result') as detailed above.
 
@@ -137,7 +172,7 @@ Please generate a single JSON output. This output must be a **single JSON object
     
 def get_walk_prompt_sudoku(input_str, output_str, tree_json):
     return f"""
-You are an AI assistant specialized in analyzing Sudoku solving reasoning processes. Your task is to trace the provided reasoning text against a structured reasoning tree and generate a "walk" representing the trajectory of the thought process.
+You are an AI assistant specialized in analyzing Latin Square solving reasoning processes. Your task is to trace the provided reasoning text against a structured reasoning tree and generate a "walk" representing the trajectory of the thought process.
 
 **Inputs:**
 
@@ -145,7 +180,7 @@ You are an AI assistant specialized in analyzing Sudoku solving reasoning proces
     ```
     {input_str}
     ```
-2.  **Reasoning Text:** A step-by-step textual explanation of how the Sudoku puzzle was solved, including potential errors, corrections, explorations of different cell values, and verifications.
+2.  **Reasoning Text:** A step-by-step textual explanation of how the Latin Square puzzle was solved, including potential errors, corrections, explorations of different cell values, and verifications.
     ```text
     {output_str}
     ```
@@ -167,18 +202,19 @@ Generate a JSON list of dictionaries, where each dictionary represents a single 
 * `category`: A string indicating the type of transition. Must be one of:
     * `calculation/derivation`: Represents forward progress in the reasoning, filling in cells or making logical deductions.
     * `backtracking`: Represents realizing an error and returning to a previous state to try a different value.
-    * `verification`: Represents checking or confirming filled cells by re-checking row/column/box constraints.
+    * `verification`: Represents checking or confirming filled cells by re-checking row/column constraints.
 
 **Instructions:**
 
 1.  Read the `Reasoning Text` carefully, paying attention to the flow, changes in direction, cell filling decisions, and verification steps.
 2.  Map segments of the `Reasoning Text` to the corresponding nodes in the `Reasoning Tree`.
-3.  Identify the sequence of nodes visited based on the flow of the `Reasoning Text`.
-4.  For each transition, determine the appropriate `category` based on the definitions above.
-5.  The walk should reflect the *actual* path taken in the `Reasoning Text`, including explorations of incorrect values and subsequent backtracking.
-6.  Ensure the output is strictly the JSON list as specified, with no additional explanatory text.
-7.  The output MUST be perfectly valid JSON, parseable by standard libraries.
-8.  The walk must always start at node1: The first transition in your output should always be `"from": "node1"`, `"to": ...`.
+3.  **IMPORTANT**: Remember that each intermediate node in the tree represents filling ONLY ONE cell. If the reasoning text describes filling multiple cells consecutively (e.g., "I fill row 1 col 1 with 3, then row 1 col 2 with 4"), you should create MULTIPLE walk steps, one for each cell filling operation.
+4.  Identify the sequence of nodes visited based on the flow of the `Reasoning Text`.
+5.  For each transition, determine the appropriate `category` based on the definitions above.
+6.  The walk should reflect the *actual* path taken in the `Reasoning Text`, including explorations of incorrect values and subsequent backtracking.
+7.  Ensure the output is strictly the JSON list as specified, with no additional explanatory text.
+8.  The output MUST be perfectly valid JSON, parseable by standard libraries.
+9.  The walk must always start at node1: The first transition in your output should always be `"from": "node1"`, `"to": ...`.
 
 **Final Output Request:**
 

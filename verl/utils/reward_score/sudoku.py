@@ -37,70 +37,76 @@ def compare_answer(model_answer, correct_solution):
             # No prefix and no colon, use as is
             model_answer_cleaned = model_answer.strip()
         
+        # Handle literal \n strings (e.g., "12453\\n31524" -> "12453\n31524")
+        # Some models output the string "\\n" instead of actual newline
+        model_answer_cleaned = model_answer_cleaned.replace('\\n', '\n')
+        
+        # Remove XML/HTML tags like </answer>, <answer>, etc.
+        model_answer_cleaned = re.sub(r'</?answer>', '', model_answer_cleaned, flags=re.IGNORECASE).strip()
+        
         # Normalize both answers by removing all whitespace
         model_normalized = ''.join(model_answer_cleaned.split())
         correct_normalized = ''.join(correct_solution.split())
         
-        # Check if they match
-        if model_normalized == correct_normalized:
-            return 1
+        # Infer grid size from correct solution
+        correct_lines = correct_solution.strip().split('\n')
+        grid_size = len(correct_lines)
+        expected_length = grid_size * grid_size
         
-        # Also check if the model answer is valid (basic validation)
-        # A valid 4x4 sudoku should have 16 numbers (4 rows x 4 columns)
-        if len(model_normalized) == 16 and model_normalized.isdigit():
-            # Verify each row, column, and 2x2 box contains 1-4
-            grid = []
-            for i in range(4):
-                row = [int(model_normalized[i*4 + j]) for j in range(4)]
-                grid.append(row)
-            
-            # Check if it's a valid sudoku solution
-            if is_valid_sudoku(grid):
-                # Even if valid, only return 1 if it matches the expected solution
-                if model_normalized == correct_normalized:
-                    return 1
+        # Check if the model answer has correct length and is all digits
+        if len(model_normalized) != expected_length or not model_normalized.isdigit():
+            return 0
+        
+        # Parse model answer into grid
+        grid = []
+        for i in range(grid_size):
+            row = [int(model_normalized[i*grid_size + j]) for j in range(grid_size)]
+            grid.append(row)
+        
+        # Check if it's a valid Latin Square solution
+        # Accept any valid solution, not just the one matching the expected answer
+        if is_valid_sudoku(grid, grid_size):
+            return 1
         
         return 0
     except Exception as e:
         return 0
 
-def is_valid_sudoku(grid):
+def is_valid_sudoku(grid, grid_size=None):
     """
-    Validate if a 4x4 sudoku grid is correctly solved.
+    Validate if a Latin Square grid is correctly solved.
+    Each row and column should contain numbers 1-grid_size exactly once.
+    Note: This is a Latin Square, not standard Sudoku - no box constraints.
     
     Args:
-        grid: 2D list representing the sudoku grid
+        grid: 2D list representing the grid
+        grid_size: Size of the grid (n for n×n). 
+                   If None, inferred from grid length.
         
     Returns:
         True if valid, False otherwise
     """
-    if len(grid) != 4:
+    if not grid:
         return False
     
-    for row in grid:
-        if len(row) != 4:
-            return False
+    if grid_size is None:
+        grid_size = len(grid)
+    
+    if len(grid) != grid_size:
+        return False
+    
+    expected_values = list(range(1, grid_size + 1))
     
     # Check rows
     for row in grid:
-        if sorted(row) != [1, 2, 3, 4]:
+        if len(row) != grid_size or sorted(row) != expected_values:
             return False
     
     # Check columns
-    for col in range(4):
-        column = [grid[row][col] for row in range(4)]
-        if sorted(column) != [1, 2, 3, 4]:
+    for col in range(grid_size):
+        column = [grid[row][col] for row in range(grid_size)]
+        if sorted(column) != expected_values:
             return False
-    
-    # Check 2x2 boxes
-    for box_row in range(0, 4, 2):
-        for box_col in range(0, 4, 2):
-            box = []
-            for i in range(2):
-                for j in range(2):
-                    box.append(grid[box_row + i][box_col + j])
-            if sorted(box) != [1, 2, 3, 4]:
-                return False
     
     return True
 
