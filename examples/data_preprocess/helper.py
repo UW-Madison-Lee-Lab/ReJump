@@ -799,6 +799,9 @@ def _select_rm_score_fn(data_source):
     elif data_source == "sudoku":
         from verl.utils.reward_score import sudoku
         return sudoku.compute_score
+    elif data_source == "zebralogic":
+        from verl.utils.reward_score import zebralogic
+        return zebralogic.compute_score
     elif data_source in ["gpqa-diamond"]:
         from verl.utils.reward_score import general
         return lambda solution_str, ground_truth: general.compute_score(solution_str, ground_truth, answer_format = supported_datasets[data_source]['answer_format'])

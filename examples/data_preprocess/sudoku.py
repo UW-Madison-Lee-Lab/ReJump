@@ -71,7 +71,7 @@ if __name__ == '__main__':
 
     # Load the sudoku dataset from jsonl file
     sudoku_file = os.path.join(
-        root_dir, "examples/data_preprocess/sudoku_5x5_108.jsonl"
+        root_dir, "examples/data_preprocess/sudoku_6x6_108.jsonl"
     )
 
     with open(sudoku_file, 'r') as f:

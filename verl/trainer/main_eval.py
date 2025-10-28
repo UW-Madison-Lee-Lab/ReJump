@@ -99,6 +99,7 @@ def main(config):
         if max_score == 1:
             passes += 1
 
+    pdb.set_trace()
     print(f'pass@{k}: {passes / total}')
 
     if config.trainer.wandb:

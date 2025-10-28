@@ -583,5 +583,23 @@ supported_datasets = {
         "type": "other",
         "difficulty": None,
         "answer_format": "tags",
-    }
+    },
+    "countdown": {
+        "num_classes": None,
+        "num_features": None,
+        "feature_noise": None,
+        "label_noise": None,
+        "type": "other",
+        "difficulty": None,
+        "answer_format": "tags",
+    },
+    "zebralogic": {
+        "num_classes": None,
+        "num_features": None,
+        "feature_noise": None,
+        "label_noise": None,
+        "type": "other",
+        "difficulty": None,
+        "answer_format": "tags",
+    },
 }
