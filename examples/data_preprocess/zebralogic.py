@@ -93,13 +93,24 @@ if __name__ == '__main__':
     # Define the processing function
     def make_map_fn(split):
         def process_fn(example, idx):
-            # Assuming 'Question' and 'Correct Answer' columns exist. Adjust if needed.
+            # Construct the complete ZebraLogic problem with puzzle, question, and choices
+            
+            # The puzzle contains the problem setup with all constraints
+            # The question is a separate field asking what to find
+            puzzle_text = example["puzzle"]
+            question_text = example["question"]
+            
+            # Format choices as a numbered list for better readability
+            choices_formatted = "\n".join([f"{chr(65+i)}. {choice}" for i, choice in enumerate(example["choices"])])
+            
+            # Combine puzzle (constraints) + question + choices into complete prompt
+            question_raw = f"""{puzzle_text}
 
-            question_raw = f"""
-            The question is: {example["question"]}
-            Please choose the correct answer from the following options:
-            {','.join(example["choices"])}
-            """
+{question_text}
+
+Please choose the correct answer from the following options:
+{choices_formatted}"""
+            
             answer_raw = example['answer']
 
             question = make_other_prefix(
@@ -109,8 +120,8 @@ if __name__ == '__main__':
                 answer_format = "tags",
                 label_str = "answer"
             )
-            # game24 answers are typically direct strings, no complex extraction needed
-            solution = {"label": [answer_raw]} # Ensure label is a list of strings
+            
+            solution = {"label": [answer_raw]}
 
             data = {
                 "data_source": data_source,
@@ -118,20 +129,20 @@ if __name__ == '__main__':
                     "role": "user",
                     "content": question,
                 }],
-                "ability": "expert_level_qa", # More fitting ability for game24
+                "ability": "logic_reasoning",
                 "reward_model": {
-                    "style": "rule", # Assuming simple string matching or similar rule-based check
+                    "style": "rule",
                     "ground_truth": solution
                 },
                 "extra_info": {
                     'split': split,
-                    'index': idx, # Use the provided index
-                    'original_index': example.get('index', None), # If original dataset has an index
+                    'index': idx,
+                    'original_index': example.get('index', None),
+                    'id': example.get('id', None),
                     'answer': answer_raw,
-                    'question': question_raw,
-                    # Add other relevant fields from the original dataset if needed
-                    'Incorrect Answers': example.get('Incorrect Answers', None),
-                    'Explanation': example.get('Explanation', None),
+                    'question': example["question"],
+                    'puzzle': puzzle_text,
+                    'choices': example["choices"],
                 }
             }
 
