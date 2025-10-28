@@ -208,6 +208,11 @@ supported_llms = {
         "model_size": 3_000_000_000,
         "type": "huggingface",
     },
+    "rayliuray/TinyZero-CountDown-Qwen2.5-3b-GRPO-Step200": {
+        "template_type": "qwen-instruct",
+        "model_size": 3_000_000_000,
+        "type": "huggingface",
+    },
     "Qwen/Qwen2.5-7B-Instruct": {
         "template_type": "qwen-instruct",
         "model_size": 7_000_000_000,

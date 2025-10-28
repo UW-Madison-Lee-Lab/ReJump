@@ -117,6 +117,7 @@ environment.py
 **/auto/
 **/trials/
 **/run_exps/auto_iterative_sft/
+**/analysis/
 
 
 analyze_deepseek/

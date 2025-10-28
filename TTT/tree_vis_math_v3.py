@@ -34,7 +34,7 @@ llm_pro = LLMAPI(
     template_type="reasoning_api"
 )
 
-model_flash_parsing = "google/gemini-2.5-flash-preview-04-17"
+model_flash_parsing = "google/gemini-2.5-pro-preview-03-25"# "google/gemini-2.5-flash-preview-04-17"
 llm_flash_for_parsing = LLMAPI(
     api_key=supported_llms[model_flash_parsing]["api_key"],
     model_name=model_flash_parsing,
@@ -702,7 +702,8 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint = N
         os.makedirs(os.path.dirname(result_path), exist_ok=True)
         input_str = results.iloc[idx]["prompt"][0]["content"]
         output_str = results.iloc[idx]["responses"][0]
-        corr = compute_score(output_str, results.iloc[idx]["reward_model"]["ground_truth"], "box")
+        corr = results.iloc[idx]["reward_model"]["ground_truth"] in output_str
+        # corr = compute_score(output_str, results.iloc[idx]["reward_model"]["ground_truth"], "box")
         tree_prompt = get_tree_prompt(input_str, output_str)
         tree_json = llm_pro.generate([{
             "role": "user",
@@ -909,10 +910,14 @@ if __name__ == "__main__":
             if not wandb_init(project_name, WANDB_INFO["entity"], wandb_config):
                 exit()
                 
-        if args.mode == "default":
-            template_type = supported_llms[model_name]["template_type"]
+        if model_name in supported_llms:
+            if args.mode == "default":
+                template_type = supported_llms[model_name]["template_type"]
+            else:
+                template_type = f"{supported_llms[model_name]['template_type']}_{args.mode}"
         else:
-            template_type = f"{supported_llms[model_name]['template_type']}_{args.mode}"
+            template_type = "qwen-instruct"
+
         results_dir = get_result_dir(
             dataset_name = args.dataset_name,
             model_name = model_name,
@@ -1028,6 +1033,7 @@ if __name__ == "__main__":
         # It's usually better to handle NaNs explicitly or ensure they are not produced for critical metrics.
         # 'no_calculation_edge' should always be 0 or 1, so it won't introduce NaNs itself.
         metric_df = metric_df.dropna(how='any') 
+        metric_df.to_csv(f"{results_dir}/tree_vis_v3/metric_df.csv")
         
         filtered_ajd = np.mean(metric_df["filtered_ajd"]) if "filtered_ajd" in metric_df.columns and not metric_df["filtered_ajd"].empty else np.nan
         print(f"Filtered AJD: {filtered_ajd}")

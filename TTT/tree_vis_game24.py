@@ -586,12 +586,16 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint=Non
         os.makedirs(os.path.dirname(result_path), exist_ok=True)
         input_str = results.iloc[idx]["prompt"][0]["content"]
         output_str = results.iloc[idx]["responses"][0]
+        answer_str = None
         if "<answer>" in output_str:
             # Find all <answer></answer> pairs
             answer_matches = re.findall(r'<answer>(.*?)</answer>', output_str, re.DOTALL)
             if answer_matches:
                 answer_str = answer_matches[-1]  # Use the first match
-        corr = compare_answer(answer_str)
+        if answer_str is None:
+            corr = False
+        else:
+            corr = compare_answer(answer_str)
         tree_prompt = get_tree_prompt(input_str, output_str)
         tree_json = llm.generate([{
             "role": "user",
@@ -612,12 +616,16 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint=Non
     else:
         json_data = load_json(result_path)
         output_str = results.iloc[idx]["responses"][0]
+        answer_str = None
         if "<answer>" in output_str:
             # Find all <answer></answer> pairs
             answer_matches = re.findall(r'<answer>(.*?)</answer>', output_str, re.DOTALL)
             if answer_matches:
                 answer_str = answer_matches[-1]  # Use the first match
-        corr = compare_answer(answer_str)
+        if answer_str is None:
+            corr = False
+        else:
+            corr = compare_answer(answer_str)
         json_data["corr"] = corr
         
     if corr_constraint is not None:
@@ -811,10 +819,13 @@ if __name__ == "__main__":
                 exit()
                 
             
-        if "ricl" in args.mode:
-            template_type = f"{supported_llms[model_name]['template_type']}_{args.mode}"
-        else: 
-            template_type = supported_llms[model_name]["template_type"]
+        if model_name in supported_llms:
+            if "ricl" in args.mode:
+                template_type = f"{supported_llms[model_name]['template_type']}_{args.mode}"
+            else: 
+                template_type = supported_llms[model_name]["template_type"]
+        else:
+            template_type = "qwen-instruct"
             
         if "instruction" in args.mode:
             data_mode = args.mode

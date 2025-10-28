@@ -45,15 +45,18 @@ class RewardManager():
             valid_response_length = data_item.batch['attention_mask'][prompt_length:].sum()
             valid_response_ids = response_ids[:valid_response_length]
 
-            log_probs = data_item.batch['log_probs']
-            if len(log_probs)>=valid_response_length:
-                item_logprob_dict = {'tokens': [], 'logprobs': []}
-                for j in range(valid_response_length):
-                    if valid_response_ids[j] != self.tokenizer.pad_token_id:
-                        item_logprob_dict['tokens'].append(self.tokenizer.decode([int(valid_response_ids[j])]))
-                        item_logprob_dict['logprobs'].append(float(log_probs[j]))  # Assuming probs[i] is a tuple of (token_id, logprob)
-            else:
+            if "log_probs" not in data_item.batch: 
                 item_logprob_dict = {None}
+            else:
+                log_probs = data_item.batch['log_probs']
+                if len(log_probs)>=valid_response_length:
+                    item_logprob_dict = {'tokens': [], 'logprobs': []}
+                    for j in range(valid_response_length):
+                        if valid_response_ids[j] != self.tokenizer.pad_token_id:
+                            item_logprob_dict['tokens'].append(self.tokenizer.decode([int(valid_response_ids[j])]))
+                            item_logprob_dict['logprobs'].append(float(log_probs[j]))  # Assuming probs[i] is a tuple of (token_id, logprob)
+                else:
+                    item_logprob_dict = {None}
             probs_token_list.append(item_logprob_dict)
 
             # decode

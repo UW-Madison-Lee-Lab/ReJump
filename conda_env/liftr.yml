@@ -57,6 +57,8 @@ dependencies:
   - zeromq=4.3.5
   - zlib=1.2.13
   - pip:
+      - torch==2.4.0
+      - torchvision==0.19.0
       - absl-py==2.2.2
       - accelerate==1.5.2
       - aiohappyeyeballs==2.6.1
@@ -64,7 +66,6 @@ dependencies:
       - aiosignal==1.3.2
       - annotated-types==0.7.0
       - anthropic==0.49.0
-      - antlr4-python3-runtime==4.7.2
       - anyio==4.9.0
       - argon2-cffi==23.1.0
       - argon2-cffi-bindings==21.2.0
@@ -99,7 +100,6 @@ dependencies:
       - fastapi==0.115.11
       - fastjsonschema==2.21.1
       - filelock==3.13.1
-      - flash-attn==2.7.4.post1
       - fonttools==4.56.0
       - frozenlist==1.5.0
       - fsspec==2024.6.1
@@ -144,7 +144,6 @@ dependencies:
       - jupyterlab-widgets==3.0.14
       - kiwisolver==1.4.7
       - lark==1.2.2
-      - latex2sympy2==1.9.1
       - liac-arff==2.5.0
       - llvmlite==0.43.0
       - lm-eval==0.4.8
@@ -202,7 +201,7 @@ dependencies:
       - protobuf==5.29.3
       - psutil==7.0.0
       - py-cpuinfo==9.0.0
-      - pyairports==2.1.1
+      - pyairports==0.0.1
       - pyarrow==19.0.1
       - pyasn1==0.6.1
       - pyasn1-modules==0.4.2
@@ -215,7 +214,7 @@ dependencies:
       - pyparsing==3.2.1
       - pytablewriter==1.2.1
       - python-dotenv==1.0.1
-      - python-graphviz==0.20.3
+      - graphviz==0.20.3
       - pytoml==0.1.21
       - pytz==2025.1
       - pyyaml==6.0.2
@@ -248,8 +247,6 @@ dependencies:
       - threadpoolctl==3.6.0
       - tiktoken==0.9.0
       - tokenizers==0.21.1
-      - torch==2.4.0+cu121
-      - torchvision==0.19.0
       - tqdm==4.67.1
       - tqdm-multiprocess==0.0.11
       - transformers==4.47.1
