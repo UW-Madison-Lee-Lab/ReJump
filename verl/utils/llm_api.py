@@ -206,7 +206,6 @@ class LLMAPI:
                         temperature=temperature,
                     )
                     
-                
                     output = response.choices[0].message.content
                     reasoning = getattr(response.choices[0].message, 'reasoning_content', None)
                     if reasoning is None:

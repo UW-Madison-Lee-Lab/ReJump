@@ -15,7 +15,7 @@
 Preprocess the game24 dataset to parquet format
 """
 
-import os
+import os, re
 from environment import root_dir
 import numpy as np
 import json
@@ -64,8 +64,24 @@ if __name__ == '__main__':
         'mc_mode',
         split='test' # Assuming the relevant data is in the train split
     )
+    def extract_size(example):
+        match = re.search(r'\d+x\d+', example["id"])
+        return {"size": match.group() if match else None}
+    dataset = dataset.map(extract_size)
+    subsets, subsets_size = dict(), dict()
+
+    # easier than 3x3
+    subsets_size["easy"] = ["2x2", "2x3", "2x4", "2x5", "2x6", "3x2", "3x3"]
+    # easier than 4x4
+    subsets_size["medium"] = ["3x4", "3x5", "3x6", "4x2", "4x3", "4x4", "5x4"]
+    # easier than 5x5
+    subsets_size["hard"] = ["4x5", "4x6", "5x3", "5x4", "5x5", "6x2", "6x3"]
+    # remaining
+    subsets_size["challenge"] = ["5x6", "6x4", "6x5", "6x6"]
+
+    dataset = dataset.filter(lambda x: x["size"] in subsets_size["challenge"])
     
-    print(f"Loaded {len(dataset)} examples from game24 train split")
+    print(f"Loaded {len(dataset)} examples from zebralogic challenge split")
 
     # Shuffle and split the data
     dataset = dataset.shuffle(seed=42)

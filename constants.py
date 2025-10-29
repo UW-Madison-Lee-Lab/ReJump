@@ -240,6 +240,11 @@ supported_llms = {
         "model_size": 8_000_000_000,
         "type": "huggingface",
     },
+    "microsoft/Phi-4-reasoning-plus": {
+        "template_type": "qwen-instruct",
+        "model_size": 14_000_000_000,
+        "type": "huggingface",
+    },
     # Llama
     "meta-llama/Llama-3.1-8B-Instruct": {
         "template_type": "qwen-instruct",
