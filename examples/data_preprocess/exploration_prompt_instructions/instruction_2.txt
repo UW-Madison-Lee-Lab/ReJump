@@ -1,0 +1,5 @@
+Imagine you are exploring a forest, and each tree branch represents a line of thought.
+
+Instead of staying close to your last position, you want to **jump from one distant branch to another**, covering as much ground as possible with each step.
+
+At each step, pick the most distant or surprising option you can think of — even if it’s unconventional. Think globally, not locally.

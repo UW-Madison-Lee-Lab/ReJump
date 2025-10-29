@@ -14,6 +14,7 @@ def gen_dataset(
     data_mode="default",
     test_ratio=1,
     response_length=3046,
+    additional_instruction_path="NO_ADDITIONAL_INSTRUCTION",
 ):
     if dataset_name == "blobs":
         feature_noise = 1.0 if feature_noise is None else feature_noise
@@ -23,7 +24,10 @@ def gen_dataset(
         feature_noise = 0.01 if feature_noise is None else feature_noise
     else:
         feature_noise = None
-        
+    if additional_instruction_path != "NO_ADDITIONAL_INSTRUCTION":
+        additional_instruction_path = f"--additional_instruction_path={additional_instruction_path}"
+    else:
+        additional_instruction_path = ""
     command = f"""
 python -m examples.data_preprocess.{dataset_name} \
 --template_type={template_type} \
@@ -33,7 +37,8 @@ python -m examples.data_preprocess.{dataset_name} \
 --feature_noise={feature_noise} \
 --test_ratio={test_ratio} \
 --label_noise={label_noise} \
---data_mode={data_mode}
+--data_mode={data_mode} \
+{additional_instruction_path}
         """ 
     
     if "ricl" in template_type:
@@ -217,6 +222,7 @@ def inference(
     wandb=2,
     api_workers=16,
     replicate_id=0,
+    additional_instruction_path="NO_ADDITIONAL_INSTRUCTION",
 ):
     dataset_dir = get_dataset_dir(
         dataset_name=dataset_name,
@@ -244,7 +250,11 @@ def inference(
         replicate_id=replicate_id,
     )
     output_file = get_dataset_filename(split="test", data_mode=data_mode)
-    return f"""
+    if additional_instruction_path != "NO_ADDITIONAL_INSTRUCTION":
+        additional_instruction_path = f"data.additional_instruction_path={additional_instruction_path}"
+    else:
+        additional_instruction_path = ""
+    command = f"""
 python -m verl.trainer.main_generation \
     trainer.nnodes=1 \
     trainer.n_gpus_per_node={n_gpus} \
@@ -264,5 +274,7 @@ python -m verl.trainer.main_generation \
     rollout.gpu_memory_utilization=0.8 \
     trainer.wandb={wandb} \
     rollout.n=1 \
-    rollout.api_workers={api_workers}
+    rollout.api_workers={api_workers} \
+    {additional_instruction_path}
     """
+    return command

@@ -120,3 +120,8 @@ environment.py
 
 
 analyze_deepseek/
+reasoning_analysis/
+gsm8k/
+logical_graph_analysis_datasets/
+multi-query-results/
+test_sample_graph_blobs/
