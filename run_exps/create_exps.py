@@ -151,8 +151,8 @@ for dataset in dataset_list:
                                     train_step=args.load_train_step,
                                     api_workers=args.api_workers,
                                     temperature=temperature,
-                                    additional_instruction_path=args.additional_instruction_path,,
-                                    replicate_id=args.replicate_id
+                                    additional_instruction_path=args.additional_instruction_path,
+                                    replicate_id=args.replicate_id,
                                 )
                                 command_list.append(inference_command)
 

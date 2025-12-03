@@ -1,0 +1,5 @@
+Imagine you are exploring a forest, and each tree branch represents a line of thought.
+
+Rather than making big leaps to far branches, focus on making small, careful moves to neighboring branches, staying close to where you just were.
+
+At each step, pick the next logical or incremental option — refining your position bit by bit. Think locally, not globally.

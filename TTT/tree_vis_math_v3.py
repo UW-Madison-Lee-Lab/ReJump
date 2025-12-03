@@ -1028,6 +1028,7 @@ if __name__ == "__main__":
         # It's usually better to handle NaNs explicitly or ensure they are not produced for critical metrics.
         # 'no_calculation_edge' should always be 0 or 1, so it won't introduce NaNs itself.
         metric_df = metric_df.dropna(how='any') 
+        metric_df.to_csv(f"{results_dir}/tree_vis_v3/metric_df.csv")
         
         filtered_ajd = np.mean(metric_df["filtered_ajd"]) if "filtered_ajd" in metric_df.columns and not metric_df["filtered_ajd"].empty else np.nan
         print(f"Filtered AJD: {filtered_ajd}")

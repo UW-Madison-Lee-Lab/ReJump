@@ -138,7 +138,10 @@ def compute_tree_edit_distance(tree1_root, tree2_root):
     return distance
 
 def compute_tree_similarity(tree1_root, tree2_root):
-    return 1 - compute_tree_edit_distance(tree1_root, tree2_root)/max(count_nodes(tree1_root), count_nodes(tree2_root))
+    try:
+        return 1 - compute_tree_edit_distance(tree1_root, tree2_root)/max(count_nodes(tree1_root), count_nodes(tree2_root))
+    except: 
+        return 0
 
 def _get_transition_matrix(walk):
     """
@@ -464,7 +467,9 @@ if __name__ == "__main__":
             if args.wandb:
                 wandb.log({
                     "tree_similarity": np.mean(tree_similarities), 
-                    "walk_similarity": np.mean(walk_similarities)
+                    "tree_similarity_stderr": np.std(tree_similarities) / np.sqrt(len(tree_similarities)),
+                    "walk_similarity": np.mean(walk_similarities),
+                    "walk_similarity_stderr": np.std(walk_similarities) / np.sqrt(len(walk_similarities)),
                 })
                 wandb.finish()
     

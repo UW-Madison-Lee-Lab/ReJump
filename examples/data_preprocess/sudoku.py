@@ -48,6 +48,7 @@ if __name__ == '__main__':
         default="default",
         choices=["default"]
     )
+    parser.add_argument('--additional_instruction_path', type=str, default=None)
 
     args = parser.parse_args()
     
@@ -71,7 +72,7 @@ if __name__ == '__main__':
 
     # Load the sudoku dataset from jsonl file
     sudoku_file = os.path.join(
-        root_dir, "examples/data_preprocess/sudoku_6x6_108.jsonl"
+        root_dir, "examples/data_preprocess/sudoku_6x6_500.jsonl"
     )
 
     with open(sudoku_file, 'r') as f:
@@ -144,6 +145,11 @@ Provide the complete solution grid in the same format as the input. \
 Please format your final answer as: Answer: <your solution grid>
             '''.strip()
 
+            if args.additional_instruction_path is not None:
+                with open(args.additional_instruction_path, 'r') as f:
+                    additional_instructions = f.read()
+                question_raw += "\n" + additional_instructions
+
             answer_raw = solution
 
             question = make_other_prefix(
@@ -159,6 +165,7 @@ Please format your final answer as: Answer: <your solution grid>
 
             data = {
                 "data_source": data_source,
+                "additional_instruction_path": args.additional_instruction_path,
                 "prompt": [{
                     "role": "user",
                     "content": question,

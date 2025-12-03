@@ -1,1 +1,5 @@
-Try at least 30 different solution attempts for this problem—even if some of them fail. The goal is to explore as many distinct approaches as possible.
+At each step, focus on **iterative refinement** by making careful, incremental adjustments.
+
+Build directly on your previous step — aim to improve or clarify your prior work rather than making large or disruptive changes.
+
+This approach helps develop deeper understanding and gradually improves your reasoning in a steady, systematic way.

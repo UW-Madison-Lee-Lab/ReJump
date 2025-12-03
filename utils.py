@@ -83,25 +83,25 @@ def wandb_init(project_name, entity_name, config, resume=False):
     
     api = wandb.Api()
     project_path = f"{entity_name}/{project_name}"
-    runs = api.runs(project_path)
-    for run in runs:
-        for key in config:
-            if run.config[key] != config[key]:
-                break
-        else:
-            if not resume: 
-                print(f"Run with this config already exists: {run.url}")
-                print("Exiting.")
-                return 0
-            else:
-                run_id = run.id
-                wandb.init(
-                    project = project_name,
-                    entity = entity_name,
-                    id = run_id,
-                    resume = "allow"
-                )
-                return 1
+    # runs = api.runs(project_path)
+    # for run in runs:
+    #     for key in config:
+    #         if run.config[key] != config[key]:
+    #             break
+    #     else:
+    #         if not resume: 
+    #             print(f"Run with this config already exists: {run.url}")
+    #             print("Exiting.")
+    #             return 0
+    #         else:
+    #             run_id = run.id
+    #             wandb.init(
+    #                 project = project_name,
+    #                 entity = entity_name,
+    #                 id = run_id,
+    #                 resume = "allow"
+    #             )
+    #             return 1
         
     wandb.init(
         project=project_name, 

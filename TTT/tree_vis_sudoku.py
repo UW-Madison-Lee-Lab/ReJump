@@ -1161,7 +1161,7 @@ if __name__ == "__main__":
         "forgetting_rates",
         "average_verification_rates",
         "average_solution_count",
-        "success_rates",
+        # "success_rates",
         "overthinking_rates"
     ]
     target_column = "corrs"

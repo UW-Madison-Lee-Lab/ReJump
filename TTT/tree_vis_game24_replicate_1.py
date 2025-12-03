@@ -26,97 +26,6 @@ import xgboost as xgb
 from sklearn.linear_model import LogisticRegression
 from sklearn.cluster import KMeans
 
-def get_tree_prompt_zebralogic(input_str, output_str):
-    """
-    Generate a prompt that converts a ZebraLogic reasoning trace into a tree of nodes.
-    Leaf nodes MUST include a complete final state table (House/Name/Book/Sport/Car),
-    while non-leaf nodes MUST record exactly one single-cell deduction.
-    """
-    return f"""
-Given the problem statement and the detailed reasoning process below, convert the reasoning into a TREE of nodes. **Do NOT solve the puzzle yourself**—only transform the GIVEN reasoning into a structured tree.
-
----
-**BEGIN ORIGINAL PROBLEM STATEMENT**
----
-{input_str}
----
-**END ORIGINAL PROBLEM STATEMENT**
----
-
----
-**BEGIN INPUT REASONING PROCESS**
----
-{output_str}
----
-**END INPUT REASONING PROCESS**
----
-
-You must output a SINGLE JSON object. Keys must be unique node IDs (e.g., "node1", "node2", ...). Each value is a node object with EXACTLY these fields:
-- "Problem" (String)
-- "parent" (String or null)
-- "Result" (String or null)
-
-========================
-Node Object Requirements
-========================
-
-1) Root Node ("node1"):
-   - Problem: "Initial state: All constraints listed, no deductions yet"
-   - parent: null
-   - Result: null
-
-2) Intermediate (Non-leaf) Nodes:
-   - Each intermediate node MUST represent exactly ONE atomic deduction or hypothesis (ONE cell assignment).
-   - Keep the description concise (do not repeat prior deductions).
-   - Valid examples:
-     - "Deduced: House 1 / Sport = tennis"
-     - "Trying: House 3 / Person = Alice"
-     - "From clue 12: House 4 / Car = tesla model 3"
-   - Invalid examples (contain multiple updates or too much context):
-     - "House 1=Norwegian and drinks water"
-     - "Up to now we have House1=..., House2=..., now trying House3=..."
-   - For intermediate nodes:
-     - Problem: describe the single-cell update only.
-     - parent: the node ID you directly build on.
-     - Result: null.
-
-   - De-duplication rule:
-     If two nodes would have the SAME "Problem" (i.e., the identical single-cell deduction/hypothesis), MERGE them into a single node instead of duplicating.
-
-3) Leaf Nodes (Complete or Attempted Complete Solutions):
-   - A leaf node represents a complete assignment of ALL relationships (ALL cells in the 6x5 grid: House, Person, Book, Sport, Car).
-   - The "Problem" string MUST start with: "Complete solution:"
-   - Immediately after that, include the FULL final state as a 6-row table in PLAIN TEXT with EXACT headers and order:
-
-     House	Person	Book	Sport	Car
-     1	<name>	<book>	<sport>	<car>
-     2	<name>	<book>	<sport>	<car>
-     3	<name>	<book>	<sport>	<car>
-     4	<name>	<book>	<sport>	<car>
-     5	<name>	<book>	<sport>	<car>
-     6	<name>	<book>	<sport>	<car>
-
-     (Use literal tab characters \t between columns, one line per house.)
-
-   - Result:
-     - MUST be ONLY the final answer to the question (e.g., "Bob").
-     - Do NOT restate the whole table inside "Result"; the table belongs in "Problem" under "Complete solution:".
-
-========================
-General Instructions
-========================
-
-- Do NOT add extra fields to the node objects.
-- Do NOT include any explanations outside the JSON.
-- Do NOT attempt to infer or fix errors; faithfully convert the given reasoning trace.
-- The parent chain (root -> ... -> leaf) implicitly defines the state. Non-leaf nodes only log ONE single-cell update each. The leaf node carries the FULL final state table.
-- If the reasoning forms multiple complete solutions, produce multiple leaf nodes (each with its own "Result" and complete table).
-- Ensure all node "Problem" descriptions are unique. If two nodes express the same single-cell deduction/hypothesis, merge them.
-
-Now, produce ONLY the JSON object as your final output.
-    """
-
-
 def get_tree_prompt_sudoku(input_str, output_str):
     # Detect grid size from input_str to provide relevant examples
     try:
@@ -261,70 +170,6 @@ Please generate a single JSON output. This output must be a **single JSON object
 
     """
     
-def get_walk_prompt_zebralogic(input_str, output_str, tree_json):
-    """Generate prompt for extracting the reasoning walk for ZebraLogic problems."""
-    return f"""
-You are an AI assistant specialized in analyzing ZebraLogic reasoning processes. Your task is to trace the provided reasoning text against a structured reasoning tree and generate a "walk" representing the trajectory of the thought process.
-
-**Inputs:**
-
-1.  **Problem Description:**
-    ```
-    {input_str}
-    ```
-2.  **Reasoning Text:** A step-by-step textual explanation of how the ZebraLogic puzzle was solved, including deductions from constraints, trial-and-error explorations, error corrections, and verifications.
-    ```text
-    {output_str}
-    ```
-3.  **Reasoning Tree:** A JSON object where each node represents either:
-    - **Root node (node1)**: Initial state with all constraints listed, no deductions yet
-    - **Intermediate nodes**: Each represents EXACTLY ONE single-cell assignment/deduction (e.g., "Deduced: House 1 / Sport = tennis")
-    - **Leaf nodes**: Complete solutions starting with "Complete solution:" followed by a full 6x5 table (House/Person/Book/Sport/Car)
-    ```json
-    {tree_json}
-    ```
-
-**Task:**
-
-Analyze the `Reasoning Text` to determine the sequence in which the solver mentally visited or considered the steps represented by the nodes in the `Reasoning Tree`. Identify the transitions between these nodes and categorize each transition.
-
-**Output Format:**
-
-Generate a JSON list of dictionaries, where each dictionary represents a single step in the reasoning walk. Each dictionary must have the following keys:
-
-* `from`: The ID (string) of the node the reasoning is moving *from*.
-* `to`: The ID (string) of the node the reasoning is moving *to*.
-* `category`: A string indicating the type of transition. Must be one of:
-    * `calculation/derivation`: Represents forward progress in the reasoning, making new single-cell deductions or establishing new single-cell relationships.
-    * `backtracking`: Represents realizing a contradiction or dead-end and returning to a previous state to try a different hypothesis.
-    * `verification`: Represents checking or confirming deductions by re-checking constraint satisfaction, or reaching a complete solution (leaf node).
-
-**Instructions:**
-
-1.  Read the `Reasoning Text` carefully, paying attention to the flow, deduction chains, hypothesis testing, constraint checking, and changes in direction.
-2.  Map segments of the `Reasoning Text` to the corresponding nodes in the `Reasoning Tree`:
-    - Each intermediate node corresponds to exactly ONE cell assignment (e.g., "House 2 / Person = Alice")
-    - Leaf nodes contain complete 6x5 tables and represent final solution attempts
-3.  **CRITICAL**: Each intermediate node in the tree represents making ONLY ONE SINGLE-CELL deduction or hypothesis. If the reasoning text describes making multiple cell assignments consecutively (e.g., "From clue 3 I deduce House 1 / Sport = tennis, and from clue 5 I deduce House 2 / Car = tesla"), you MUST create MULTIPLE walk steps, one for each single-cell assignment.
-4.  Identify the sequence of nodes visited based on the flow of the `Reasoning Text`.
-5.  For each transition, determine the appropriate `category`:
-    - Use `calculation/derivation` for new single-cell assignments
-    - Use `backtracking` when abandoning a hypothesis due to contradiction
-    - Use `verification` when checking constraints or reaching a complete solution (leaf node)
-6.  The walk should reflect the *actual* path taken in the `Reasoning Text`, including:
-    - Explorations of incorrect hypotheses and subsequent backtracking
-    - Individual cell-by-cell deductions
-    - Verification steps and reaching complete solutions
-7.  Ensure the output is strictly the JSON list as specified, with no additional explanatory text.
-8.  The output MUST be perfectly valid JSON, parseable by standard libraries.
-9.  The walk must always start at node1: The first transition in your output should always be `"from": "node1"`, `"to": ...`.
-
-**Final Output Request:**
-
-Now, analyze the provided inputs and generate the reasoning walk as a JSON list. Output *only* the JSON list.
-    """
-
-
 def get_walk_prompt_sudoku(input_str, output_str, tree_json):
     return f"""
 You are an AI assistant specialized in analyzing Latin Square solving reasoning processes. Your task is to trace the provided reasoning text against a structured reasoning tree and generate a "walk" representing the trajectory of the thought process.
@@ -878,7 +723,7 @@ def compute_filtered_average_jump_distance(tree_data, walk_steps_list):
     return filtered_ajd
 
 def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint=None, dataset_name="game24"):
-    result_path = f"{results_dir}/tree_vis_{analysis_model}/{idx}.json"
+    result_path = f"{results_dir}/tree_vis_{analysis_model}_1/{idx}.json"
     if not os.path.exists(result_path) or overwrite:
         os.makedirs(os.path.dirname(result_path), exist_ok=True)
         input_str = results.iloc[idx]["prompt"][0]["content"]
@@ -895,17 +740,12 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint=Non
             # For sudoku, compare_answer signature is different
             # We need ground_truth, but we'll just check format here
             corr = compare_answer(answer_str, results.iloc[idx]["reward_model"]["ground_truth"]["label"][0])
-        elif dataset_name == "zebralogic":
-            # For zebralogic, compare with ground truth answer
-            corr = compare_answer(answer_str, results.iloc[idx]["reward_model"]["ground_truth"]["label"][0])
         else:
             corr = compare_answer(answer_str)
         
         # Choose prompt based on dataset type
         if dataset_name == "sudoku":
             tree_prompt = get_tree_prompt_sudoku(input_str, output_str)
-        elif dataset_name == "zebralogic":
-            tree_prompt = get_tree_prompt_zebralogic(input_str, output_str)
         else:
             tree_prompt = get_tree_prompt(input_str, output_str)
         
@@ -917,8 +757,6 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint=Non
         # Choose walk prompt based on dataset type
         if dataset_name == "sudoku":
             walk_prompt = get_walk_prompt_sudoku(input_str, output_str, tree_json)
-        elif dataset_name == "zebralogic":
-            walk_prompt = get_walk_prompt_zebralogic(input_str, output_str, tree_json)
         else:
             walk_prompt = get_walk_prompt(input_str, output_str, tree_json)
         walk_json = llm.generate([{
@@ -943,8 +781,6 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint=Non
         if dataset_name == "game24":
             corr = compare_answer(answer_str)
         elif dataset_name == "sudoku":
-            corr = compare_answer(answer_str, results.iloc[idx]["reward_model"]["ground_truth"]["label"][0])
-        elif dataset_name == "zebralogic":
             corr = compare_answer(answer_str, results.iloc[idx]["reward_model"]["ground_truth"]["label"][0])
         else:
             corr = compare_answer(answer_str)
@@ -1047,11 +883,6 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint=Non
                                     # For sudoku, compare with ground truth
                                     ground_truth = results.iloc[idx]["reward_model"]["ground_truth"]["label"][0]
                                     is_correct_for_leaf = compare_answer(str(expression_from_leaf_problem), ground_truth)
-                                elif dataset_name == "zebralogic":
-                                    # For zebralogic, extract Result field (final answer) and compare with ground truth
-                                    leaf_result = leaf_node_info.get("Result", "")
-                                    ground_truth = results.iloc[idx]["reward_model"]["ground_truth"]["label"][0]
-                                    is_correct_for_leaf = compare_answer(str(leaf_result), ground_truth)
                                 else:
                                     expression_to_evaluate = str(expression_from_leaf_problem)
                                     is_correct_for_leaf = compare_answer(expression_to_evaluate)
@@ -1107,7 +938,7 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint=Non
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--idx", type=int, nargs='+', default=[])
-    parser.add_argument("--dataset_name", type=str, default="zebralogic", choices=["game24", "sudoku", "zebralogic"])
+    parser.add_argument("--dataset_name", type=str, default="game24", choices=["game24", "sudoku"])
     parser.add_argument("--model_name", type=str, nargs='+', default=["deepseek-ai/deepseek-reasoner"])
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--num_samples", type=int, default=100)
@@ -1125,8 +956,6 @@ if __name__ == "__main__":
         from verl.utils.reward_score.game24 import compare_answer
     elif args.dataset_name == "sudoku":
         from verl.utils.reward_score.sudoku import compare_answer
-    elif args.dataset_name == "zebralogic":
-        from verl.utils.reward_score.zebralogic import compare_answer
     else:
         raise ValueError(f"Unsupported dataset: {args.dataset_name}")
     
@@ -1194,7 +1023,6 @@ if __name__ == "__main__":
         
         if len(args.idx) == 0:
             idxs = list(range(len(results)))
-            random.shuffle(idxs)
         else:
             idxs = args.idx
         
@@ -1270,7 +1098,7 @@ if __name__ == "__main__":
         
         metric_df = pd.DataFrame(metric_dict)
         metric_df = metric_df.dropna(how='any')
-        metric_df.to_csv(f"{results_dir}/tree_vis_{analysis_model}/metric_df.csv")
+        metric_df.to_csv(f"{results_dir}/tree_vis_{analysis_model}_1/metric_df.csv")
 
         filtered_ajd = np.mean(metric_df["filtered_ajd"])
         print(f"Filtered AJD: {filtered_ajd}")
@@ -1332,7 +1160,7 @@ if __name__ == "__main__":
         "forgetting_rates",
         "average_verification_rates",
         "average_solution_count",
-        # "success_rates",
+        "success_rates",
         "overthinking_rates"
     ]
     target_column = "corrs"
@@ -1373,19 +1201,6 @@ if __name__ == "__main__":
             print(f"  {name}: {importance:.4f}")
             feature_importance_dict[name] = float(importance)
 
-        # Compute correlation between each feature and y
-        print("Correlation between features and y (using Pearson correlation):")
-        feature_correlation_dict = {}
-        for i, feature_name in enumerate(feature_columns):
-            feature_vector = X[:, i]
-            # Compute Pearson correlation; np.corrcoef returns the correlation matrix
-            if np.std(feature_vector) > 0 and np.std(y) > 0:
-                corr_value = np.corrcoef(feature_vector, y)[0, 1]
-            else:
-                corr_value = float('nan')
-            print(f"  {feature_name}: {corr_value:.4f}")
-            feature_correlation_dict[feature_name] = float(corr_value)
-
         # Perform K-means clustering on all samples
         X_incorr, y_incorr = X[y == 0], y[y == 0]
         if len(X_incorr) > 1:  # K-means requires at least 2 samples
@@ -1399,6 +1214,7 @@ if __name__ == "__main__":
             for i, feature_name in enumerate(feature_columns):
                 feature_min, feature_max = X_incorr[:, i].min(), X_incorr[:, i].max()
                 print(f"  {feature_name}: [{feature_min:.4f}, {feature_max:.4f}]")
+            
             # Directly use k=2 for clustering
             k = 3
             kmeans = KMeans(n_clusters=k, random_state=42)

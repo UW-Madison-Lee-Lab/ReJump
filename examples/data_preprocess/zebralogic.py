@@ -40,7 +40,7 @@ if __name__ == '__main__':
     parser.add_argument('--template_type', type=str, default="reasoning_api")
     parser.add_argument('--label_noise', type=float, default=None)
     parser.add_argument('--data_mode', type=str, default="default", choices=["default"])
-
+    parser.add_argument('--additional_instruction_path', type=str, default=None)
     args = parser.parse_args()
     
     data_source = "zebralogic"
@@ -127,6 +127,12 @@ if __name__ == '__main__':
 Please choose the correct answer from the following options:
 {choices_formatted}"""
             
+
+            if args.additional_instruction_path is not None:
+                with open(args.additional_instruction_path, 'r') as f:
+                    additional_instructions = f.read()
+                question_raw += "\n" + additional_instructions
+
             answer_raw = example['answer']
 
             question = make_other_prefix(
@@ -141,6 +147,7 @@ Please choose the correct answer from the following options:
 
             data = {
                 "data_source": data_source,
+                "additional_instruction_path": args.additional_instruction_path,
                 "prompt": [{
                     "role": "user",
                     "content": question,

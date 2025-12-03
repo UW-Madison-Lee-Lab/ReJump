@@ -1023,7 +1023,6 @@ if __name__ == "__main__":
         
         if len(args.idx) == 0:
             idxs = list(range(len(results)))
-            random.shuffle(idxs)
         else:
             idxs = args.idx
         
