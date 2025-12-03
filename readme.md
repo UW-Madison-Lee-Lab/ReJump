@@ -3,45 +3,36 @@
     <p>
       <a href="https://yzeng58.github.io/" target="_blank">Yuchen Zeng</a><sup>*1,2</sup>, 
       <a href="https://zhangshuibai.github.io/#" target="_blank">Shuibai Zhang</a><sup>*1</sup>, 
-      <a href="https://wonjunn.github.io/">Wonjun Kang</a><sup>*3,5</sup>, 
+      <a href="https://wonjunn.github.io/">Wonjun Kang</a><sup>*3,4</sup>, 
       <a href="https://cychomatica.github.io/" target="_blank">Shutong Wu</a><sup>1</sup>, 
       Lynnix Zou<sup>1</sup>, 
       <a href="https://yingfan-bot.github.io/" target="_blank">Ying Fan</a><sup>1,2</sup>, 
       Heeju Kim<sup>3</sup>, 
-      Ziqian Lin<sup>1,4</sup>, 
+      Ziqian Lin<sup>1</sup>, 
       <a href="https://jungtaek.github.io/" target="_blank">Jungtaek Kim</a><sup>1</sup>, 
       Hyung Il Koo<sup>3</sup>, 
       <a href="https://papail.io/" target="_blank">Dimitris Papailiopoulos</a><sup>1,2</sup>, 
-      <a href="https://kangwooklee.com/aboutme/" target="_blank">Kangwook Lee</a><sup>1,6</sup>,
+      <a href="https://kangwooklee.com/aboutme/" target="_blank">Kangwook Lee</a><sup>1,5</sup>,
   </p>
   <p>
   <sup>*</sup>Equal Contribution
     <sup>1</sup>University of Wisconsin-Madison 
     <sup>2</sup>Microsoft Research
     <sup>3</sup>FuriosaAI
-    <sup>4</sup>Google
-    <sup>5</sup>Seoul National University
-    <sup>6</sup>Krafton AI
+    <sup>4</sup>Seoul National University
+    <sup>5</sup>Krafton
     
 </p>
        </h4>
 
-**Abstract**: The use of Chain-of-Thought (CoT) processes has significantly improved the performance of Large Language Models (LLMs). 
-This has led to the development of Large Reasoning Models (LRMs) (i.e., LLMs explicitly trained to generate long-form CoTs), which achieve impressive success on challenging tasks like math and programming. 
-However, their underlying reasoning ``algorithms'' remain poorly understood. 
-To investigate this, we propose \textit{ReJump}, which represents a reasoning trace as a visitation order over nodes in a tree of intermediate problem-solving steps. 
-Beyond adjacent transitions that captures behaviors like calculation, ReJump introduces \textit{jumps}, transitions between nodes, including non-adjacent ones,  that capture high-level reasoning behavior such as calculation, verification and backtracking. 
-This representation enables analyzing LLM reasoning with diverse metrics that quantify exploration, exploitation, overthinking, forgetting, and verification.
-Applying ReJump to state-of-the-art LRMs on two tasks reveals that models with similar accuracy can exhibit distinct reasoning behaviors, and that different tasks favor different reasoning styles (e.g., varying exploration-exploitation tradeoffs).
-To further understand how learning strategies shape reasoning, we use ReJump to compare distilled LRMs with their teachers, CoT-prompted LLMs with LRMs, and to study how number of reasoning examples influence reasoning behavior. 
-Finally, we show that ReJump can improve reasoning quality at test time through strategies such as ReJump-guided Best-of-N selection and prompt selection.
+**Abstract**: Large Language Models (LLMs) typically reason via Chain-of-Thought (CoT) prompting or explicit training. Though many LLMs achieve similar accuracy on challenging tasks, such as math problem solving and programming, how their underlying reasoning "algorithms" compare remains poorly understood. To investigate this, we propose *ReJump*, which represents a reasoning trace as a visitation order over nodes in a tree of intermediate problem-solving steps. ReJump allows tree jumps, non-adjacent transitions between nodes that capture reasoning behaviors such as backtracking, verification, and calculation. This representation enables analyzing LLM reasoning with diverse and intuitive metrics that capture exploration, exploitation, overthinking, forgetting, and verification. We apply ReJump to analyze state-of-the-art Large Reasoning Models (LRMs), which are LLMs explicitly trained for long-form CoTs, and find that models with comparable final accuracy can nonetheless display distinct reasoning behaviors. We further compare distilled LRMs with their teachers, CoT-prompted LLMs with LRMs, and investigate how reasoning examples influence reasoning behavior. Finally, we show that ReJump can improve reasoning quality at test time through strategies such as ReJump-guided Best-of-N selection and prompt selection.
 
 
 <img width="903" alt="image" src="imgs/ReJump_demo.png">
 
 # News  🚀
 
-Empty.
+- Our paper is available on [ArXiv](https://arxiv.org/abs/2512.00831)!
 
 # Contents
 
@@ -60,7 +51,7 @@ To set up the environment for benchmarking LLMs on meme humor, please follow the
 1. Clone this repository.
 
    ```bash
-   git clone https://github.com/yzeng58/ReJump.git
+   git clone https://github.com/UW-Madison-Lee-Lab/ReJump.git
    cd ReJump
    ```
 
