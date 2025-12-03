@@ -153,7 +153,7 @@ class LLMAPI:
     ) -> str:
         max_retries = 1000  # Increased retry count
         if max_retries <= 0: raise ValueError("max_retries must be greater than 0")
-        timeout = 3600  # Increased timeout to 120 seconds
+        timeout = 5  # Increased timeout to 120 seconds
         
         # Ensure messages is a list
         if not isinstance(messages, list):
@@ -174,7 +174,7 @@ class LLMAPI:
                     response = self.client.messages.create(
                         model=self.model,
                         system = "You are a helpful data analysis assistant.",
-                        max_tokens=max(1064, min(max_tokens, 60_000)),
+                        max_tokens=10240,
                         messages=messages,
                         thinking=thinking
                     )
@@ -296,6 +296,7 @@ class LLMAPI:
                 
             except json.decoder.JSONDecodeError as e:
                 print(f"JSONDecodeError: {e}")
+                # import pdb; pdb.set_trace()
                 time.sleep(timeout)
                 
             except IndexError as e:
