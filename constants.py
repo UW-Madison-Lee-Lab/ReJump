@@ -579,5 +579,14 @@ supported_datasets = {
         "type": "other",
         "difficulty": None,
         "answer_format": "tags",
+    },
+    "sudoku": {
+        "num_classes": None,
+        "num_features": None,
+        "feature_noise": None,
+        "label_noise": None,
+        "type": "other",
+        "difficulty": None,
+        "answer_format": "tags",
     }
 }

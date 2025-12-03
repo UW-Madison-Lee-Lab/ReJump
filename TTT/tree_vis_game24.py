@@ -22,9 +22,99 @@ from collections import deque
 from sklearn.model_selection import train_test_split
 from collections import Counter
 import xgboost as xgb
-from verl.utils.reward_score.game24 import compare_answer
+# compare_answer will be imported dynamically based on dataset_name
 from sklearn.linear_model import LogisticRegression
 from sklearn.cluster import KMeans
+
+def get_tree_prompt_sudoku(input_str, output_str):
+    # Detect grid size from input_str to provide relevant examples
+    try:
+        # Try to extract grid from input_str
+        lines = [line.strip() for line in input_str.split('\n') if line.strip() and not line.startswith('Solve') and not line.startswith('Puzzle:')]
+        puzzle_lines = [l for l in lines if any(c.isdigit() for c in l)]
+        if puzzle_lines:
+            grid_size = len(puzzle_lines)
+            if grid_size == 4:
+                initial_example = "Initial grid: 0204\\n3401\\n0012\\n2043"
+                complete_example = "Complete grid: 1234\\n3421\\n4312\\n2143"
+            elif grid_size == 9:
+                initial_example = "Initial grid: 530070000\\n600195000\\n098000060\\n..."
+                complete_example = "Complete grid: 534678912\\n672195348\\n198342567\\n..."
+            else:
+                initial_example = f"Initial grid: <{grid_size}x{grid_size} grid with 0s for empty cells>"
+                complete_example = f"Complete grid: <{grid_size}x{grid_size} solved grid>"
+        else:
+            # Fallback to generic
+            initial_example = "Initial grid: <NxN grid with 0s for empty cells>"
+            complete_example = "Complete grid: <NxN solved grid>"
+    except:
+        # Fallback to generic
+        initial_example = "Initial grid: <NxN grid with 0s for empty cells>"
+        complete_example = "Complete grid: <NxN solved grid>"
+    
+    return f"""
+Given the problem statement and reasoning process below. Your task is to analyze a detailed thinking process for solving a Latin Square puzzle (provided below) and convert it into a reasoning tree. **Do not try to solve the problem yourself, fully use the given reasoning process and just convert it!**
+
+---
+**BEGIN ORIGINAL PROBLEM STATEMENT**
+---
+{input_str}
+---
+**END ORIGINAL PROBLEM STATEMENT**
+---
+
+---
+**BEGIN INPUT REASONING PROCESS**
+---
+{output_str}
+---
+**END INPUT REASONING PROCESS**
+---
+
+Here are some instructions:
+
+**Node Object Structure:**
+
+Each node object must contain: `Problem`, `parent`, `Result`.
+
+1. **`Problem` (String):** A description of the current state of the Latin Square grid or the specific cell(s) being filled.
+
+* **`node1` (Root):** Must describe the initial puzzle state with empty cells marked as 0. For example, "{initial_example}"
+
+* **Non-leaf Nodes (Intermediate Nodes):** Each node describes **filling exactly ONE cell** in the grid. 
+  - **CRITICAL**: Each intermediate node should only represent filling a SINGLE number in a SINGLE cell.
+  - **Keep descriptions CONCISE**: Only describe the action itself (which cell, which number). Do NOT include the entire grid state or all previously filled cells.
+  - **CORRECT Examples**: 
+    - "Filled row 2, column 3 with 2"
+    - "Trying row 1, column 1 with value 4"
+  - **WRONG Examples**: 
+    - "Filled row 1 col 1 with 3 and row 1 col 2 with 4" (TWO cells - should be split)
+    - "Grid now has [1,1]=3, [1,2]=4, [2,1]=2, trying [2,2]=1" (includes too much context - just say "Trying row 2, column 2 with 1")
+  - If the reasoning fills multiple cells, create separate nodes for each cell filling operation.
+  - Give all these nodes index numbers to keep tracking (after node1).
+
+* **Leaf node:** **This node represents a complete or attempted complete solution of the Latin Square grid.** For example, "{complete_example}". Use an index number for each one (after node1).
+
+Pay attention that the problem statement of each node should be unique. If two nodes have the same description (i.e., the same partial grid state), merge them into one.
+
+2. **`parent` (String):**
+
+* **`node1` (root):** Must be None.
+
+* **Other nodes:** Must be the previous partial solution that the current node builds on. Use the index number to indicate the index of its parent node.
+
+3. **`Result` (String):**
+
+* **`root`:** None.
+
+* **Intermediate Nodes:** None.
+
+* **Leaf node:** Must be the **complete solution grid**. For example, the final solved grid.
+
+Please generate a single JSON output. This output must be a **single JSON object** where keys are unique node IDs (e.g., "node1", "node2", corresponding to the index numbers assigned to track the nodes) and values are the node objects (containing 'Problem', 'parent', 'Result') as detailed above.
+
+    """
+
 
 def get_tree_prompt(input_str, output_str):
     return f"""
@@ -80,6 +170,58 @@ Please generate a single JSON output. This output must be a **single JSON object
 
     """
     
+def get_walk_prompt_sudoku(input_str, output_str, tree_json):
+    return f"""
+You are an AI assistant specialized in analyzing Latin Square solving reasoning processes. Your task is to trace the provided reasoning text against a structured reasoning tree and generate a "walk" representing the trajectory of the thought process.
+
+**Inputs:**
+
+1.  **Problem Description:**
+    ```
+    {input_str}
+    ```
+2.  **Reasoning Text:** A step-by-step textual explanation of how the Latin Square puzzle was solved, including potential errors, corrections, explorations of different cell values, and verifications.
+    ```text
+    {output_str}
+    ```
+3.  **Reasoning Tree:** A JSON object representing the structured steps and dependencies of the solution(s). Each key is a node ID, and the value contains information about that step, including its parent node and specifically a "Problem" field describing the state or action at that node.
+    ```json
+    {tree_json}
+    ```
+
+**Task:**
+
+Analyze the `Reasoning Text` to determine the sequence in which the solver mentally visited or considered the steps represented by the nodes in the `Reasoning Tree`. Identify the transitions between these nodes and categorize each transition.
+
+**Output Format:**
+
+Generate a JSON list of dictionaries, where each dictionary represents a single step in the reasoning walk. Each dictionary must have the following keys:
+
+* `from`: The ID (string) of the node the reasoning is moving *from*.
+* `to`: The ID (string) of the node the reasoning is moving *to*.
+* `category`: A string indicating the type of transition. Must be one of:
+    * `calculation/derivation`: Represents forward progress in the reasoning, filling in cells or making logical deductions.
+    * `backtracking`: Represents realizing an error and returning to a previous state to try a different value.
+    * `verification`: Represents checking or confirming filled cells by re-checking row/column constraints.
+
+**Instructions:**
+
+1.  Read the `Reasoning Text` carefully, paying attention to the flow, changes in direction, cell filling decisions, and verification steps.
+2.  Map segments of the `Reasoning Text` to the corresponding nodes in the `Reasoning Tree`.
+3.  **IMPORTANT**: Remember that each intermediate node in the tree represents filling ONLY ONE cell. If the reasoning text describes filling multiple cells consecutively (e.g., "I fill row 1 col 1 with 3, then row 1 col 2 with 4"), you should create MULTIPLE walk steps, one for each cell filling operation.
+4.  Identify the sequence of nodes visited based on the flow of the `Reasoning Text`.
+5.  For each transition, determine the appropriate `category` based on the definitions above.
+6.  The walk should reflect the *actual* path taken in the `Reasoning Text`, including explorations of incorrect values and subsequent backtracking.
+7.  Ensure the output is strictly the JSON list as specified, with no additional explanatory text.
+8.  The output MUST be perfectly valid JSON, parseable by standard libraries.
+9.  The walk must always start at node1: The first transition in your output should always be `"from": "node1"`, `"to": ...`.
+
+**Final Output Request:**
+
+Now, analyze the provided inputs and generate the reasoning walk as a JSON list. Output *only* the JSON list.
+    """
+
+
 def get_walk_prompt(input_str, output_str, tree_json):
     return f"""
 You are an AI assistant specialized in analyzing mathematical reasoning processes. Your task is to trace the provided reasoning text against a structured reasoning tree and generate a "walk" representing the trajectory of the thought process.
@@ -580,7 +722,7 @@ def compute_filtered_average_jump_distance(tree_data, walk_steps_list):
     filtered_ajd = sum_distances / num_jumps
     return filtered_ajd
 
-def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint=None):
+def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint=None, dataset_name="game24"):
     result_path = f"{results_dir}/tree_vis_{analysis_model}/{idx}.json"
     if not os.path.exists(result_path) or overwrite:
         os.makedirs(os.path.dirname(result_path), exist_ok=True)
@@ -592,17 +734,32 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint=Non
             answer_matches = re.findall(r'<answer>(.*?)</answer>', output_str, re.DOTALL)
             if answer_matches:
                 answer_str = answer_matches[-1]  # Use the first match
-        if answer_str is None:
-            corr = False
+        # Call compare_answer based on dataset type
+        if dataset_name == "game24":
+            corr = compare_answer(answer_str)
+        elif dataset_name == "sudoku":
+            # For sudoku, compare_answer signature is different
+            # We need ground_truth, but we'll just check format here
+            corr = compare_answer(answer_str, results.iloc[idx]["reward_model"]["ground_truth"]["label"][0])
         else:
             corr = compare_answer(answer_str)
-        tree_prompt = get_tree_prompt(input_str, output_str)
+        
+        # Choose prompt based on dataset type
+        if dataset_name == "sudoku":
+            tree_prompt = get_tree_prompt_sudoku(input_str, output_str)
+        else:
+            tree_prompt = get_tree_prompt(input_str, output_str)
+        
         tree_json = llm.generate([{
             "role": "user",
             "content": tree_prompt
         }])[2]
         
-        walk_prompt = get_walk_prompt(input_str, output_str, tree_json)
+        # Choose walk prompt based on dataset type
+        if dataset_name == "sudoku":
+            walk_prompt = get_walk_prompt_sudoku(input_str, output_str, tree_json)
+        else:
+            walk_prompt = get_walk_prompt(input_str, output_str, tree_json)
         walk_json = llm.generate([{
             "role": "user",
             "content": walk_prompt
@@ -622,10 +779,7 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint=Non
             answer_matches = re.findall(r'<answer>(.*?)</answer>', output_str, re.DOTALL)
             if answer_matches:
                 answer_str = answer_matches[-1]  # Use the first match
-        if answer_str is None:
-            corr = False
-        else:
-            corr = compare_answer(answer_str)
+        corr = compare_answer(answer_str)
         json_data["corr"] = corr
         
     if corr_constraint is not None:
@@ -715,10 +869,19 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint=Non
                             expression_from_leaf_problem = leaf_node_info.get("Problem")
 
                             if expression_from_leaf_problem is not None:
-                                # Add "=24" to the expression string from the Problem field
-                                # so that the compare_answer function can evaluate it correctly.
-                                expression_to_evaluate = str(expression_from_leaf_problem) + "=24"
-                                is_correct_for_leaf = compare_answer(expression_to_evaluate)
+                                # Evaluate based on dataset type
+                                if dataset_name == "game24":
+                                    # Add "=24" to the expression string from the Problem field
+                                    # so that the compare_answer function can evaluate it correctly.
+                                    expression_to_evaluate = str(expression_from_leaf_problem) + "=24"
+                                    is_correct_for_leaf = compare_answer(expression_to_evaluate)
+                                elif dataset_name == "sudoku":
+                                    # For sudoku, compare with ground truth
+                                    ground_truth = results.iloc[idx]["reward_model"]["ground_truth"]["label"][0]
+                                    is_correct_for_leaf = compare_answer(str(expression_from_leaf_problem), ground_truth)
+                                else:
+                                    expression_to_evaluate = str(expression_from_leaf_problem)
+                                    is_correct_for_leaf = compare_answer(expression_to_evaluate)
                                 print(f"  Leaf Node {node_id}: Problem='{expression_from_leaf_problem}', compare_answer output={is_correct_for_leaf}")
                                 if is_correct_for_leaf == 1: # Count successful ones
                                     num_successful_filtered_leaves_for_sr += 1
@@ -771,7 +934,7 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint=Non
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--idx", type=int, nargs='+', default=[])
-    parser.add_argument("--dataset_name", type=str, default="game24", choices=["game24"])
+    parser.add_argument("--dataset_name", type=str, default="game24", choices=["game24", "sudoku"])
     parser.add_argument("--model_name", type=str, nargs='+', default=["deepseek-ai/deepseek-reasoner"])
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--num_samples", type=int, default=100)
@@ -781,7 +944,16 @@ if __name__ == "__main__":
     parser.add_argument("--corr_constraint", type=lambda x: None if x == "None" else int(x), default=None, choices=[None, 0, 1])
     parser.add_argument("--replicate_id", type=int, default=0)
     parser.add_argument("--analysis_model", type=str, default="google/gemini-2.5-pro-preview-03-25")
+    parser.add_argument("--response_length", type=int, default=404, help="Response length used in model generation")
     args = parser.parse_args()
+    
+    # Dynamically import compare_answer based on dataset_name
+    if args.dataset_name == "game24":
+        from verl.utils.reward_score.game24 import compare_answer
+    elif args.dataset_name == "sudoku":
+        from verl.utils.reward_score.sudoku import compare_answer
+    else:
+        raise ValueError(f"Unsupported dataset: {args.dataset_name}")
     
     # model = "xai/grok-3-mini-beta"
     # analysis_model = "claude/claude-3-7-sonnet-20250219-thinking"
@@ -837,7 +1009,7 @@ if __name__ == "__main__":
             model_name = model_name,
             shot = 0,
             template_type = template_type,
-            response_length = 404,
+            response_length = args.response_length,
             num_samples = args.num_samples,
             feature_noise = supported_datasets[args.dataset_name]["feature_noise"],
             label_noise = 0.0,
@@ -871,7 +1043,7 @@ if __name__ == "__main__":
             attempts, success, overwrite, skip = 0, False, args.overwrite, False
             while attempts < 5 and not success:
                 try:
-                    graph_metric = get_analysis(idx, results, results_dir, overwrite, args.corr_constraint)
+                    graph_metric = get_analysis(idx, results, results_dir, overwrite, args.corr_constraint, args.dataset_name)
                     success = True
                     if args.corr_constraint is not None:
                         if graph_metric is None:
