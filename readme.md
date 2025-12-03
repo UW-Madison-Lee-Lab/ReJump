@@ -147,7 +147,7 @@ bash run_exps/auto/run_all_<exp_name>.sh
 
 ## MATH500
 ```bash
-python -m TTT.tree_vis_math_v3 \
+python -m rejump_extractor.tree_vis_math_v3 \
 --dataset math500 \
 --model_name <model_name> \
 --temperature <temperature> \
@@ -157,7 +157,7 @@ python -m TTT.tree_vis_math_v3 \
 
 ## Game of 24
 ```bash
-python -m TTT.tree_vis_game24 \
+python -m rejump_extractor.tree_vis_game24 \
 --dataset game24 \
 --model_name <model_name> \
 --temperature <temperature> \
@@ -167,7 +167,7 @@ python -m TTT.tree_vis_game24 \
 
 ## Sudoku (5*5 Latin Square)
 ```bash
-python -m TTT.tree_vis_game24 \
+python -m rejump_extractor.tree_vis_game24 \
 --dataset sudoku \
 --model_name <model_name> \
 --temperature <temperature> \
