@@ -1,4 +1,4 @@
-from TTT.tree_vis_math_v3 import parse_json, get_result_dir
+from rejump_extractor.tree_vis_math_v3 import parse_json, get_result_dir
 import zss
 import argparse
 from constants import supported_datasets, supported_llms

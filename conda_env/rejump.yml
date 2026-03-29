@@ -1,4 +1,4 @@
-name: liftr
+name: rejump
 channels:
   - nvidia
   - conda-forge

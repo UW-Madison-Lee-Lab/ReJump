@@ -62,10 +62,10 @@ def get_model_dir(
     train_step = 0,
     n_query=1,
 ):
-    return os.path.join(root_dir, 'checkpoints', 'TinyZero', get_model_name(dataset_name, model_name, shot, template_type, response_length, num_samples, feature_noise, label_noise, data_mode, n_query=n_query), "actor", f"global_step_{train_step}")
+    return os.path.join(root_dir, 'checkpoints', 'rejump', get_model_name(dataset_name, model_name, shot, template_type, response_length, num_samples, feature_noise, label_noise, data_mode, n_query=n_query), "actor", f"global_step_{train_step}")
 def get_configs_via_model_dir(model_dir):
     # Extract model name and train step from the model directory path using regex
-    pattern = r".*TinyZero[/\\](.+)[/\\]actor[/\\]global_step_(\d+)$"
+    pattern = r".*rejump[/\\](.+)[/\\]actor[/\\]global_step_(\d+)$"
     match = re.match(pattern, model_dir)
     if match:
         model_name = match.group(1)  # The full model name with all parameters

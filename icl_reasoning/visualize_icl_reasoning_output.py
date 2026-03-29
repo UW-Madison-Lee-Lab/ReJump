@@ -16,7 +16,7 @@ from typing import Dict, Any, List, Optional, Tuple
 
 # Import function to get the number of classes
 try:
-    from liftr.icl_reasoning.icl_reasoning import get_num_classes
+    from rejump.icl_reasoning.icl_reasoning import get_num_classes
     from transformers import AutoTokenizer
 except ImportError:
     # If unable to import, provide a simple fallback function

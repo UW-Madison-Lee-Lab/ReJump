@@ -3,8 +3,8 @@ defaults:
 
 # ICL examples configuration
 icl_examples:
-  - _target_: liftr.icl_reasoning.icl_reasoning.TextDirectICLExampleConfig
-    text_file_path: "/home/szhang967/liftr/icl_reasoning/deepseek-good-example.txt"  # Replace with your text file path
+  - _target_: rejump.icl_reasoning.icl_reasoning.TextDirectICLExampleConfig
+    text_file_path: "/home/szhang967/rejump/icl_reasoning/deepseek-good-example.txt"  # Replace with your text file path
     example_count: 1  # Number of examples in the text file
     icl_example_maxlength: 20000  # Maximum token length for example
 

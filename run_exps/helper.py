@@ -194,7 +194,7 @@ python -m verl.trainer.main_ppo \
     trainer.nnodes=1 \
     trainer.save_freq=10 \
     trainer.test_freq=10 \
-    trainer.project_name=TinyZero \
+    trainer.project_name=rejump \
     trainer.experiment_name={trained_model_name} \
     trainer.total_epochs=15
     """

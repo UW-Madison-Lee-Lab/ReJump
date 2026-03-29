@@ -59,8 +59,8 @@ To set up the environment for benchmarking LLMs on meme humor, please follow the
 
    ```bash
    # create the environment that works for all experiments in our paper
-   conda env create -f conda_env/liftr.yml
-   conda activate liftr
+   conda env create -f conda_env/rejump.yml
+   conda activate rejump
    pip install -e .
    ```
 
@@ -84,7 +84,7 @@ To set up the environment for benchmarking LLMs on meme humor, please follow the
     TRITON_CACHE_DIR="<path-to-your-triton-cache>"
     
     WANDB_INFO = {
-        'project': 'liftr',
+        'project': 'rejump',
         'entity': '<your-wandb-entity>'
     }
     
