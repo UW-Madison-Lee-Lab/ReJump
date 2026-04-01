@@ -65,7 +65,10 @@ ANTHROPIC_API_KEY = "your-anthropic-api-key"
 
 from huggingface_hub import login
 
-login(token=HUGGINGFACE_API_KEY)
+try:
+    login(token=HUGGINGFACE_API_KEY)
+except Exception:
+    pass  # Skip HF login for API-only inference
 
 @hydra.main(config_path='config', config_name='generation', version_base=None)
 def main(config):

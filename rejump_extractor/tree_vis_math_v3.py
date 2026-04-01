@@ -27,14 +27,14 @@ from sklearn.cluster import KMeans
 
 # model = "xai/grok-3-mini-beta"
 # model = "claude/claude-3-7-sonnet-20250219-thinking"
-model_pro = "google/gemini-2.5-pro-preview-03-25"
+model_pro = "google/gemini-2.5-pro"
 llm_pro = LLMAPI(
     api_key=supported_llms[model_pro]["api_key"],
     model_name=model_pro,
     template_type="reasoning_api"
 )
 
-model_flash_parsing = "google/gemini-2.5-pro-preview-03-25"# "google/gemini-2.5-flash-preview-04-17"
+model_flash_parsing = "google/gemini-2.5-pro"
 llm_flash_for_parsing = LLMAPI(
     api_key=supported_llms[model_flash_parsing]["api_key"],
     model_name=model_flash_parsing,
@@ -702,7 +702,9 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint = N
         os.makedirs(os.path.dirname(result_path), exist_ok=True)
         input_str = results.iloc[idx]["prompt"][0]["content"]
         output_str = results.iloc[idx]["responses"][0]
-        corr = results.iloc[idx]["reward_model"]["ground_truth"] in output_str
+        gt = results.iloc[idx]["reward_model"]["ground_truth"]
+        gt_str = gt["label"][0] if isinstance(gt, dict) else gt
+        corr = gt_str in output_str
         # corr = compute_score(output_str, results.iloc[idx]["reward_model"]["ground_truth"], "box")
         tree_prompt = get_tree_prompt(input_str, output_str)
         tree_json = llm_pro.generate([{
@@ -875,7 +877,7 @@ def get_analysis(idx, results, results_dir, overwrite=False, corr_constraint = N
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--idx", type=int, nargs='+', default=[])
-    parser.add_argument("--dataset_name", type=str, default="math500", choices=["gsm8k", "math500", "gpqa-diamond"])
+    parser.add_argument("--dataset_name", type=str, default="math500", choices=["gsm8k", "math500", "gpqa-diamond", "aime"])
     parser.add_argument("--model_name", type=str, nargs='+', default=["deepseek-ai/deepseek-reasoner"])
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--num_samples", type=int, default=-1)
@@ -977,7 +979,10 @@ if __name__ == "__main__":
                     overwrite = True
                     continue
                 
-            if skip: continue 
+            if skip: continue
+            if not success:
+                print(f"Index {idx}: All 5 attempts failed, skipping")
+                continue
             
             filtered_ajds.append(graph_metric["filtered_ajd"])
             average_solution_counts.append(graph_metric["average_solution_count"]) # Append average solution count

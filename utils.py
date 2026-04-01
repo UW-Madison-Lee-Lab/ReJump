@@ -86,7 +86,7 @@ def wandb_init(project_name, entity_name, config, resume=False):
     runs = api.runs(project_path)
     for run in runs:
         for key in config:
-            if run.config[key] != config[key]:
+            if run.config.get(key) != config[key]:
                 break
         else:
             if not resume: 
