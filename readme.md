@@ -46,7 +46,7 @@
 
 # Step 1: Set Up Environment
 
-To set up the environment for benchmarking LLMs on meme humor, please follow the following steps. This works for linux. 
+To set up the environment for ReJump extraction, analysis, and experiment scripts, follow these steps on Linux.
 
 1. Clone this repository.
 
@@ -64,34 +64,14 @@ To set up the environment for benchmarking LLMs on meme humor, please follow the
    pip install -e .
    ```
 
-3. Create `environment.py` in the `liftr` directory. Note that many variables need you to config except `root_dir` on your own
+3. Create a local `environment.py` at the repository root. This file is ignored by git and must never be committed.
 
-   ```python
-    import os
-    root_dir = os.path.dirname(os.path.abspath(__file__))
-    
-    OPENAI_API_KEY = '<your-openai-api-key>'
-    HUGGINGFACE_API_KEY = '<your-huggingface-api-key>'
-    ANTHROPIC_API_KEY = '<your-anthropic-api-key>'
-    GEMINI_API_KEY = "<your-gemini-api-key>"
-    DEEPSEEK_API_KEY = "<your-deepseek-api-key>"
-    OPENROUTER_API_KEY = "<your-openrouter-api-key>"
-    XAI_API_KEY = "<your-xai-api-key>"
-    ALIBABA_API_KEY = "<your-alibaba-api-key>"
-    
-    HF_HOME = "<path-to-your-hf-home>"
-    TRANSFORMERS_CACHE = "<path-to-your-transformers-cache>"
-    TRITON_CACHE_DIR="<path-to-your-triton-cache>"
-    
-    WANDB_INFO = {
-        'project': 'rejump',
-        'entity': '<your-wandb-entity>'
-    }
-    
-    CONDA_PATH = f"<path-to-your-conda>"
-    ```
-    
-    **Important: Do not commit this file to version control**. This file contains sensitive API keys and should not be synced via GitHub or any other version control system to prevent security risks.
+   ```bash
+   cp environment.example.py environment.py
+   # Fill in only the keys/paths needed for the scripts you plan to run.
+   ```
+     
+   **Important: do not commit `environment.py`.** It contains local API keys and machine-specific paths. The checked-in `environment.example.py` contains placeholders only.
 
 # Step 2: Collect LLM Responses on MATH500 and Game of 24
 

@@ -32,7 +32,10 @@ extras_require = {
 
 from pathlib import Path
 this_directory = Path(__file__).parent
-long_description = (this_directory / "README.md").read_text()
+readme_path = this_directory / "README.md"
+if not readme_path.exists():
+    readme_path = this_directory / "readme.md"
+long_description = readme_path.read_text()
 
 setup(
     name='verl',
