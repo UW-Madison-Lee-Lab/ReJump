@@ -25,24 +25,29 @@
 </p>
        </h4>
 
-**Abstract**: Large Language Models (LLMs) typically reason via Chain-of-Thought (CoT) prompting or explicit training. Though many LLMs achieve similar accuracy on challenging tasks, such as math problem solving and programming, how their underlying reasoning "algorithms" compare remains poorly understood. To investigate this, we propose *ReJump*, which represents a reasoning trace as a visitation order over nodes in a tree of intermediate problem-solving steps. ReJump allows tree jumps, non-adjacent transitions between nodes that capture reasoning behaviors such as backtracking, verification, and calculation. This representation enables analyzing LLM reasoning with diverse and intuitive metrics that capture exploration, exploitation, overthinking, forgetting, and verification. We apply ReJump to analyze state-of-the-art Large Reasoning Models (LRMs), which are LLMs explicitly trained for long-form CoTs, and find that models with comparable final accuracy can nonetheless display distinct reasoning behaviors. We further compare distilled LRMs with their teachers, CoT-prompted LLMs with LRMs, and investigate how reasoning examples influence reasoning behavior. Finally, we show that ReJump can improve reasoning quality at test time through strategies such as ReJump-guided Best-of-N selection and prompt selection.
+**Abstract**: Large Reasoning Models (LRMs) are Large Language Models (LLMs) explicitly trained to generate long-form Chain-of-Thoughts (CoTs), achieving impressive success on challenging tasks like math and programming. However, their underlying reasoning "algorithms" remain poorly understood. To investigate this, we propose *ReJump*, which represents a reasoning trace as a visitation order over nodes in a tree of intermediate problem-solving steps. Transitions between nodes, which we term *jumps*, include adjacent moves that capture behaviors such as calculation, and non-adjacent moves that capture behaviors such as backtracking and verification. ReJump enables analyzing LLM reasoning with diverse metrics that quantify exploration, exploitation, overthinking, forgetting, and verification. Using our proposed LLM agent to extract reasoning traces into ReJump format, we evaluate state-of-the-art LRMs on two tasks and find that models with similar accuracy can exhibit distinct reasoning behaviors, while different tasks favor different reasoning styles (e.g., varying balance between exploration and exploitation). To further understand how learning strategies shape reasoning, we use ReJump to compare distilled LRMs with their teachers, compare CoT-prompted LLMs with LRMs, and examine how reinforcement learning affects reasoning behavior. Finally, we show that ReJump can improve reasoning quality at test time through strategies such as ReJump-guided Best-of-N selection and prompt selection.
+
+**Links**: [Paper (arXiv)](https://arxiv.org/abs/2512.00831) | [OpenReview](https://openreview.net/forum?id=hlUgEwl3Du)
 
 
 <img width="903" alt="image" src="imgs/ReJump_demo.png">
 
 # News  🚀
 
-- Our paper is available on [ArXiv](https://arxiv.org/abs/2512.00831)!
+- [May 2026] Our paper is accepted to ICML 2026!
+- [Dec 2025] Our paper is available on [arXiv](https://arxiv.org/abs/2512.00831).
 
 # Contents
 
 - [Step 1: Set Up Environment](#step-1-set-up-environment)
-- [Step 2: Collect LLM Responses on MATH500 and Game of 24](#step-2-collect-llm-responses-on-math500-and-game-of-24)
-  - [MATH500](#math500)
+- [Step 2: Collect LLM Responses on MATH-500, Game of 24, and Sudoku](#step-2-collect-llm-responses-on-math-500-game-of-24-and-sudoku)
+  - [MATH-500](#math-500)
   - [Game of 24](#game-of-24)
+  - [Sudoku (5x5 Latin Square)](#sudoku-5x5-latin-square)
 - [Step 3: Perform Reasoning Analysis via ReJump](#step-3-perform-reasoning-analysis-via-rejump)
-  - [MATH500](#math500)
+  - [MATH-500](#math-500-1)
   - [Game of 24](#game-of-24)
+  - [Sudoku (5x5 Latin Square)](#sudoku-5x5-latin-square-1)
 
 # Step 1: Set Up Environment
 
@@ -73,11 +78,11 @@ To set up the environment for ReJump extraction, analysis, and experiment script
      
    **Important: do not commit `environment.py`.** It contains local API keys and machine-specific paths. The checked-in `environment.example.py` contains placeholders only.
 
-# Step 2: Collect LLM Responses on MATH500 and Game of 24
+# Step 2: Collect LLM Responses on MATH-500, Game of 24, and Sudoku
 
 Check `constants.py` for all supported LLMs.
 
-## MATH500
+## MATH-500
 ```bash
 python -m run_exps.create_exps \
 --dataset math500 \
@@ -108,7 +113,7 @@ python -m run_exps.create_exps \
 bash run_exps/auto/run_all_<exp_name>.sh
 ```
 
-## Sudoku (5*5 Latin Square)
+## Sudoku (5x5 Latin Square)
 ```
 python -m run_exps.create_exps \
 --dataset sudoku \
@@ -125,10 +130,10 @@ bash run_exps/auto/run_all_<exp_name>.sh
 
 # Step 3: Perform Reasoning Analysis via ReJump
 
-## MATH500
+## MATH-500
 ```bash
 python -m rejump_extractor.tree_vis_math_v3 \
---dataset math500 \
+--dataset_name math500 \
 --model_name <model_name> \
 --temperature <temperature> \
 --num_samples 500 \
@@ -138,17 +143,17 @@ python -m rejump_extractor.tree_vis_math_v3 \
 ## Game of 24
 ```bash
 python -m rejump_extractor.tree_vis_game24 \
---dataset game24 \
+--dataset_name game24 \
 --model_name <model_name> \
 --temperature <temperature> \
 --num_samples 100 \
 --wandb
 ```
 
-## Sudoku (5*5 Latin Square)
+## Sudoku (5x5 Latin Square)
 ```bash
-python -m rejump_extractor.tree_vis_game24 \
---dataset sudoku \
+python -m rejump_extractor.tree_vis_sudoku \
+--dataset_name sudoku \
 --model_name <model_name> \
 --temperature <temperature> \
 --num_samples 100 \

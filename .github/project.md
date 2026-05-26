@@ -1,7 +1,7 @@
 # ReJump Codebase Handoff
 
-> **Last updated**: 2026-03-30
-> **Purpose**: Enable any agent (or future-me) to understand and run experiments without asking Yuchen.
+> **Last updated**: 2026-05-26
+> **Purpose**: Document the ReJump code structure, experiment entrypoints, and release-facing setup.
 
 ---
 
@@ -23,7 +23,8 @@ Three-stage pipeline:
 | Directory | What it does |
 |---|---|
 | `constants.py` | All config: `supported_llms` (25+ models), `supported_datasets`, path helpers |
-| `environment.py` | API keys, paths — **never commit** |
+| `environment.example.py` | Template for local API keys and paths |
+| `environment.py` | Local API keys and paths — **ignored by git; never commit** |
 | `rejump_extractor/` | **Core extraction pipeline** — one script per task type |
 | `run_exps/` | Experiment orchestration — generates batch scripts |
 | `examples/data_preprocess/` | Dataset prep — one module per dataset (math500.py, game24.py, aime.py, sudoku.py, etc.) |
@@ -44,7 +45,7 @@ Three-stage pipeline:
 | Script | Task | CLI Example |
 |---|---|---|
 | `rejump_extractor/tree_vis_math_v3.py` | MATH-500, AIME, GSM8K, GPQA | `python -m rejump_extractor.tree_vis_math_v3 --dataset_name math500 --model_name "xai/grok-3-mini-beta" --num_samples -1 --temperature 0.0` |
-| `rejump_extractor/tree_vis_game24.py` | Game of 24, Sudoku | `python -m rejump_extractor.tree_vis_game24 --dataset_name game24 --model_name "xai/grok-3-mini-beta" --num_samples 100 --temperature 0.0` |
+| `rejump_extractor/tree_vis_game24.py` | Game of 24 | `python -m rejump_extractor.tree_vis_game24 --dataset_name game24 --model_name "xai/grok-3-mini-beta" --num_samples 100 --temperature 0.0` |
 | `rejump_extractor/tree_vis_sudoku.py` | Sudoku (same interface as game24) | `python -m rejump_extractor.tree_vis_sudoku --dataset_name sudoku --model_name "xai/grok-3-mini-beta"` |
 | `rejump_extractor/compare_tree.py` | Tree similarity between models | Uses Zhang-Shasha TED + Jensen-Shannon divergence |
 | `rejump_extractor/benchmark_acc.py` | Accuracy + token analysis | |
@@ -150,7 +151,7 @@ results/{model-name-with-dashes}/
 
 **Not in main pkl but in `results-tree-vis-v3-msr.pkl`**: Sudoku (Grok × 6 runs, QwQ × 1 NaN), ZebraLogic (Grok × 5 runs). Only Grok has actual metric values; QwQ sudoku is all NaN.
 
-**AIME**: Being implemented and run by another agent (as of 2026-03-30).
+**AIME**: Data preprocessing and generation support are implemented on the release branch.
 
 ### Local extraction results (`tree_vis_v3/metric_df.csv`):
 - Only game24 for: Phi-4, QwQ-32B, DeepSeek-R1, Grok, synthetic
@@ -256,22 +257,16 @@ combined = pd.concat(dfs)
 
 | Branch | Purpose | Key files |
 |---|---|---|
-| `develop` (current) | Latest working branch | `rejump_extractor/`, up-to-date math/game24 extractors |
-| `origin/yz_dev` | Yuchen's dev — has ZebraLogic, Sudoku updates | `TTT/tree_vis_zebralogic.py`, `examples/data_preprocess/zebralogic.py`, `sudoku_6x6_500.jsonl` |
+| `master` | Public default branch; kept in sync with `develop` for release | `readme.md`, `environment.example.py`, `rejump_extractor/` |
+| `develop` | Latest working/release branch | `rejump_extractor/`, math/game24/sudoku/aime data and extraction code |
 | `origin/wonjun_dev` | Wonjun's experiments | Benchmark notebooks, sensitivity analysis |
 | `origin/shuibai_dev` | Shuibai's experiments | Additional analysis |
-
-**To get ZebraLogic code onto develop:**
-```bash
-git checkout origin/yz_dev -- TTT/tree_vis_zebralogic.py examples/data_preprocess/zebralogic.py verl/utils/reward_score/zebralogic.py
-# Note: TTT/ is old dir name → may need to move to rejump_extractor/
-```
 
 ---
 
 ## Known Issues / Gotchas
 
-1. **Code is "屎山"** — many dead ends, old experiments, classification/regression code mixed with reasoning. Focus only on `rejump_extractor/` and `analysis/benchmark_*.ipynb`.
+1. The repository still contains legacy experiments and notebooks mixed with the current reasoning pipeline. For paper-facing reproduction, focus on `rejump_extractor/`, `examples/data_preprocess/`, `run_exps/`, and `analysis/benchmark_*.ipynb`.
 
 2. **`num_samples=-1`** means "all samples in the dataset". For math500 that's 500, for game24 it's 100, etc.
 
