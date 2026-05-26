@@ -276,13 +276,12 @@ combined = pd.concat(dfs)
 
 5. **W&B integration** — many scripts use W&B for logging. Use `--wandb` flag. Project: `rejump-tree-vis-v3`.
 
-6. **OneDrive results** — some older results may be on Microsoft OneDrive (old MSR account) and not in this local repo. If a result seems missing, ask Yuchen.
+6. **External result artifacts** — some older intermediate artifacts are not committed to this repository. If a result file is missing, regenerate it from the documented scripts or retrieve it from the project artifact store.
 
-7. **ZebraLogic** — NOT on `develop` branch! Lives on `origin/yz_dev` branch in `TTT/tree_vis_zebralogic.py` (1453 lines). Also has `examples/data_preprocess/zebralogic.py` and `verl/utils/reward_score/zebralogic.py`. To use: `git checkout origin/yz_dev -- TTT/tree_vis_zebralogic.py examples/data_preprocess/zebralogic.py verl/utils/reward_score/zebralogic.py`.
-   - Note: on `yz_dev`, extractors are in `TTT/` dir (old name), not `rejump_extractor/`.
+7. **ZebraLogic** — the paper uses ZebraLogic only in auxiliary analysis. Treat it as an optional artifact-dependent extension unless the corresponding data and extraction scripts are available in the active branch.
 
 8. **AIME dataset** — exists in `datasets/aime/` and `constants.py` supports it, but extractor is `tree_vis_math_v3.py` (same as math500). Use `--dataset_name aime`.
 
-9. **Sudoku extractor** — uses `tree_vis_sudoku.py` (or `tree_vis_game24.py --dataset_name sudoku`). Both support sudoku.
+9. **Sudoku extractor** — use `tree_vis_sudoku.py --dataset_name sudoku`.
 
 10. **Git submodule** — this `github/` directory is a git submodule inside the submission repo. The `.git` file points to the parent repo's `.git/modules/`.
